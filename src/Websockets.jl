@@ -208,8 +208,8 @@ end
 
 generate_websocket_key(key) = begin
   magicstring = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-  resp_key = readall(`echo -n $key$magicstring` | `openssl dgst -sha1`)
-  m = match(r"(?:\([^)]\)=\s)?(.+)$", resp_key)
+  @show resp_key = readall(`echo -n $key$magicstring` | `openssl dgst -sha1`)
+  @show m = match(r"(?:\([^)]*\)=\s)?(.+)$", resp_key)
   bytes = hex2bytes(m.captures[1])
   return base64(bytes)
 end
