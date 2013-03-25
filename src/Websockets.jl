@@ -1,13 +1,14 @@
 module Websockets
 
+using Httplib
 using Http
-export WebSocket,
+export Websocket,
+       WebsocketHandler,
        write,
        read,
-       close,
-       websocket_handler
+       close
 
-type WebSocket
+type Websocket
   id::Int
   socket::TcpSocket
 end
@@ -46,7 +47,7 @@ end
 #      *  %xA denotes a pong
 #      *  %xB-F are reserved for further control frames
 
-function send_fragment(ws::WebSocket, islast::Bool, data)
+function send_fragment(ws::Websocket, islast::Bool, data)
   l = length(data)
   b1::Uint8 = (islast ? 0b1000_0001 : 0b0000_0001) #always send text
 
@@ -70,13 +71,13 @@ function send_fragment(ws::WebSocket, islast::Bool, data)
 end
 
 import Base.write
-function write(ws::WebSocket,data)
+function write(ws::Websocket,data)
   println("sending")
   #assume data fits in one fragment
   send_fragment(ws,true,data)
 end
 
-type WebSocketFragment
+type WebsocketFragment
   is_last::Bool
   rsv1::Bool
   rsv2::Bool
@@ -88,8 +89,8 @@ type WebSocketFragment
   data::Array{Uint8} #ByteString
 end
 
-function WebSocketFragment(fin,rsv1,rsv2,rsv3,opcode,masked,payload_len,maskkey,data)
-  return WebSocketFragment( bool(fin)
+function WebsocketFragment(fin,rsv1,rsv2,rsv3,opcode,masked,payload_len,maskkey,data)
+  return WebsocketFragment( bool(fin)
     , bool(rsv1)
     , bool(rsv2)
     , bool(rsv3)
@@ -97,20 +98,20 @@ function WebSocketFragment(fin,rsv1,rsv2,rsv3,opcode,masked,payload_len,maskkey,
     , bool(masked)
     , payload_len
     , maskkey
-    , data) 
+    , data)
 end
 
-function is_control_frame(msg::WebSocketFragment)
+function is_control_frame(msg::WebsocketFragment)
   return bool((msg.opcode & 0b0000_1000) >>> 3)
   # if that bit is set (1), then this is a control frame.
 end
 
-function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
+function handle_control_frame(ws::Websocket,wsf::WebsocketFragment)
   #just drop it on the floor.
 end
 
 import Base.read
-function read(ws::WebSocket)
+function read(ws::Websocket)
   a = read(ws.socket,Uint8)
   fin    = a & 0b1000_0000 >>> 7 #if fin, then is final fragment
   rsv1   = a & 0b0100_0000 #if not 0, fail.
@@ -142,7 +143,7 @@ function read(ws::WebSocket)
   end
 
   #handle control (non-data) messages
-  #@show wsf = WebSocketFragment(fin,rsv1,rsv2,rsv3,opcode,mask,payload_len,maskkey,data)
+  #@show wsf = WebsocketFragment(fin,rsv1,rsv2,rsv3,opcode,mask,payload_len,maskkey,data)
   #if is_control_frame(wsf)
   #  @show handle_control_frame(ws,wsf)
   #  #return read(ws)
@@ -151,7 +152,7 @@ function read(ws::WebSocket)
   return data
 end
 
-function close(ws::WebSocket)
+function close(ws::Websocket)
   println("...send close frame")
   println("...make sure we don't send anything else")
   println("...wait for their close frame, then close the Tcpsocket")
@@ -208,7 +209,7 @@ end
 generate_websocket_key(key) = begin
   magicstring = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
   resp_key = readall(`echo -n $key$magicstring` | `openssl dgst -sha1`)
-  m = match(r"\w+\W+(.+)$", resp_key)
+  m = match(r"(?:\([^)]\)=\s)?(.+)$", resp_key)
   bytes = hex2bytes(m.captures[1])
   return base64(bytes)
 end
@@ -218,15 +219,23 @@ websocket_handshake(request,client) = begin
 
   key = get_websocket_key(request)
   resp_key = generate_websocket_key(key)
-  
+
   #TODO: use a proper HTTP response type
   response = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "
   Base.write(client.sock,"$response$resp_key\r\n\r\n")
 end
 
-websocket_handler(handler) = (request,client) -> begin
-  websocket_handshake(request,client)
-  handler(request,WebSocket(client.id,client.sock))
+immutable WebsocketHandler <: Http.WebsocketInterface
+    handle::Function
+end
+
+import Http: handle, is_websocket_handshake
+function handle(handler::WebsocketHandler, req::Request, client::Http.Client)
+    websocket_handshake(req, client)
+    handler.handle(req, Websocket(client.id, client.sock))
+end
+function is_websocket_handshake(handler::WebsocketHandler, req::Request)
+    get(req.headers, "Upgrade", false) == "websocket"
 end
 
 end # module Websockets
