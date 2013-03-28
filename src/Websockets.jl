@@ -8,6 +8,11 @@ export Websocket,
        read,
        close
 
+include("Base64.jl") #used for encoding handshake key
+
+# A Websocket is just a wrapper over a TcpSocket
+# All it does is wrap outgoing data in the protocol
+# and unwrapp incoming data.
 type Websocket
   id::Int
   socket::TcpSocket
@@ -38,15 +43,19 @@ end
 #
 
 # Opcode values
-#      *  %x0 denotes a continuation frame
-#      *  %x1 denotes a text frame
-#      *  %x2 denotes a binary frame
-#      *  %x3-7 are reserved for further non-control frames
-#      *  %x8 denotes a connection close
-#      *  %x9 denotes a ping
-#      *  %xA denotes a pong
-#      *  %xB-F are reserved for further control frames
+#  *  %x0 denotes a continuation frame
+#  *  %x1 denotes a text frame
+#  *  %x2 denotes a binary frame
+#  *  %x3-7 are reserved for further non-control frames
+#
+#  *  %x8 denotes a connection close
+#  *  %x9 denotes a ping
+#  *  %xA denotes a pong
+#  *  %xB-F are reserved for further control frames
 
+# Internal function for wrapping one
+# piece of data into a WS header
+# sending it out over the TcpSocket.
 function send_fragment(ws::Websocket, islast::Bool, data)
   l = length(data)
   b1::Uint8 = (islast ? 0b1000_0001 : 0b0000_0001) #always send text
@@ -70,6 +79,9 @@ function send_fragment(ws::Websocket, islast::Bool, data)
   end
 end
 
+# Exported function for sending data into a websocket
+# data should allow length(data) and write(TcpSocket,data)
+# all protocol details are taken care of.
 import Base.write
 function write(ws::Websocket,data)
   println("sending")
@@ -77,6 +89,8 @@ function write(ws::Websocket,data)
   send_fragment(ws,true,data)
 end
 
+# represents on received message fragment
+# (headers + data)
 type WebsocketFragment
   is_last::Bool
   rsv1::Bool
@@ -89,6 +103,7 @@ type WebsocketFragment
   data::Array{Uint8} #ByteString
 end
 
+# constructor to do some conversions from bits to Bool.
 function WebsocketFragment(fin,rsv1,rsv2,rsv3,opcode,masked,payload_len,maskkey,data)
   return WebsocketFragment( bool(fin)
     , bool(rsv1)
@@ -101,16 +116,24 @@ function WebsocketFragment(fin,rsv1,rsv2,rsv3,opcode,masked,payload_len,maskkey,
     , data)
 end
 
+# A message frame/fragment can be
+# either a control frame or a data frame
+# this function determines which it is
+# according to the opcode.
 function is_control_frame(msg::WebsocketFragment)
   return bool((msg.opcode & 0b0000_1000) >>> 3)
   # if that bit is set (1), then this is a control frame.
 end
 
+#TODO: handle close, ping, pong control messages.
 function handle_control_frame(ws::Websocket,wsf::WebsocketFragment)
   #just drop it on the floor.
 end
 
 import Base.read
+# Read data from a Websocket.
+# This will block until a full message has been received.
+# The headers will be stripped and only the data will be returned.
 function read(ws::Websocket)
   a = read(ws.socket,Uint8)
   fin    = a & 0b1000_0000 >>> 7 #if fin, then is final fragment
@@ -152,6 +175,8 @@ function read(ws::Websocket)
   return data
 end
 
+# TODO: send a close frame
+# TODO: make sure we don't write after this.
 function close(ws::Websocket)
   println("...send close frame")
   println("...make sure we don't send anything else")
@@ -162,50 +187,15 @@ end
 # Websocket Handshake
 #
 
-#parse http request for special key
+# get key out of request header
 get_websocket_key(request::Request) = begin
   return request.headers["Sec-WebSocket-Key"]
 end
 
-char2digit(c::Char) = '0' <= c <= '9' ? c-'0' : lowercase(c)-'a'+10
-
-hex2bytes(s::ASCIIString) =
-  [ uint8(char2digit(s[i])<<4 | char2digit(s[i+1])) for i=1:2:length(s) ]
-
-const base64chars = ['A':'Z','a':'z','0':'9','+','/']
-
-function base64(x::Uint8, y::Uint8, z::Uint8)
-  n = int(x)<<16 | int(y)<<8 | int(z)
-  base64chars[(n >> 18)            + 1],
-  base64chars[(n >> 12) & 0b111111 + 1],
-  base64chars[(n >>  6) & 0b111111 + 1],
-  base64chars[(n      ) & 0b111111 + 1]
-end
-
-function base64(x::Uint8, y::Uint8)
-  a, b, c = base64(x, y, 0x0)
-  a, b, c, '='
-end
-
-function base64(x::Uint8)
-  a, b = base64(x, 0x0, 0x0)
-  a, b, '=', '='
-end
-
-function base64(v::Array{Uint8})
-  n = length(v)
-  w = Array(Uint8,4*iceil(n/3))
-  j = 0
-  for i = 1:3:n-2
-    w[j+=1], w[j+=1], w[j+=1], w[j+=1] = base64(v[i], v[i+1], v[i+2])
-  end
-  tail = n % 3
-  if tail > 0
-    w[j+=1], w[j+=1], w[j+=1], w[j+=1] = base64(v[end-tail+1:end]...)
-  end
-  ASCIIString(w)
-end
-
+# the protocol requires that a special key
+# be processed and sent back with the handshake response
+# to prove that received the HTTP request
+# and that we *really* know what websockets means.
 generate_websocket_key(key) = begin
   magicstring = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
   @show resp_key = readall(`echo -n $key$magicstring` | `openssl dgst -sha1`)
@@ -214,7 +204,7 @@ generate_websocket_key(key) = begin
   return base64(bytes)
 end
 
-# perform the handshake if it's a websocket request
+# perform the handshake assuming it's a websocket request
 websocket_handshake(request,client) = begin
 
   key = get_websocket_key(request)
@@ -225,6 +215,9 @@ websocket_handshake(request,client) = begin
   Base.write(client.sock,"$response$resp_key\r\n\r\n")
 end
 
+# Implement the WebsocketInterface
+# so that this implementation can be used
+# in Http's server implementation.
 immutable WebsocketHandler <: Http.WebsocketInterface
     handle::Function
 end
