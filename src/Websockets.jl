@@ -99,13 +99,24 @@ type WebsocketFragment
   opcode::Uint8 #really, Uint4
   is_masked::Bool
   payload_len::Uint64
-  maskkey::Array{Uint8,4} #Union{Array{Uint8,4}, Nothing}
-  data::Array{Uint8} #ByteString
+  maskkey::Vector{Uint8} #Union{Array{Uint8,4}, Nothing}
+  data::Vector{Uint8} #ByteString
 end
 
 # constructor to do some conversions from bits to Bool.
-function WebsocketFragment(fin,rsv1,rsv2,rsv3,opcode,masked,payload_len,maskkey,data)
-  return WebsocketFragment( bool(fin)
+function WebsocketFragment(
+   fin::Uint8
+  ,rsv1::Uint8
+  ,rsv2::Uint8
+  ,rsv3::Uint8
+  ,opcode::Uint8
+  ,masked::Uint8
+  ,payload_len::Uint64
+  ,maskkey::Vector{Uint8}
+  ,data::Vector{Uint8})
+
+  WebsocketFragment(
+      bool(fin)
     , bool(rsv1)
     , bool(rsv2)
     , bool(rsv3)
@@ -126,15 +137,28 @@ function is_control_frame(msg::WebsocketFragment)
 end
 
 #TODO: handle close, ping, pong control messages.
+#  *  %x8 denotes a connection close
+#  *  %x9 denotes a ping
+#  *  %xA denotes a pong
+#  *  %xB-F are reserved for further control frames
+
 function handle_control_frame(ws::Websocket,wsf::WebsocketFragment)
-  #just drop it on the floor.
+
+  print("handling control frame")
+  @show wsf
+
+  if wsf.opcode == 0x8
+    print("closed!\n")
+  elseif wsf.opcode == 0x9
+    print("ping\n")
+  elseif wsf.opcode == 0xA
+    print("pong\n")
+  else
+    print("unknown opcode $(wsf.opcode)\n")
+  end
 end
 
-import Base.read
-# Read data from a Websocket.
-# This will block until a full message has been received.
-# The headers will be stripped and only the data will be returned.
-function read(ws::Websocket)
+function read_frame(ws::Websocket)
   a = read(ws.socket,Uint8)
   fin    = a & 0b1000_0000 >>> 7 #if fin, then is final fragment
   rsv1   = a & 0b0100_0000 #if not 0, fail.
@@ -165,14 +189,30 @@ function read(ws::Websocket)
     data[i] = d
   end
 
-  #handle control (non-data) messages
-  #@show wsf = WebsocketFragment(fin,rsv1,rsv2,rsv3,opcode,mask,payload_len,maskkey,data)
-  #if is_control_frame(wsf)
-  #  @show handle_control_frame(ws,wsf)
-  #  #return read(ws)
-  #end
+  return WebsocketFragment(fin,rsv1,rsv2,rsv3,opcode,mask,payload_len,maskkey,data)
+end
 
-  return data
+import Base.read
+# Read data from a Websocket.
+# This will block until a full message has been received.
+# The headers will be stripped and only the data will be returned.
+function read(ws::Websocket)
+
+  frame = read_frame(ws)
+
+  #handle control (non-data) messages
+  if is_control_frame(frame)
+    @show handle_control_frame(ws,frame)
+    return read(ws)
+  end
+
+  #handle data that uses multiple fragments
+  if !frame.is_last
+    print("\n\thandling fragmented message\n")
+    return concatenate(frame.data,read(ws))
+  end
+
+  return frame.data
 end
 
 # TODO: send a close frame
