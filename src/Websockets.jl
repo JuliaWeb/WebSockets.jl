@@ -99,7 +99,7 @@ function write(ws::Websocket,data)
   send_fragment(ws,true,data)
 end
 
-# represents on received message fragment
+# represents one received message fragment
 # (headers + data)
 type WebsocketFragment
   is_last::Bool
@@ -146,26 +146,22 @@ function is_control_frame(msg::WebsocketFragment)
   # if that bit is set (1), then this is a control frame.
 end
 
-#TODO: handle close, ping, pong control messages.
-#  *  %x8 denotes a connection close
-#  *  %x9 denotes a ping
-#  *  %xA denotes a pong
-#  *  %xB-F are reserved for further control frames
-
 function handle_control_frame(ws::Websocket,wsf::WebsocketFragment)
 
   println("handling control frame")
   @show wsf
 
-  if wsf.opcode == 0x8
+  if wsf.opcode == 0x8 #  %x8 denotes a connection close
     println("closed!")
     #TODO: send close frame
     #TODO: close socket
-  elseif wsf.opcode == 0x9
+  elseif wsf.opcode == 0x9 #  %x9 denotes a ping
     println("ping")
-  elseif wsf.opcode == 0xA
+    #TODO: send pong
+  elseif wsf.opcode == 0xA #  %xA denotes a pong
     println("pong")
-  else
+    # nothing to do here...?
+  else #  %xB-F are reserved for further control frames
     println("unknown opcode $(wsf.opcode)")
   end
 end
@@ -177,6 +173,7 @@ function read_frame(ws::Websocket)
   rsv2   = a & 0b0010_0000 #if not 0, fail.
   rsv3   = a & 0b0001_0000 #if not 0, fail.
   opcode = a & 0b0000_1111 #if not known code, fail.
+  #TODO: add validation somewhere to ensure rsv,opcode,mask,etc are valid.
 
   b = read(ws.socket,Uint8)
   mask = b & 0b1000_0000 >>> 7 #if not 1, fail.
