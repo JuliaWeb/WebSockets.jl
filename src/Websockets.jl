@@ -16,6 +16,11 @@ include("Base64.jl") #used for encoding handshake key
 type Websocket
   id::Int
   socket::TcpSocket
+  is_closed::Bool
+
+  function Websocket(id::Int,socket::TcpSocket)
+    new(id,socket, !socket.open)
+  end
 end
 
 #
@@ -75,7 +80,7 @@ function send_fragment(ws::Websocket, islast::Bool, data)
     write(ws.socket,uint64(l))
     write(ws.socket,data)
   else
-    error("Attempted to send too much data for one websocket fragment")
+    error("Attempted to send too much data for one websocket fragment\n")
   end
 end
 
@@ -84,6 +89,11 @@ end
 # all protocol details are taken care of.
 import Base.write
 function write(ws::Websocket,data)
+  if ws.is_closed
+    @show ws
+    error("attempt to write to closed Websocket\n")
+  end
+
   println("sending")
   #assume data fits in one fragment
   send_fragment(ws,true,data)
@@ -144,17 +154,19 @@ end
 
 function handle_control_frame(ws::Websocket,wsf::WebsocketFragment)
 
-  print("handling control frame")
+  println("handling control frame")
   @show wsf
 
   if wsf.opcode == 0x8
-    print("closed!\n")
+    println("closed!")
+    #TODO: send close frame
+    #TODO: close socket
   elseif wsf.opcode == 0x9
-    print("ping\n")
+    println("ping")
   elseif wsf.opcode == 0xA
-    print("pong\n")
+    println("pong")
   else
-    print("unknown opcode $(wsf.opcode)\n")
+    println("unknown opcode $(wsf.opcode)")
   end
 end
 
@@ -188,6 +200,7 @@ function read_frame(ws::Websocket)
     print("$(convert(Char,d))")
     data[i] = d
   end
+  println("")
 
   return WebsocketFragment(fin,rsv1,rsv2,rsv3,opcode,mask,payload_len,maskkey,data)
 end
@@ -197,6 +210,9 @@ import Base.read
 # This will block until a full message has been received.
 # The headers will be stripped and only the data will be returned.
 function read(ws::Websocket)
+  if ws.is_closed
+    error("Attempt to read from closed Websocket")
+  end
 
   frame = read_frame(ws)
 
@@ -238,8 +254,8 @@ end
 # and that we *really* know what websockets means.
 generate_websocket_key(key) = begin
   magicstring = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-  @show resp_key = readall(`echo -n $key$magicstring` | `openssl dgst -sha1`)
-  @show m = match(r"(?:\([^)]*\)=\s)?(.+)$", resp_key)
+  resp_key = readall(`echo -n $key$magicstring` | `openssl dgst -sha1`)
+  m = match(r"(?:\([^)]*\)=\s)?(.+)$", resp_key)
   bytes = hex2bytes(m.captures[1])
   return base64(bytes)
 end
