@@ -6,7 +6,9 @@ export Websocket,
        WebsocketHandler,
        write,
        read,
-       close
+       close,
+       send_ping,
+       send_pong
 
 include("Base64.jl") #used for encoding handshake key
 
@@ -61,9 +63,9 @@ end
 # Internal function for wrapping one
 # piece of data into a WS header
 # sending it out over the TcpSocket.
-function send_fragment(ws::Websocket, islast::Bool, data)
+function send_fragment(ws::Websocket, islast::Bool, data, opcode=0b0001)
   l = length(data)
-  b1::Uint8 = (islast ? 0b1000_0001 : 0b0000_0001) #always send text
+  b1::Uint8 = (islast ? 0b1000_0000 : 0b0000_0000) | opcode
 
   if l <= 125
     write(ws.socket,b1)
@@ -98,6 +100,22 @@ function write(ws::Websocket,data)
   #assume data fits in one fragment
   send_fragment(ws,true,data)
 end
+
+function send_ping(ws::Websocket)
+  send_fragment(ws, true, "", 0x9)
+end
+
+function send_pong(ws::Websocket)
+  send_fragment(ws, true, "", 0xA)
+end
+
+function close(ws::Websocket)
+  send_fragment(ws, true, "", 0x8)
+  ws.is_closed = true
+  # wait for their close frame, then close the Tcpsocket?
+  close(ws.socket)
+end
+
 
 # represents one received message fragment
 # (headers + data)
@@ -226,14 +244,6 @@ function read(ws::Websocket)
   end
 
   return frame.data
-end
-
-# TODO: send a close frame
-# TODO: make sure we don't write after this.
-function close(ws::Websocket)
-  println("...send close frame")
-  println("...make sure we don't send anything else")
-  println("...wait for their close frame, then close the Tcpsocket")
 end
 
 #
