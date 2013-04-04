@@ -63,10 +63,9 @@ end
 # Internal function for wrapping one
 # piece of data into a WS header
 # sending it out over the TcpSocket.
-function send_fragment(ws::Websocket, islast::Bool, data, opcode=0b0001)
+function send_fragment(ws::Websocket, islast::Bool, data::Array{Uint8}, opcode=0b0001)
   l = length(data)
   b1::Uint8 = (islast ? 0b1000_0000 : 0b0000_0000) | opcode
-
   if l <= 125
     write(ws.socket,b1)
     write(ws.socket,uint8(l))
@@ -74,17 +73,19 @@ function send_fragment(ws::Websocket, islast::Bool, data, opcode=0b0001)
   elseif l <= typemax(Uint16)
     write(ws.socket,b1)
     write(ws.socket,uint8(126))
-    write(ws.socket,uint16(l))
+    write(ws.socket,hton(uint16(l)))
     write(ws.socket,data)
   elseif l <= typemax(Uint64)
     write(ws.socket,b1)
     write(ws.socket,uint8(127))
-    write(ws.socket,uint64(l))
+    write(ws.socket,hton(uint64(l)))
     write(ws.socket,data)
   else
     error("Attempted to send too much data for one websocket fragment\n")
   end
 end
+send_fragment(ws::Websocket, islast::Bool, data::ByteString, opcode=0b0001) =
+  send_fragment(ws, islast, data.data, opcode)
 
 # Exported function for sending data into a websocket
 # data should allow length(data) and write(TcpSocket,data)
