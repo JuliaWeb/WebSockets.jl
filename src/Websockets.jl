@@ -1,7 +1,7 @@
 module Websockets
 
 using Httplib
-using Http
+using HttpServer
 export Websocket,
        WebsocketHandler,
        write,
