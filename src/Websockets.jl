@@ -282,12 +282,12 @@ end
 # Implement the WebsocketInterface
 # so that this implementation can be used
 # in Http's server implementation.
-immutable WebsocketHandler <: Http.WebsocketInterface
+immutable WebsocketHandler <: HttpServer.WebsocketInterface
     handle::Function
 end
 
-import Http: handle, is_websocket_handshake
-function handle(handler::WebsocketHandler, req::Request, client::Http.Client)
+import HttpServer: handle, is_websocket_handshake
+function handle(handler::WebsocketHandler, req::Request, client::HttpServer.Client)
     websocket_handshake(req, client)
     handler.handle(req, Websocket(client.id, client.sock))
 end
