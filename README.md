@@ -6,7 +6,7 @@ Websockets in Julia!
 Echo server example:
 
 ```.jl
-using Http
+using HttpServer
 using Websockets
 
 wsh = websocket_handler((req,client) -> begin
