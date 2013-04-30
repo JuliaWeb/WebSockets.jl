@@ -51,3 +51,12 @@ server = Server(wsh)
 run(server,8080)
 ~~~~
 
+To play with a WebSockets echo server, you can:
+
+1. Paste the above code in to the Julia REPL
+2. Open `localhost:8080` in Chrome
+3. Open the Chrome developers tools console
+4. Type `ws = new WebSocket("ws://localhost:8080");` into the console
+5. Type `ws.send("hi")` into the console.
+6. Switch to the 'Network' tab; click on the request; click on the 'frames' tab.
+7. You will see the two frames containing "hi": one sent and one received.
