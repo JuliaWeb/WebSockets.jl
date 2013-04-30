@@ -1,15 +1,15 @@
 using HttpServer
-using Websockets
+using WebSockets
 
 #global Dict to store open connections in
-global connections = Dict{Int,Websocket}()
+global connections = Dict{Int,WebSocket}()
 global usernames   = Dict{Int,String}()
 
 function decodeMessage( msg )
     bytestring(msg)
 end
 
-wsh = WebsocketHandler() do req, client
+wsh = WebSocketHandler() do req, client
     global connections
     @show connections[client.id] = client
     while true

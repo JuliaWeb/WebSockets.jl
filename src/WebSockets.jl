@@ -1,9 +1,9 @@
-module Websockets
+module WebSockets
 
-using Httplib
+using HttpCommon
 using HttpServer
-export Websocket,
-       WebsocketHandler,
+export WebSocket,
+       WebSocketHandler,
        write,
        read,
        close,
@@ -12,21 +12,21 @@ export Websocket,
 
 include("Base64.jl") #used for encoding handshake key
 
-# A Websocket is just a wrapper over a TcpSocket
+# A WebSocket is just a wrapper over a TcpSocket
 # All it does is wrap outgoing data in the protocol
 # and unwrapp incoming data.
-type Websocket
+type WebSocket
   id::Int
   socket::TcpSocket
   is_closed::Bool
 
-  function Websocket(id::Int,socket::TcpSocket)
+  function WebSocket(id::Int,socket::TcpSocket)
     new(id,socket, !socket.open)
   end
 end
 
 #
-# Websocket Packets
+# WebSocket Packets
 #
 
 #      0                   1                   2                   3
@@ -63,7 +63,7 @@ end
 # Internal function for wrapping one
 # piece of data into a WS header
 # sending it out over the TcpSocket.
-function send_fragment(ws::Websocket, islast::Bool, data::Array{Uint8}, opcode=0b0001)
+function send_fragment(ws::WebSocket, islast::Bool, data::Array{Uint8}, opcode=0b0001)
   l = length(data)
   b1::Uint8 = (islast ? 0b1000_0000 : 0b0000_0000) | opcode
   if l <= 125
@@ -84,17 +84,17 @@ function send_fragment(ws::Websocket, islast::Bool, data::Array{Uint8}, opcode=0
     error("Attempted to send too much data for one websocket fragment\n")
   end
 end
-send_fragment(ws::Websocket, islast::Bool, data::ByteString, opcode=0b0001) =
+send_fragment(ws::WebSocket, islast::Bool, data::ByteString, opcode=0b0001) =
   send_fragment(ws, islast, data.data, opcode)
 
 # Exported function for sending data into a websocket
 # data should allow length(data) and write(TcpSocket,data)
 # all protocol details are taken care of.
 import Base.write
-function write(ws::Websocket,data)
+function write(ws::WebSocket,data)
   if ws.is_closed
     @show ws
-    error("attempt to write to closed Websocket\n")
+    error("attempt to write to closed WebSocket\n")
   end
 
   println("sending")
@@ -102,15 +102,15 @@ function write(ws::Websocket,data)
   send_fragment(ws,true,data)
 end
 
-function send_ping(ws::Websocket)
+function send_ping(ws::WebSocket)
   send_fragment(ws, true, "", 0x9)
 end
 
-function send_pong(ws::Websocket)
+function send_pong(ws::WebSocket)
   send_fragment(ws, true, "", 0xA)
 end
 
-function close(ws::Websocket)
+function close(ws::WebSocket)
   send_fragment(ws, true, "", 0x8)
   ws.is_closed = true
   # wait for their close frame, then close the Tcpsocket?
@@ -120,7 +120,7 @@ end
 
 # represents one received message fragment
 # (headers + data)
-type WebsocketFragment
+type WebSocketFragment
   is_last::Bool
   rsv1::Bool
   rsv2::Bool
@@ -133,7 +133,7 @@ type WebsocketFragment
 end
 
 # constructor to do some conversions from bits to Bool.
-function WebsocketFragment(
+function WebSocketFragment(
    fin::Uint8
   ,rsv1::Uint8
   ,rsv2::Uint8
@@ -144,7 +144,7 @@ function WebsocketFragment(
   ,maskkey::Vector{Uint8}
   ,data::Vector{Uint8})
 
-  WebsocketFragment(
+  WebSocketFragment(
       bool(fin)
     , bool(rsv1)
     , bool(rsv2)
@@ -160,12 +160,12 @@ end
 # either a control frame or a data frame
 # this function determines which it is
 # according to the opcode.
-function is_control_frame(msg::WebsocketFragment)
+function is_control_frame(msg::WebSocketFragment)
   return bool((msg.opcode & 0b0000_1000) >>> 3)
   # if that bit is set (1), then this is a control frame.
 end
 
-function handle_control_frame(ws::Websocket,wsf::WebsocketFragment)
+function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
 
   println("handling control frame")
   @show wsf
@@ -185,7 +185,7 @@ function handle_control_frame(ws::Websocket,wsf::WebsocketFragment)
   end
 end
 
-function read_frame(ws::Websocket)
+function read_frame(ws::WebSocket)
   a = read(ws.socket,Uint8)
   fin    = a & 0b1000_0000 >>> 7 #if fin, then is final fragment
   rsv1   = a & 0b0100_0000 #if not 0, fail.
@@ -218,16 +218,16 @@ function read_frame(ws::Websocket)
   end
   println("")
 
-  return WebsocketFragment(fin,rsv1,rsv2,rsv3,opcode,mask,payload_len,maskkey,data)
+  return WebSocketFragment(fin,rsv1,rsv2,rsv3,opcode,mask,payload_len,maskkey,data)
 end
 
 import Base.read
-# Read data from a Websocket.
+# Read data from a WebSocket.
 # This will block until a full message has been received.
 # The headers will be stripped and only the data will be returned.
-function read(ws::Websocket)
+function read(ws::WebSocket)
   if ws.is_closed
-    error("Attempt to read from closed Websocket")
+    error("Attempt to read from closed WebSocket")
   end
 
   frame = read_frame(ws)
@@ -248,7 +248,7 @@ function read(ws::Websocket)
 end
 
 #
-# Websocket Handshake
+# WebSocket Handshake
 #
 
 # get key out of request header
@@ -259,7 +259,7 @@ end
 # the protocol requires that a special key
 # be processed and sent back with the handshake response
 # to prove that received the HTTP request
-# and that we *really* know what websockets means.
+# and that we *really* know what webSockets means.
 generate_websocket_key(key) = begin
   magicstring = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
   resp_key = readall(`echo -n $key$magicstring` | `openssl dgst -sha1`)
@@ -279,20 +279,20 @@ websocket_handshake(request,client) = begin
   Base.write(client.sock,"$response$resp_key\r\n\r\n")
 end
 
-# Implement the WebsocketInterface
+# Implement the WebSocketInterface
 # so that this implementation can be used
 # in Http's server implementation.
-immutable WebsocketHandler <: HttpServer.WebsocketInterface
+immutable WebSocketHandler <: HttpServer.WebSocketInterface
     handle::Function
 end
 
 import HttpServer: handle, is_websocket_handshake
-function handle(handler::WebsocketHandler, req::Request, client::HttpServer.Client)
+function handle(handler::WebSocketHandler, req::Request, client::HttpServer.Client)
     websocket_handshake(req, client)
-    handler.handle(req, Websocket(client.id, client.sock))
+    handler.handle(req, WebSocket(client.id, client.sock))
 end
-function is_websocket_handshake(handler::WebsocketHandler, req::Request)
+function is_websocket_handshake(handler::WebSocketHandler, req::Request)
     get(req.headers, "Upgrade", false) == "websocket"
 end
 
-end # module Websockets
+end # module WebSockets
