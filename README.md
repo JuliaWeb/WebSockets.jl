@@ -36,17 +36,18 @@ and you should see a basic IRC-like chat application.
 
 ##Echo server example:
 
-```.jl
+~~~~.jl
 using HttpServer
 using WebSockets
 
-wsh = websocket_handler((req,client) -> begin
+wsh = WebSocketHandler() do req,client
     while true
         msg = read(client)
         write(client, msg)
     end
-end)
-wshh = WebSocketHandler(wsh)
-server = Server(wshh)
+  end
+  
+server = Server(wsh)
 run(server,8080)
-```
+~~~~
+
