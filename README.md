@@ -21,7 +21,7 @@ WebSockets.jl and it's dependencies
 ([HttpServer.jl](https://github.com/hackerschool/HttpServer.jl),
 [HttpCommon.jl](https://github.com/hackerschool/HttpCommon.jl),
 [HttpParser.jl](https://github.com/hackerschool/HttpParser.jl))
-will are Julia packages.
+are all Julia packages.
 This means that all you have to do is run `Pkg.add("WebSockets")`
 and everything will be installed.
 
