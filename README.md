@@ -68,3 +68,14 @@ To play with a WebSockets echo server, you can:
 5. Type `ws.send("hi")` into the console.
 6. Switch to the 'Network' tab; click on the request; click on the 'frames' tab.
 7. You will see the two frames containing "hi": one sent and one received.
+
+~~~~
+:::::::::::::
+::         ::
+:: Made at ::
+::         ::
+:::::::::::::
+     ::
+Hacker School
+:::::::::::::
+~~~~
