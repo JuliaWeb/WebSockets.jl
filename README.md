@@ -1,14 +1,22 @@
 WebSockets.jl
 =============
 
-This is an implementation of the WebSockets protocol in Julia.
-It started out as part of webstack.jl, and became it's own repo
-when [webstack.jl](https://github.com/hackerschool/webstack.jl) was fragmented
-in preparation for making each piece into it's own package.
+This is a server-side implementation of the WebSockets protocol in Julia.
+If you want to write a web app in Julia that uses websockets, you'll need this package.
 
 WebSockets.jl is most useful in combination with
 [HttpServer.jl](https://github.com/hackerschool/HttpServer.jl),
 which takes care of accepting connections and parsing HTTP requests.
+As you can see in the example code at the bottom of the README,
+you just define a function that takes a request and a client.
+The request is an HTTP Request from [HttpCommon.jl](https://github.com/hackerschool/HttpCommon.jl);
+the client is a `WebSocket`, from this package.
+Your server can `write` data to the WebSocket,
+`read` data from it, send `ping` or `pong` messages, or `close` the connection.
+
+On a historical note, this pacakage started out as part of webstack.jl, and became it's own repo
+when [webstack.jl](https://github.com/hackerschool/webstack.jl) was fragmented
+in preparation for making each piece into it's own package.
 
 WebSockets.jl, like the rest of webstack.jl, has only been tested
 with the development version of Julia.
