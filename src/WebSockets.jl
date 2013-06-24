@@ -174,7 +174,7 @@ is_control_frame(msg::WebSocketFragment) = (msg.opcode & 0b0000_1000) > 0
 function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
   if wsf.opcode == 0x8 #  %x8 denotes a connection close
     send_fragment(ws, true, "", 0x8)
-    w.is_closed = true
+    ws.is_closed = true
     wait(ws.socket.closenotify)
   elseif wsf.opcode == 0x9 #  %x9 denotes a ping
     send_pong(ws,wsf.data)
