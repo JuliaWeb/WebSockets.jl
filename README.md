@@ -25,16 +25,18 @@ if you want to use WebSockets.jl.
 
 ##Installation/Setup
 
-WebSockets.jl and it's dependencies
+```jl
+# in REQUIRE
+WebSockets 0.0.1
+
+# in REPL
+julia> Pkg2.add("WebSockets")
+```
+
+This will install WebSockets.jl and it's dependencies
 ([HttpServer.jl](https://github.com/hackerschool/HttpServer.jl),
 [HttpCommon.jl](https://github.com/hackerschool/HttpCommon.jl),
-[HttpParser.jl](https://github.com/hackerschool/HttpParser.jl))
-are all Julia packages.
-This means that all you have to do is run `Pkg.add("WebSockets")`
-and everything will be installed.
-
-You will also need libhttp-parser, so you should follow the directions in
-[HttpParser](https://github.com/hackerschool/HttpParser.jl)'s README.
+[HttpParser.jl](https://github.com/hackerschool/HttpParser.jl)).
 
 At this point, you can test that it all works
 by `cd`ing into the `~/.julia/WebSockets.jl` directory and
@@ -54,7 +56,7 @@ wsh = WebSocketHandler() do req,client
         write(client, msg)
     end
   end
-  
+
 server = Server(wsh)
 run(server,8080)
 ~~~~
