@@ -2,6 +2,8 @@ module WebSockets
 
 using HttpCommon
 using HttpServer
+using Codecs
+using GnuTLS
 export WebSocket,
        WebSocketHandler,
        write,
@@ -10,7 +12,7 @@ export WebSocket,
        send_ping,
        send_pong
 
-include("Base64.jl") #used for encoding handshake key
+import Base: read, write, isopen, close
 
 # A WebSocket is just a wrapper over a TcpSocket
 # All it does is wrap outgoing data in the protocol
@@ -19,9 +21,10 @@ type WebSocket
   id::Int
   socket::TcpSocket
   is_closed::Bool
+  sent_close::Bool
 
   function WebSocket(id::Int,socket::TcpSocket)
-    new(id,socket, !socket.open)
+    new(id,socket, !isopen(socket), false)
   end
 end
 
@@ -90,32 +93,37 @@ send_fragment(ws::WebSocket, islast::Bool, data::ByteString, opcode=0b0001) =
 # Exported function for sending data into a websocket
 # data should allow length(data) and write(TcpSocket,data)
 # all protocol details are taken care of.
-import Base.write
 function write(ws::WebSocket,data)
   if ws.is_closed
     @show ws
     error("attempt to write to closed WebSocket\n")
   end
 
-  println("sending")
   #assume data fits in one fragment
   send_fragment(ws,true,data)
 end
 
-function send_ping(ws::WebSocket)
-  send_fragment(ws, true, "", 0x9)
+function send_ping(ws::WebSocket, data = "")
+  send_fragment(ws, true, data, 0x9)
 end
 
-function send_pong(ws::WebSocket)
-  send_fragment(ws, true, "", 0xA)
+function send_pong(ws::WebSocket, data = "")
+  send_fragment(ws, true, data, 0xA)
 end
 
 function close(ws::WebSocket)
-  send_fragment(ws, true, "", 0x8)
-  ws.is_closed = true
-  # wait for their close frame, then close the Tcpsocket?
-  close(ws.socket)
+    send_fragment(ws, true, "", 0x8)
+    ws.is_closed = true
+    while true
+      wsf = read_frame(ws)
+      is_control_frame(wsf) || continue
+      wsf.opcode == 0x8 || continue
+      break
+    end
+    close(ws.socket)
 end
+
+isopen(ws::WebSocket) = !ws.is_closed
 
 
 # represents one received message fragment
@@ -160,28 +168,20 @@ end
 # either a control frame or a data frame
 # this function determines which it is
 # according to the opcode.
-function is_control_frame(msg::WebSocketFragment)
-  return bool((msg.opcode & 0b0000_1000) >>> 3)
-  # if that bit is set (1), then this is a control frame.
-end
+# if that bit is set (1), then this is a control frame.
+is_control_frame(msg::WebSocketFragment) = (msg.opcode & 0b0000_1000) > 0
 
 function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
-
-  println("handling control frame")
-  @show wsf
-
   if wsf.opcode == 0x8 #  %x8 denotes a connection close
-    println("closed!")
-    #TODO: send close frame
-    #TODO: close socket
+    send_fragment(ws, true, "", 0x8)
+    w.is_closed = true
+    wait(ws.socket.closenotify)
   elseif wsf.opcode == 0x9 #  %x9 denotes a ping
-    println("ping")
-    #TODO: send pong
+    send_pong(ws,wsf.data)
   elseif wsf.opcode == 0xA #  %xA denotes a pong
-    println("pong")
-    # nothing to do here...?
+    # Nothing to do here
   else #  %xB-F are reserved for further control frames
-    println("unknown opcode $(wsf.opcode)")
+    error("Unknown opcode $(wsf.opcode)")
   end
 end
 
@@ -213,10 +213,8 @@ function read_frame(ws::WebSocket)
   for i in 1:payload_len
     d = read(ws.socket, Uint8)
     d = d $ maskkey[mod(i - 1, 4) + 1]
-    print("$(convert(Char,d))")
     data[i] = d
   end
-  println("")
 
   return WebSocketFragment(fin,rsv1,rsv2,rsv3,opcode,mask,payload_len,maskkey,data)
 end
@@ -240,7 +238,6 @@ function read(ws::WebSocket)
 
   #handle data that uses multiple fragments
   if !frame.is_last
-    print("\n\thandling fragmented message\n")
     return concatenate(frame.data,read(ws))
   end
 
@@ -260,17 +257,12 @@ end
 # be processed and sent back with the handshake response
 # to prove that received the HTTP request
 # and that we *really* know what webSockets means.
-generate_websocket_key(key) = begin
-  magicstring = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-  resp_key = readall(`echo -n $key$magicstring` | `openssl dgst -sha1`)
-  m = match(r"(?:\([^)]*\)=\s)?(.+)$", resp_key)
-  bytes = hex2bytes(m.captures[1])
-  return base64(bytes)
-end
+generate_websocket_key(key) = bytestring(encode(Base64,
+  GnuTLS.hash(SHA1,string(key,"258EAFA5-E914-47DA-95CA-C5AB0DC85B11").data)))
+
 
 # perform the handshake assuming it's a websocket request
 websocket_handshake(request,client) = begin
-
   key = get_websocket_key(request)
   resp_key = generate_websocket_key(key)
 
@@ -289,7 +281,9 @@ end
 import HttpServer: handle, is_websocket_handshake
 function handle(handler::WebSocketHandler, req::Request, client::HttpServer.Client)
     websocket_handshake(req, client)
-    handler.handle(req, WebSocket(client.id, client.sock))
+    sock = WebSocket(client.id, client.sock)
+    handler.handle(req, sock)
+    isopen(sock) && close(sock)
 end
 function is_websocket_handshake(handler::WebSocketHandler, req::Request)
     get(req.headers, "Upgrade", false) == "websocket"
