@@ -257,19 +257,8 @@ end
 # be processed and sent back with the handshake response
 # to prove that received the HTTP request
 # and that we *really* know what webSockets means.
-<<<<<<< HEAD
-generate_websocket_key(key) = begin
-  magicstring = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-  resp_key = readall(`echo -n $key$magicstring` |> `openssl dgst -sha1`)
-  m = match(r"(?:\([^)]*\)=\s)?(.+)$", resp_key)
-  bytes = hex2bytes(m.captures[1])
-  return base64(bytes)
-end
-=======
 generate_websocket_key(key) = bytestring(encode(Base64,
   GnuTLS.hash(SHA1,string(key,"258EAFA5-E914-47DA-95CA-C5AB0DC85B11").data)))
-
->>>>>>> e92335e8476c2956bc52f6956726f3716f9141ae
 
 # perform the handshake assuming it's a websocket request
 websocket_handshake(request,client) = begin
