@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+    <title>Websockets client</title>
+    <style>
+        .sent {
+            color: blue;
+        }
+        .received {
+            color: green;
+        }
+    </style>
+</head>
+<body>
+<div id="content">
+
+    </div>
+    <div id="sayer" style="position:fixed;bottom:0;height:50px;background:#333;width:100%;">
+        <span></span><input name="say" type="text" value="" /><input type="submit" value="say" />
+    </div>
+</div>
+<script src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
+<script type="text/javascript">
+    $(function(){
+        var connection = new WebSocket('ws://'+window.location.host);
+        var you = "you";
+        connection.onmessage = function( message ){
+            window.lastmessage = message;
+            $("#content").prepend( $("<p class='received'></p>").html( message.data ) );
+        }
+        function sendMessage( message ){
+            connection.send(message);
+            $("#content").prepend( $("<p class='sent'></p>").html( you + ": " + message ) );
+        }
+        $("#sayer input[type=submit]").click(function(){
+            if( $("#sayer input[name=say]").val().replace(/\s/gi,'').length )
+                sendMessage( $("#sayer input[name=say]").val() );
+            $("#sayer input[name=say]").val("").focus();
+        });
+        $("#sayer input[name=say]").keypress(function(e){
+            if( e.which === 13 ) $("#sayer input[type=submit]").click();
+        });
+    });
+</script>
+</body>
+</html>
