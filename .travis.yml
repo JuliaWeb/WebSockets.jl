@@ -18,6 +18,7 @@ script:
     - julia -e 'Pkg.add("BinDeps")'
     - julia -e 'Pkg.add("Calendar")'
     - julia -e 'Pkg.add("HttpServer")'
+    - julia -e 'Pkg.add("GnuTLS")'
     - julia -e 'Pkg.fixup("WebSockets")'
     - julia ~/.julia/WebSockets/test/tests.jl
 
