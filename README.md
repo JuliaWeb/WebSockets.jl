@@ -1,5 +1,6 @@
 WebSockets.jl
 =============
+[![Build Status](https://travis-ci.org/hackerschool/WebSockets.jl.png)](https://travis-ci.org/hackerschool/WebSockets.jl)
 
 This is a server-side implementation of the WebSockets protocol in Julia.
 If you want to write a web app in Julia that uses websockets, you'll need this package.
