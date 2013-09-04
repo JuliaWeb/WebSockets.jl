@@ -19,11 +19,11 @@ import Base: read, write, isopen, close
 # and unwrapp incoming data.
 type WebSocket
   id::Int
-  socket::TcpSocket
+  socket::Base.TcpSocket
   is_closed::Bool
   sent_close::Bool
 
-  function WebSocket(id::Int,socket::TcpSocket)
+  function WebSocket(id::Int,socket::Base.TcpSocket)
     new(id,socket, !isopen(socket), false)
   end
 end
