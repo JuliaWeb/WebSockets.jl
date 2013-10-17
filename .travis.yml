@@ -21,6 +21,5 @@ script:
     - julia -e 'Pkg.add("HttpParser")'
     - julia -e 'Pkg.add("HttpCommon")'
     - julia -e 'Pkg.add("HttpServer")'
-    - julia -e 'Pkg.fixup("WebSockets")'
     - julia ~/.julia/WebSockets/test/tests.jl
 
