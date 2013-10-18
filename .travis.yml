@@ -15,11 +15,6 @@ script:
     - julia -e "Pkg.init()"
     - mkdir -p ~/.julia/WebSockets
     - cp -R ./* ~/.julia/WebSockets/
-    - julia -e 'Pkg.add("BinDeps")'
-    - julia -e 'Pkg.add("Calendar")'
-    - julia -e 'Pkg.add("GnuTLS")'
-    - julia -e 'Pkg.add("HttpParser")'
-    - julia -e 'Pkg.add("HttpCommon")'
-    - julia -e 'Pkg.add("HttpServer")'
+    - julia -e 'Pkg.resolve()'
     - julia ~/.julia/WebSockets/test/tests.jl
 
