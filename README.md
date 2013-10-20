@@ -40,7 +40,7 @@ This will install WebSockets.jl and it's dependencies
 [HttpParser.jl](https://github.com/hackerschool/HttpParser.jl)).
 
 At this point, you can test that it all works
-by `cd`ing into the `~/.julia/WebSockets.jl` directory and
+by `cd`ing into the `~/.julia/WebSockets` directory and
 running `julia examples/chat.jl`.
 Open `localhost:8000` in a browser that supports WebSockets,
 and you should see a basic IRC-like chat application.
