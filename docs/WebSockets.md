@@ -8,20 +8,20 @@ which is what you to set up a server that accepts HTTP(S) connections.
 
 As a first example, we can create a WebSockets echo server:
 
-~~~julia
-using HttpServer
-using WebSockets
+    :::julia
+    using HttpServer
+    using WebSockets
 
-wsh = WebSocketHandler() do req,client
-    while true
-        msg = read(client)
-        write(client, msg)
-    end
-  end
+    wsh = WebSocketHandler() do req,client
+            while true
+                msg = read(client)
+                write(client, msg)
+            end
+          end
 
-server = Server(wsh)
-run(server,8080)
-~~~
+    server = Server(wsh)
+    run(server,8080)
+
 
 This sets up a server running on localhost, port 8080.
 It will accept WebSockets connections.
@@ -42,9 +42,8 @@ You can:
 
 ## Installation/Setup
 
-~~~julia
-julia> Pkg.add("WebSockets")
-~~~
+    :::julia
+    julia> Pkg.add("WebSockets")
 
 At this point, you can use the examples below to test that it all works.
 
@@ -58,20 +57,19 @@ At this point, you can use the examples below to test that it all works.
 
 ## Echo server example:
 
-~~~julia
-using HttpServer
-using WebSockets
+    :::julia
+    using HttpServer
+    using WebSockets
 
-wsh = WebSocketHandler() do req,client
-    while true
-        msg = read(client)
-        write(client, msg)
-    end
-  end
+    wsh = WebSocketHandler() do req,client
+            while true
+                msg = read(client)
+                write(client, msg)
+            end
+          end
 
-server = Server(wsh)
-run(server,8080)
-~~~
+    server = Server(wsh)
+    run(server,8080)
 
 To play with a WebSockets echo server, you can:
 
