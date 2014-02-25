@@ -12,9 +12,7 @@ before_install:
     - git config --global user.email "leah.a.hanson@gmail.com"
     - git submodule update --init --recursive
 script:
-    - julia -e "Pkg.init()"
-    - mkdir -p ~/.julia/WebSockets
-    - cp -R ./* ~/.julia/WebSockets/
-    - julia -e 'Pkg.resolve()'
-    - julia ~/.julia/WebSockets/test/tests.jl
+    - julia -e 'Pkg.init(); run(`ln -s $(pwd()) $(Pkg.dir("WebSockets"))`); Pkg.pin("WebSockets"); Pkg.resolve()'
+    - julia -e 'using WebSockets; @assert isdefined(:WebSockets); @assert typeof(WebSockets) === Module'
+    - julia test/tests.jl
 
