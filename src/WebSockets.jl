@@ -3,7 +3,7 @@ module WebSockets
 using HttpCommon
 using HttpServer
 using Codecs
-using GnuTLS
+using Nettle
 export WebSocket,
        WebSocketHandler,
        write,
@@ -257,8 +257,11 @@ end
 # be processed and sent back with the handshake response
 # to prove that received the HTTP request
 # and that we *really* know what webSockets means.
-generate_websocket_key(key) = bytestring(encode(Base64,
-  GnuTLS.hash(SHA1,string(key,"258EAFA5-E914-47DA-95CA-C5AB0DC85B11").data)))
+function generate_websocket_key(key)
+  h = HashState(SHA1)
+  update!(h, key*"258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+  bytestring(encode(Base64, digest!(h)))
+end
 
 # perform the handshake assuming it's a websocket request
 websocket_handshake(request,client) = begin
