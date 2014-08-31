@@ -93,7 +93,7 @@ send_fragment(ws::WebSocket, islast::Bool, data::ByteString, opcode=0b0001) =
 # Exported function for sending data into a websocket
 # data should allow length(data) and write(TcpSocket,data)
 # all protocol details are taken care of.
-function write(ws::WebSocket,data)
+function write(ws::WebSocket,data::ByteString)
   if ws.is_closed
     @show ws
     error("attempt to write to closed WebSocket\n")
@@ -101,6 +101,16 @@ function write(ws::WebSocket,data)
 
   #assume data fits in one fragment
   send_fragment(ws,true,data)
+end
+
+function write(ws::WebSocket, data::Array{Uint8})
+  if ws.is_closed
+    @show ws
+    error("attempt to write to closed WebSocket\n")
+  end
+
+  #indicate this is binary data
+  send_fragment(ws,true,data, 0b0010)
 end
 
 function send_ping(ws::WebSocket, data = "")
