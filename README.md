@@ -6,7 +6,7 @@ WebSockets.jl
 
 This is a server-side implementation of the WebSockets protocol in Julia. If you want to write a web app in Julia that uses WebSockets, you'll need this package.
 
-This package works with [HttpServer.jl](https://github.com/JuliaWeb/HttpServer.jl), which is what you to set up a server that accepts HTTP(S) connections.
+This package works with [HttpServer.jl](https://github.com/JuliaWeb/HttpServer.jl), which is what you use to set up a server that accepts HTTP(S) connections.
 
 As a first example, we can create a WebSockets echo server:
 
