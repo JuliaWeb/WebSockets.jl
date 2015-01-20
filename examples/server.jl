@@ -30,7 +30,7 @@ end
 server = Server(httph, wsh)
 println("Chat server listening on 8080...")
 
-eval(Base,parse("mystreamvar = IOString()"))
+eval(Base,parse("mystreamvar = IOBuffer()"))
 eval(Base,parse("STDOUT = mystreamvar"))
 
 run(server,8080)
