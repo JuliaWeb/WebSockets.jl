@@ -86,12 +86,12 @@ To play with a WebSockets echo server, you can:
 7. You will see the two frames containing "hi": one sent and one received.
 
 ~~~~
-:::::::::::::
-::         ::
-:: Made at ::
-::         ::
-:::::::::::::
-     ::
-Hacker School
-:::::::::::::
+::::::::::::::::
+::            ::
+::  Made at   ::
+::            ::
+::::::::::::::::
+       ::
+ Recurse Center
+::::::::::::::::
 ~~~~
