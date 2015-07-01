@@ -258,11 +258,6 @@ end
 # WebSocket Handshake
 #
 
-# get key out of request header
-get_websocket_key(request::Request) = begin
-  return request.headers["Sec-WebSocket-Key"]
-end
-
 # the protocol requires that a special key
 # be processed and sent back with the handshake response
 # to prove that received the HTTP request
@@ -274,13 +269,16 @@ function generate_websocket_key(key)
 end
 
 # perform the handshake assuming it's a websocket request
-websocket_handshake(request,client) = begin
-  key = get_websocket_key(request)
+funcion websocket_handshake(request,client)
+  key = request.headers["Sec-WebSocket-Key"]
   resp_key = generate_websocket_key(key)
 
   #TODO: use a proper HTTP response type
-  response = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "
-  Base.write(client.sock,"$response$resp_key\r\n\r\n")
+  response = Response(101)
+  response.headers["Upgrade"] = "websockets"
+  response.headers["Connection"] = "Upgrade"
+  response.headers["Sec-WebSocket-Accept"] = resp_key
+  Base.write(client.sock, response)
 end
 
 # Implement the WebSocketInterface
