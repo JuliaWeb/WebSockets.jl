@@ -163,12 +163,12 @@ function WebSocketFragment(
   ,data::Vector{Uint8})
 
   WebSocketFragment(
-      bool(fin)
-    , bool(rsv1)
-    , bool(rsv2)
-    , bool(rsv3)
+      fin != 0
+    , rsv1 != 0
+    , rsv2 != 0
+    , rsv3 != 0
     , opcode
-    , bool(masked)
+    , masked != 0
     , payload_len
     , maskkey
     , data)
