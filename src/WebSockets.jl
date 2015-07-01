@@ -271,8 +271,23 @@ end
 # Checks for required headers; sends Response(400) if they're missing or bad.
 # Otherwise, ransforms client key into accept value, and sends Reponse(101).
 # TODO: Add logging of refused requests
-funcion websocket_handshake(request,client)
+function websocket_handshake(request,client)
+  if !haskey(request.headers, "Sec-WebSocket-Key")
+    Base.write(client.sock, Response(400))
+    return
+  end
+  if get(request.headers, "Sec-WebSocket-Version", "13") != "13"
+    response = Response(400)
+    response.headers["Sec-WebSocket-Version"] = "13"
+    Base.write(client.sock, response)
+    return
+  end
+
   key = request.headers["Sec-WebSocket-Key"]
+  if length(decode(key)) != 16 # Key must be 16 bytes
+    Base.write(client.sock, Response(400))
+    return
+  end
   resp_key = generate_websocket_key(key)
 
   response = Response(101)
