@@ -258,22 +258,23 @@ end
 # WebSocket Handshake
 #
 
-# the protocol requires that a special key
-# be processed and sent back with the handshake response
-# to prove that received the HTTP request
-# and that we *really* know what webSockets means.
+# Transforms a websocket client key into the server's accept value.
+# Concatenate key with magic string from RFC, then SHA1 hash.
+# Return base64 encoded string of value.
 function generate_websocket_key(key)
   h = HashState(SHA1)
   update!(h, key*"258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
   bytestring(encode(Base64, digest!(h)))
 end
 
-# perform the handshake assuming it's a websocket request
+# Responds to a WebSocket handshake request.
+# Checks for required headers; sends Response(400) if they're missing or bad.
+# Otherwise, ransforms client key into accept value, and sends Reponse(101).
+# TODO: Add logging of refused requests
 funcion websocket_handshake(request,client)
   key = request.headers["Sec-WebSocket-Key"]
   resp_key = generate_websocket_key(key)
 
-  #TODO: use a proper HTTP response type
   response = Response(101)
   response.headers["Upgrade"] = "websockets"
   response.headers["Connection"] = "Upgrade"
@@ -281,9 +282,7 @@ funcion websocket_handshake(request,client)
   Base.write(client.sock, response)
 end
 
-# Implement the WebSocketInterface
-# so that this implementation can be used
-# in Http's server implementation.
+# Implement the WebSocketInterface, for compatilibility with HttpServer.
 immutable WebSocketHandler <: HttpServer.WebSocketInterface
     handle::Function
 end
