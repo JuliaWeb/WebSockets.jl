@@ -298,7 +298,10 @@ function handle(handler::WebSocketHandler, req::Request, client::HttpServer.Clie
     isopen(sock) && close(sock)
 end
 function is_websocket_handshake(handler::WebSocketHandler, req::Request)
-    get(req.headers, "Upgrade", false) == "websocket"
+    is_get = req.method == "GET"
+    is_upgrade = get(req.headers, "Connection", false) == "upgrade"
+    is_websockets = get(req.headers, "Upgrade", false) == "websocket"
+    return is_get && is_upgrade && is_websockets
 end
 
 end # module WebSockets
