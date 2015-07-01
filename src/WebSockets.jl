@@ -71,17 +71,17 @@ function send_fragment(ws::WebSocket, islast::Bool, data::Array{Uint8}, opcode=0
   b1::Uint8 = (islast ? 0b1000_0000 : 0b0000_0000) | opcode
   if l <= 125
     write(ws.socket,b1)
-    write(ws.socket,uint8(l))
+    write(ws.socket,convert(Uint8,l))
     write(ws.socket,data)
   elseif l <= typemax(Uint16)
     write(ws.socket,b1)
-    write(ws.socket,uint8(126))
-    write(ws.socket,hton(uint16(l)))
+    write(ws.socket,convert(Uint8,126))
+    write(ws.socket,hton(convert(Uint16,l)))
     write(ws.socket,data)
   elseif l <= typemax(Uint64)
     write(ws.socket,b1)
-    write(ws.socket,uint8(127))
-    write(ws.socket,hton(uint64(l)))
+    write(ws.socket,convert(Uint8,127))
+    write(ws.socket,hton(convert(Uint64,l)))
     write(ws.socket,data)
   else
     error("Attempted to send too much data for one websocket fragment\n")
@@ -163,12 +163,12 @@ function WebSocketFragment(
   ,data::Vector{Uint8})
 
   WebSocketFragment(
-      bool(fin)
-    , bool(rsv1)
-    , bool(rsv2)
-    , bool(rsv3)
+      fin != 0
+    , rsv1 != 0
+    , rsv2 != 0
+    , rsv3 != 0
     , opcode
-    , bool(masked)
+    , masked != 0
     , payload_len
     , maskkey
     , data)
