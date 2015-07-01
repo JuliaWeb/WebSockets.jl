@@ -181,6 +181,7 @@ end
 # if that bit is set (1), then this is a control frame.
 is_control_frame(msg::WebSocketFragment) = (msg.opcode & 0b0000_1000) > 0
 
+# Respond to pings, ignore pongs, respond to close.
 function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
   if wsf.opcode == 0x8 #  %x8 denotes a connection close
     send_fragment(ws, true, "", 0x8)
@@ -195,23 +196,24 @@ function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
   end
 end
 
+# Read a frame: turn bytes from the websocket into a WebSocketFragment.
 function read_frame(ws::WebSocket)
   a = read(ws.socket,Uint8)
-  fin    = a & 0b1000_0000 >>> 7 #if fin, then is final fragment
+  fin    = a & 0b1000_0000 >>> 7  # If fin, then is final fragment
   rsv1   = a & 0b0100_0000 #if not 0, fail.
   rsv2   = a & 0b0010_0000 #if not 0, fail.
   rsv3   = a & 0b0001_0000 #if not 0, fail.
   opcode = a & 0b0000_1111 #if not known code, fail.
-  #TODO: add validation somewhere to ensure rsv,opcode,mask,etc are valid.
+  # TODO: add validation somewhere to ensure rsv,opcode,mask,etc are valid.
 
   b = read(ws.socket,Uint8)
-  mask = b & 0b1000_0000 >>> 7 #if not 1, fail.
+  mask = b & 0b1000_0000 >>> 7  # If not 1, fail.
 
   payload_len::Uint64 = b & 0b0111_1111
   if payload_len == 126
-    payload_len = ntoh(read(ws.socket,Uint16)) #2 bytes
+    payload_len = ntoh(read(ws.socket,Uint16))  # 2 bytes
   elseif payload_len == 127
-    payload_len = ntoh(read(ws.socket,Uint64)) #8 bytes
+    payload_len = ntoh(read(ws.socket,Uint64))  # 8 bytes
   end
 
   maskkey = Array(Uint8,4)
@@ -237,16 +239,17 @@ function read(ws::WebSocket)
   if ws.is_closed
     error("Attempt to read from closed WebSocket")
   end
-
   frame = read_frame(ws)
 
-  #handle control (non-data) messages
+  # Handle control (non-data) messages.
   if is_control_frame(frame)
+    # Don't return control frames; they're not interesting to users.
     @show handle_control_frame(ws,frame)
+    # Recurse to return the next data frame.
     return read(ws)
   end
 
-  #handle data that uses multiple fragments
+  # Handle data message that uses multiple fragments.
   if !frame.is_last
     return concatenate(frame.data,read(ws))
   end
