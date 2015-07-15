@@ -248,7 +248,7 @@ function read(ws::WebSocket)
 
   #handle data that uses multiple fragments
   if !frame.is_last
-    return concatenate(frame.data,read(ws))
+    return vcat(frame.data, read(ws))
   end
 
   return frame.data
