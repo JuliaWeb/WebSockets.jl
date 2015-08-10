@@ -3,3 +3,4 @@ HttpCommon 0.0.3-
 HttpServer 0.0.4-
 Codecs
 Nettle
+Compat
