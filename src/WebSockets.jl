@@ -242,13 +242,14 @@ function read(ws::WebSocket)
 
   #handle control (non-data) messages
   if is_control_frame(frame)
-    @show handle_control_frame(ws,frame)
+    handle_control_frame(ws,frame)
+    # return the next non-control frame
     return read(ws)
   end
 
   #handle data that uses multiple fragments
   if !frame.is_last
-    return concatenate(frame.data,read(ws))
+    return vcat(frame.data, read(ws))
   end
 
   return frame.data
