@@ -52,7 +52,7 @@ At this point, you can use the examples below to test that it all works.
 
 ## [Chat client/server example](https://github.com/JuliaWeb/WebSockets.jl/blob/master/examples/chat.jl):
 
-1. Move to the `~/.julia/WebSockets.jl` directory
+1. Move to the `~/.julia/<version>/WebSockets` directory
 2. Run `julia examples/chat.jl`
 3. In a web browser, open `localhost:8000`
 4. You should see a basic IRC-like chat application
