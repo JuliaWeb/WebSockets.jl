@@ -301,7 +301,7 @@ function websocket_handshake(request,client)
   end
 
   key = request.headers["Sec-WebSocket-Key"]
-  if length(decode(key)) != 16 # Key must be 16 bytes
+  if length(decode(Base64,key)) != 16 # Key must be 16 bytes
     Base.write(client.sock, Response(400))
     return
   end
