@@ -65,43 +65,57 @@ end
 #     |                     Payload Data continued ...                |
 #     +---------------------------------------------------------------+
 #
+
+
 # Opcode values
 #  *  %x0 denotes a continuation frame
+const OPCODE_CONTINUATION = 0x00
 #  *  %x1 denotes a text frame
+const OPCODE_TEXT = 0x1
 #  *  %x2 denotes a binary frame
+const OPCODE_BINARY = 0x2
 #  *  %x3-7 are reserved for further non-control frames
 #
 #  *  %x8 denotes a connection close
+const OPCODE_CLOSE = 0x8
 #  *  %x9 denotes a ping
+const OPCODE_PING = 0x9
 #  *  %xA denotes a pong
+const OPCODE_PONG = 0xA
 #  *  %xB-F are reserved for further control frames
 
 # Constructs a frame from the arguments and sends it on the provided socket.
-function send_fragment(ws::WebSocket, islast::Bool, data::Array{Uint8}, opcode=0b0001)
+function write_fragment(io::IO, islast::Bool, data::Array{UInt8}, opcode)
   l = length(data)
-  b1::Uint8 = (islast ? 0b1000_0000 : 0b0000_0000) | opcode
+  b1::UInt8 = (islast ? 0b1000_0000 : 0b0000_0000) | opcode
+
+  # TODO: Do the mask xor thing??
+  # 1. set bit 8 to 1,
+  # 2. set a mask
+  # 3. xor data with mask
+
   if l <= 125
-    write(ws.socket,b1)
-    write(ws.socket,UInt8(l))
-    write(ws.socket,data)
-  elseif l <= typemax(Uint16)
-    write(ws.socket,b1)
-    write(ws.socket,UInt8(126))
-    write(ws.socket,hton(UInt16(l)))
-    write(ws.socket,data)
-  elseif l <= typemax(Uint64)
-    write(ws.socket,b1)
-    write(ws.socket,UInt8(127))
-    write(ws.socket,hton(UInt64(l)))
-    write(ws.socket,data)
+    write(io, b1)
+    write(io, @compat UInt8(l))
+    write(io, data)
+  elseif l <= typemax(UInt16)
+    write(io, b1)
+    write(io, @compat UInt8(126))
+    write(io, hton(@compat UInt16(l)))
+    write(io, data)
+  elseif l <= typemax(UInt64)
+    write(io, b1)
+    write(io, @compat UInt8(127))
+    write(io, hton(@compat UInt64(l)))
+    write(io, data)
   else
     error("Attempted to send too much data for one websocket fragment\n")
   end
 end
 
 # A version of send_fragment for text data.
-function send_fragment(ws::WebSocket, islast::Bool, data::ByteString, opcode=0b0001)
-  send_fragment(ws, islast, data.data, opcode)
+function write_fragment(io::IO, islast::Bool, data::ByteString, opcode)
+  write_fragment(io, islast, data.data, opcode)
 end
 
 # Write text data; will be sent as one frame.
@@ -110,36 +124,44 @@ function Base.write(ws::WebSocket,data::ByteString)
     @show ws
     error("Attempted write to closed WebSocket\n")
   end
-  send_fragment(ws, true, data)
+  write_fragment(ws.socket, true, data, OPCODE_TEXT)
 end
 
 # Write binary data; will be sent as one frmae.
-function Base.write(ws::WebSocket, data::Array{Uint8})
+function Base.write(ws::WebSocket, data::Array{UInt8})
   if ws.is_closed
     @show ws
     error("attempt to write to closed WebSocket\n")
   end
-  send_fragment(ws, true, data, 0b0010)
+  write_fragment(ws.socket, true, data, OPCODE_BINARY)
 end
 
 # Send a ping message, optionally with data.
-function send_ping(ws::WebSocket, data = "")
-  send_fragment(ws, true, data, 0x9)
+function write_ping(io::IO, data = "")
+  write_fragment(io, true, data, OPCODE_PING)
 end
 
+send_ping(ws, data...) = write_ping(ws.socket, data...)
+
 # Send a pong message, optionally with data.
-function send_pong(ws::WebSocket, data = "")
-  send_fragment(ws, true, data, 0xA)
+function write_pong(io::IO, data = "")
+  write_fragment(io, true, data, OPCODE_PONG)
 end
+
+send_pong(ws, data...) = write_pong(ws.socket, data...)
 
 # Send a close message.
 function Base.close(ws::WebSocket)
-    send_fragment(ws, true, "", 0x8)
+    # Tell client to close connection
+    write_fragment(ws.socket, true, "", OPCODE_CLOSE)
     ws.is_closed = true
+
+    # Wait till client responds with an OPCODE_CLOSE
     while true
-      wsf = read_frame(ws)
+      wsf = read_frame(ws.socket)
+      # ALERT: stuff might get lost in ether here
       is_control_frame(wsf) || continue
-      wsf.opcode == 0x8 || continue
+      wsf.opcode == OPCODE_CLOSE || continue
       break
     end
     close(ws.socket)
@@ -147,7 +169,7 @@ end
 
 # A WebSocket is closed if the underlying TCP socket closes, or if we send or
 # receive a close message.
-Base.isopen(ws::WebSocket) = !ws.is_closed
+Base.isopen(ws::WebSocket) = !ws.is_closed && isopen(ws.socket)
 
 
 # Represents one (received) message frame.
@@ -156,24 +178,24 @@ type WebSocketFragment
   rsv1::Bool
   rsv2::Bool
   rsv3::Bool
-  opcode::Uint8  # This is actually a Uint4 value.
+  opcode::UInt8  # This is actually a UInt4 value.
   is_masked::Bool
-  payload_len::Uint64
-  maskkey::Vector{Uint8}  # This will be 4 bytes on frames from the client.
-  data::Vector{Uint8}  # For text messages, this is a ByteString.
+  payload_len::UInt64
+  maskkey::Vector{UInt8}  # This will be 4 bytes on frames from the client.
+  data::Vector{UInt8}  # For text messages, this is a ByteString.
 end
 
 # This constructor handles conversions from bytes to bools.
 function WebSocketFragment(
-   fin::Uint8
-  ,rsv1::Uint8
-  ,rsv2::Uint8
-  ,rsv3::Uint8
-  ,opcode::Uint8
-  ,masked::Uint8
-  ,payload_len::Uint64
-  ,maskkey::Vector{Uint8}
-  ,data::Vector{Uint8})
+   fin::UInt8
+  ,rsv1::UInt8
+  ,rsv2::UInt8
+  ,rsv3::UInt8
+  ,opcode::UInt8
+  ,masked::UInt8
+  ,payload_len::UInt64
+  ,maskkey::Vector{UInt8}
+  ,data::Vector{UInt8})
 
   WebSocketFragment(
       fin != 0
@@ -192,13 +214,14 @@ is_control_frame(msg::WebSocketFragment) = (msg.opcode & 0b0000_1000) > 0
 
 # Respond to pings, ignore pongs, respond to close.
 function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
-  if wsf.opcode == 0x8  # %x8 denotes a connection close.
-    send_fragment(ws, true, "", 0x8)
+  if wsf.opcode == OPCODE_CLOSE
+    # Reply with an empty CLOSE frame
+    write_fragment(ws.socket, true, "", OPCODE_CLOSE)
     ws.is_closed = true
     wait(ws.socket.closenotify)
-  elseif wsf.opcode == 0x9  # %x9 denotes a ping.
-    send_pong(ws,wsf.data)
-  elseif wsf.opcode == 0xA  # %xA denotes a pong.
+  elseif wsf.opcode == OPCODE_PING
+    write_pong(ws.socket,wsf.data)
+  elseif wsf.opcode == OPCODE_PONG
     # Nothing to do here; no reply is needed for a pong message.
   else  # %xB-F are reserved for further control frames
     error("Unknown opcode $(wsf.opcode)")
@@ -206,8 +229,8 @@ function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
 end
 
 # Read a frame: turn bytes from the websocket into a WebSocketFragment.
-function read_frame(ws::WebSocket)
-  a = read(ws.socket,Uint8)
+function read_frame(io::IO)
+  a = read(io,UInt8)
   fin    = a & 0b1000_0000 >>> 7  # If fin, then is final fragment
   rsv1   = a & 0b0100_0000  # If not 0, fail.
   rsv2   = a & 0b0010_0000  # If not 0, fail.
@@ -215,24 +238,29 @@ function read_frame(ws::WebSocket)
   opcode = a & 0b0000_1111  # If not known code, fail.
   # TODO: add validation somewhere to ensure rsv, opcode, mask, etc are valid.
 
-  b = read(ws.socket,Uint8)
+  b = read(io,UInt8)
   mask = b & 0b1000_0000 >>> 7  # If not 1, fail.
 
-  payload_len::Uint64 = b & 0b0111_1111
+  if mask != 1
+      error("WebSocket reader cannot handle incoming messages without mask. " *
+            "See http://tools.ietf.org/html/rfc6455#section-5.3")
+  end
+
+  payload_len::UInt64 = b & 0b0111_1111
   if payload_len == 126
-    payload_len = ntoh(read(ws.socket,Uint16))  # 2 bytes
+    payload_len = ntoh(read(io,UInt16))  # 2 bytes
   elseif payload_len == 127
-    payload_len = ntoh(read(ws.socket,Uint64))  # 8 bytes
+    payload_len = ntoh(read(io,UInt64))  # 8 bytes
   end
 
-  maskkey = Array(Uint8,4)
+  maskkey = Array(UInt8,4)
   for i in 1:4
-   maskkey[i] = read(ws.socket,Uint8)
+    maskkey[i] = read(io,UInt8)
   end
 
-  data = Array(Uint8, payload_len)
+  data = Array(UInt8, payload_len)
   for i in 1:payload_len
-    d = read(ws.socket, Uint8)
+    d = read(io, UInt8)
     d = d $ maskkey[mod(i - 1, 4) + 1]
     data[i] = d
   end
@@ -250,7 +278,7 @@ function Base.read(ws::WebSocket)
   if ws.is_closed
     error("Attempt to read from closed WebSocket")
   end
-  frame = read_frame(ws)
+  frame = read_frame(ws.socket)
 
   # Handle control (non-data) messages.
   if is_control_frame(frame)
