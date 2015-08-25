@@ -301,7 +301,7 @@ function websocket_handshake(request,client)
   end
 
   key = request.headers["Sec-WebSocket-Key"]
-  if length(decode(key)) != 16 # Key must be 16 bytes
+  if length(decode(Base64,key)) != 16 # Key must be 16 bytes
     Base.write(client.sock, Response(400))
     return
   end
@@ -328,8 +328,8 @@ function handle(handler::WebSocketHandler, req::Request, client::HttpServer.Clie
 end
 function is_websocket_handshake(handler::WebSocketHandler, req::Request)
     is_get = req.method == "GET"
-    is_upgrade = lowercase(get(req.headers, "Connection", false)) == "upgrade"
-    is_websockets = lowercase(get(req.headers, "Upgrade", false)) == "websocket"
+    is_upgrade = lowercase(get(req.headers, "Connection", "")) == "upgrade"
+    is_websockets = lowercase(get(req.headers, "Upgrade", "")) == "websocket"
     return is_get && is_upgrade && is_websockets
 end
 
