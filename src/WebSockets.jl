@@ -336,7 +336,7 @@ function websocket_handshake(request,client)
   resp_key = generate_websocket_key(key)
 
   response = Response(101)
-  response.headers["Upgrade"] = "websockets"
+  response.headers["Upgrade"] = "websocket"
   response.headers["Connection"] = "Upgrade"
   response.headers["Sec-WebSocket-Accept"] = resp_key
   Base.write(client.sock, response)
