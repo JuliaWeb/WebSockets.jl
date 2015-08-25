@@ -356,7 +356,8 @@ function handle(handler::WebSocketHandler, req::Request, client::HttpServer.Clie
 end
 function is_websocket_handshake(handler::WebSocketHandler, req::Request)
     is_get = req.method == "GET"
-    is_upgrade = lowercase(get(req.headers, "Connection", "")) == "upgrade"
+    # "upgrade" for Chrome and "keep-alive, upgrade" for Firefox.
+    is_upgrade = contains(lowercase(get(req.headers, "Connection", "")),"upgrade") 
     is_websockets = lowercase(get(req.headers, "Upgrade", "")) == "websocket"
     return is_get && is_upgrade && is_websockets
 end
