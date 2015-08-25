@@ -4,7 +4,10 @@ using Base.Test
 
 import WebSockets: generate_websocket_key,
                    write_fragment,
-                   read_frame
+                   read_frame,
+                   is_websocket_handshake
+
+import HttpCommon: Request
 
 #is_control_frame is one line, checking one bit.
 #get_websocket_key grabs a header.
@@ -106,4 +109,32 @@ end
 #
 close(io)
 
+# Tests for is_websocket_handshake
+chromeheaders = @compat Dict{String,String}(
+        "Connection"=>"Upgrade",
+        "Upgrade"=>"websocket"
+    )
+chromerequest = Request(
+    "GET",
+    "",
+    chromeheaders,
+    ""
+    )
 
+firefoxheaders = @compat Dict{String,String}(
+        "Connection"=>"keep-alive, Upgrade",
+        "Upgrade"=>"websocket"
+    )
+
+firefoxrequest= Request(
+    "GET",
+    "",
+    firefoxheaders,
+    ""
+    )
+
+handler = WebSocketHandler(x->x); #Dummy handler
+
+for request in [chromerequest, firefoxrequest]
+    @test is_websocket_handshake(handler,request) == true
+end
