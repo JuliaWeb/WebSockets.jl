@@ -308,9 +308,8 @@ end
 #   3. Encode the resulting number in base64.
 # This function then returns the string of the base64-encoded value.
 function generate_websocket_key(key)
-  h = HashState(SHA1)
-  update!(h, key*"258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
-  bytestring(encode(Base64, digest!(h)))
+    hashed_key = digest("SHA1", key*"258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+    bytestring(encode(Base64, hashed_key))
 end
 
 # Responds to a WebSocket handshake request.
@@ -357,7 +356,7 @@ end
 function is_websocket_handshake(handler::WebSocketHandler, req::Request)
     is_get = req.method == "GET"
     # "upgrade" for Chrome and "keep-alive, upgrade" for Firefox.
-    is_upgrade = contains(lowercase(get(req.headers, "Connection", "")),"upgrade") 
+    is_upgrade = contains(lowercase(get(req.headers, "Connection", "")),"upgrade")
     is_websockets = lowercase(get(req.headers, "Upgrade", "")) == "websocket"
     return is_get && is_upgrade && is_websockets
 end
