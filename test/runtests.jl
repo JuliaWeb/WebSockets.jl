@@ -110,7 +110,7 @@ end
 close(io)
 
 # Tests for is_websocket_handshake
-chromeheaders = @compat Dict{String,String}(
+chromeheaders = @compat Dict{AbstractString,AbstractString}(
         "Connection"=>"Upgrade",
         "Upgrade"=>"websocket"
     )
@@ -121,7 +121,7 @@ chromerequest = Request(
     ""
     )
 
-firefoxheaders = @compat Dict{String,String}(
+firefoxheaders = @compat Dict{AbstractString,AbstractString}(
         "Connection"=>"keep-alive, Upgrade",
         "Upgrade"=>"websocket"
     )

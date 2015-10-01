@@ -31,15 +31,23 @@ export WebSocket,
        send_ping,
        send_pong
 
+const TCPSock = VERSION < v"0.4.0-dev" ? Base.TcpSocket : Base.TCPSocket
+if VERSION < v"0.4.0-dev"
+  init_socket(sock) = nothing
+else
+  init_socket(sock) = Base.buffer_writes(sock) # Buffer writes to socket till flush(sock)
+end
+
 # A WebSocket is a wrapper over a TcpSocket. It takes care of wrapping outgoing
 # data in a frame and unwrapping (and concatenating) incoming data.
 type WebSocket
   id::Int
-  socket::Base.TcpSocket
+  socket::TCPSock
   is_closed::Bool
   sent_close::Bool
 
-  function WebSocket(id::Int,socket::Base.TcpSocket)
+  function WebSocket(id::Int,socket::TCPSock)
+    init_socket(socket)
     new(id,socket, !isopen(socket), false)
   end
 end
@@ -84,7 +92,7 @@ const OPCODE_PING = 0x9
 const OPCODE_PONG = 0xA
 #  *  %xB-F are reserved for further control frames
 
-# Constructs a frame from the arguments and sends it on the provided socket.
+# Write the raw frame to a bufffer
 function write_fragment(io::IO, islast::Bool, data::Array{UInt8}, opcode)
   l = length(data)
   b1::UInt8 = (islast ? 0b1000_0000 : 0b0000_0000) | opcode
@@ -118,13 +126,34 @@ function write_fragment(io::IO, islast::Bool, data::ByteString, opcode)
   write_fragment(io, islast, data.data, opcode)
 end
 
+if VERSION < v"0.4.0-dev"
+  function locked_write(io::IO, islast::Bool, data, opcode)
+    buf = IOBuffer()
+    write_fragment(buf, islast, data, opcode)
+    write(io, takebuf_array(buf))
+  end
+else
+  function locked_write(io::IO, islast::Bool, data, opcode)
+    isa(io, TCPSock) && lock(io.lock)
+    try
+      write_fragment(io, islast, data, opcode)
+    finally
+      if isa(io, TCPSock)
+        flush(io)
+        unlock(io.lock)
+      end
+    end
+  end
+end
+
+
 # Write text data; will be sent as one frame.
 function Base.write(ws::WebSocket,data::ByteString)
   if ws.is_closed
     @show ws
     error("Attempted write to closed WebSocket\n")
   end
-  write_fragment(ws.socket, true, data, OPCODE_TEXT)
+  locked_write(ws.socket, true, data, OPCODE_TEXT)
 end
 
 # Write binary data; will be sent as one frmae.
@@ -133,19 +162,19 @@ function Base.write(ws::WebSocket, data::Array{UInt8})
     @show ws
     error("attempt to write to closed WebSocket\n")
   end
-  write_fragment(ws.socket, true, data, OPCODE_BINARY)
+  locked_write(ws.socket, true, data, OPCODE_BINARY)
 end
 
 # Send a ping message, optionally with data.
 function write_ping(io::IO, data = "")
-  write_fragment(io, true, data, OPCODE_PING)
+  locked_write(io, true, data, OPCODE_PING)
 end
 
 send_ping(ws, data...) = write_ping(ws.socket, data...)
 
 # Send a pong message, optionally with data.
 function write_pong(io::IO, data = "")
-  write_fragment(io, true, data, OPCODE_PONG)
+  locked_write(io, true, data, OPCODE_PONG)
 end
 
 send_pong(ws, data...) = write_pong(ws.socket, data...)
@@ -153,7 +182,7 @@ send_pong(ws, data...) = write_pong(ws.socket, data...)
 # Send a close message.
 function Base.close(ws::WebSocket)
     # Tell client to close connection
-    write_fragment(ws.socket, true, "", OPCODE_CLOSE)
+    locked_write(ws.socket, true, "", OPCODE_CLOSE)
     ws.is_closed = true
 
     # Wait till client responds with an OPCODE_CLOSE
@@ -216,7 +245,7 @@ is_control_frame(msg::WebSocketFragment) = (msg.opcode & 0b0000_1000) > 0
 function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
   if wsf.opcode == OPCODE_CLOSE
     # Reply with an empty CLOSE frame
-    write_fragment(ws.socket, true, "", OPCODE_CLOSE)
+    locked_write(ws.socket, true, "", OPCODE_CLOSE)
     ws.is_closed = true
     wait(ws.socket.closenotify)
   elseif wsf.opcode == OPCODE_PING
