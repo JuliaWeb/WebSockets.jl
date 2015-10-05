@@ -35,11 +35,11 @@ export WebSocket,
 # data in a frame and unwrapping (and concatenating) incoming data.
 type WebSocket
   id::Int
-  socket::Base.TcpSocket
+  socket::Base.TCPSocket
   is_closed::Bool
   sent_close::Bool
 
-  function WebSocket(id::Int,socket::Base.TcpSocket)
+  function WebSocket(id::Int,socket::Base.TCPSocket)
     new(id,socket, !isopen(socket), false)
   end
 end
