@@ -15,22 +15,22 @@ wsh = WebSocketHandler() do req, client
     while true
         msg = read(client)
         msg = decodeMessage(msg)
-        if beginswith(msg, "setusername:")
+        if startswith(msg, "setusername:")
             println("SETTING USERNAME: $msg")
-            usernames[client.id] = msg[13:]
+            usernames[client.id] = msg[13:end]
         end
-        if beginswith(msg, "say:")
+        if startswith(msg, "say:")
             println("EMITTING MESSAGE: $msg")
             for (k,v) in connections
                 if k != client.id
-                    write(v, (usernames[client.id] * ": " * msg[5:]))
+                    write(v, (usernames[client.id] * ": " * msg[5:end]))
                 end
             end
         end
     end
 end
 
-onepage = readall("./examples/chat-client.html")
+onepage = readall(Pkg.dir("Websockets","examples","chat-client.html"))
 httph = HttpHandler() do req::Request, res::Response
   Response(onepage)
 end
