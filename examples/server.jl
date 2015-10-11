@@ -22,7 +22,7 @@ wsh = WebSocketHandler() do req, client
     end
 end
 
-onepage = readall("./examples/repl-client.html")
+onepage = readall(Pkg.dir("WebSockets","examples","repl-client.html"))
 httph = HttpHandler() do req::Request, res::Response
   Response(onepage)
 end
