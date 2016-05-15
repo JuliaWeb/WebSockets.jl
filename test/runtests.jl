@@ -1,5 +1,5 @@
 using WebSockets
-using Compat
+using Compat; import Compat.String
 using Base.Test
 
 import WebSockets: generate_websocket_key,

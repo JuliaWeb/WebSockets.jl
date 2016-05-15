@@ -21,7 +21,7 @@ using HttpCommon
 using HttpServer
 using Codecs
 using Nettle
-using Compat
+using Compat; import Compat.String
 
 export WebSocket,
        WebSocketHandler,
@@ -122,7 +122,7 @@ function write_fragment(io::IO, islast::Bool, data::Array{UInt8}, opcode)
 end
 
 # A version of send_fragment for text data.
-function write_fragment(io::IO, islast::Bool, data::ByteString, opcode)
+function write_fragment(io::IO, islast::Bool, data::String, opcode)
   write_fragment(io, islast, data.data, opcode)
 end
 
@@ -148,7 +148,7 @@ end
 
 
 # Write text data; will be sent as one frame.
-function Base.write(ws::WebSocket,data::ByteString)
+function Base.write(ws::WebSocket,data::String)
   if ws.is_closed
     @show ws
     error("Attempted write to closed WebSocket\n")
@@ -211,7 +211,7 @@ type WebSocketFragment
   is_masked::Bool
   payload_len::UInt64
   maskkey::Vector{UInt8}  # This will be 4 bytes on frames from the client.
-  data::Vector{UInt8}  # For text messages, this is a ByteString.
+  data::Vector{UInt8}  # For text messages, this is a String.
 end
 
 # This constructor handles conversions from bytes to bools.
