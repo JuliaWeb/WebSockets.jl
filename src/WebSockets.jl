@@ -20,7 +20,7 @@ module WebSockets
 using HttpCommon
 using HttpServer
 using Codecs
-using Nettle
+using MbedTLS
 using Compat; import Compat.String
 
 export WebSocket,
@@ -337,7 +337,7 @@ end
 #   3. Encode the resulting number in base64.
 # This function then returns the string of the base64-encoded value.
 function generate_websocket_key(key)
-    hashed_key = digest("SHA1", key*"258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+    hashed_key = digest(MD_SHA1, key*"258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
     bytestring(encode(Base64, hashed_key))
 end
 
