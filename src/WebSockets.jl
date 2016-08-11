@@ -338,7 +338,7 @@ end
 # This function then returns the string of the base64-encoded value.
 function generate_websocket_key(key)
     hashed_key = digest(MD_SHA1, key*"258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
-    String((encode(Base64, hashed_key)))
+    String(encode(Base64, hashed_key))
 end
 
 # Responds to a WebSocket handshake request.
