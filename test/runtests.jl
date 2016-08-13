@@ -40,7 +40,7 @@ for len = [8, 125], op = (rand(UInt8) & 0b1111), fin=[true, false]
 
     @test bits(frame[1]) == (fin ? "1" : "0") * "000" * bits(op)[end-3:end]
     @test frame[2] == @compat UInt8(len)
-    @test bytestring(frame[3:end]) == test_str
+    @test String(frame[3:end]) == test_str
 
     # Check to see if reading message without a mask fails
     in_buf = IOBuffer(frame)
@@ -65,7 +65,7 @@ for len = [8, 125], op = (rand(UInt8) & 0b1111), fin=[true, false]
     @test frame_back.is_masked == true
     @test frame_back.payload_len == len
     @test all(map(==, frame_back.maskkey, maskkey))
-    @test test_str == bytestring(frame_back.data)
+    @test test_str == String(frame_back.data)
 end
 
 # Length 126 or more
@@ -101,7 +101,7 @@ for len = 126:129, op = 0b1111, fin=[true, false]
     @test frame_back.is_masked == true
     @test frame_back.payload_len == len
     @test all(map(==, frame_back.maskkey, maskkey))
-    @test test_str == bytestring(frame_back.data)
+    @test test_str == String(frame_back.data)
 end
 
 # TODO: test for length > typemax(Uint32)
