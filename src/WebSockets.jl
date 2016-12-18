@@ -38,6 +38,9 @@ else
   init_socket(sock) = Base.buffer_writes(sock) # Buffer writes to socket till flush(sock)
 end
 
+type WebSocketClosedError <: Exception end
+Base.showerror(io::IO, e::WebSocketClosedError) = print(io, "Error: client disconnected")
+
 # A WebSocket is a wrapper over a TcpSocket. It takes care of wrapping outgoing
 # data in a frame and unwrapping (and concatenating) incoming data.
 type WebSocket
@@ -247,7 +250,8 @@ function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
     # Reply with an empty CLOSE frame
     locked_write(ws.socket, true, "", OPCODE_CLOSE)
     ws.is_closed = true
-    wait(ws.socket.closenotify)
+    close(ws.socket)
+    throw(WebSocketClosedError())
   elseif wsf.opcode == OPCODE_PING
     write_pong(ws.socket,wsf.data)
   elseif wsf.opcode == OPCODE_PONG
