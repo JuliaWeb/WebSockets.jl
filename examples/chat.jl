@@ -30,7 +30,7 @@ wsh = WebSocketHandler() do req, client
     end
 end
 
-onepage = readall(Pkg.dir("Websockets","examples","chat-client.html"))
+onepage = readall(Pkg.dir("WebSockets","examples","chat-client.html"))
 httph = HttpHandler() do req::Request, res::Response
   Response(onepage)
 end
