@@ -6,29 +6,36 @@ global connections = Dict{Int,WebSocket}()
 global usernames   = Dict{Int,String}()
 
 function decodeMessage( msg )
-    bytestring(msg)
+    String(copy(msg))
 end
-
+function eval_or_describe_error(strmsg)
+   try
+       return eval(parse(strmsg, raise = false))
+   catch err
+        iob = IOBuffer()
+        dump(iob, err)
+        return String(take!(iob))
+   end
+end
+       
 wsh = WebSocketHandler() do req, client
     global connections
     connections[client.id] = client
     while true
-        msg = read(client)
-        msg = decodeMessage(msg)
-        val = eval(parse(msg))
-        output = takebuf_string(Base.mystreamvar)
+        val = client |> read |> decodeMessage |> eval_or_describe_error
+        output = String(take!(Base.mystreamvar))
         val = val == nothing ? "<br>" : val
         write(client,"$val<br>$output")
     end
 end
 
-onepage = readall(Pkg.dir("WebSockets","examples","repl-client.html"))
+onepage = readstring(Pkg.dir("WebSockets","examples","repl-client.html"))
 httph = HttpHandler() do req::Request, res::Response
   Response(onepage)
 end
 
 server = Server(httph, wsh)
-println("Chat server listening on 8080...")
+println("Repl server listening on 8080...")
 
 eval(Base,parse("mystreamvar = IOBuffer()"))
 eval(Base,parse("STDOUT = mystreamvar"))

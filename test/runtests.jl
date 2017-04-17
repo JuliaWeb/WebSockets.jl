@@ -19,10 +19,10 @@ import HttpCommon: Request
 # Test writing
 
 function xor_payload(maskkey, data)
-    out = Array(UInt8, length(data))
+  out = Array{UInt8,1}(length(data))
   for i in 1:length(data)
     d = data[i]
-    d = d $ maskkey[mod(i - 1, 4) + 1]
+    d = xor(d , maskkey[mod(i - 1, 4) + 1])
     out[i] = d
   end
   out
@@ -34,16 +34,16 @@ const io = IOBuffer()
 for len = [8, 125], op = (rand(UInt8) & 0b1111), fin=[true, false]
 
     test_str = randstring(len)
-    write_fragment(io, fin, test_str, op)
+    write_fragment(io, fin, Vector{UInt8}(test_str), op)
 
-    frame = takebuf_array(io)
+    frame = take!(io)
 
     @test bits(frame[1]) == (fin ? "1" : "0") * "000" * bits(op)[end-3:end]
     @test frame[2] == @compat UInt8(len)
     @test String(frame[3:end]) == test_str
 
     # Check to see if reading message without a mask fails
-    in_buf = IOBuffer(frame)
+    in_buf = IOBuffer(String(frame))
     @test_throws ErrorException read_frame(in_buf)
     close(in_buf)
 
@@ -72,9 +72,9 @@ end
 for len = 126:129, op = 0b1111, fin=[true, false]
 
     test_str = randstring(len)
-    write_fragment(io, fin, test_str, op)
+    write_fragment(io, fin, Vector{UInt8}(test_str), op)
 
-    frame = takebuf_array(io)
+    frame = take!(io)
 
     @test bits(frame[1]) == (fin ? "1" : "0") * "000" * bits(op)[end-3:end]
     @test frame[2] == 126
