@@ -33,7 +33,7 @@
         var you = "you";
         connection.onmessage = function( message ){
             window.lastmessage = message;
-            $("#content").prepend( $("<p class='received'></p>").html( message.data ) );
+            $("#content").append( $("<p class='received'></p>").html( message.data ) );
         }
         function changeUsername( username ){
             you = username;
@@ -42,7 +42,7 @@
         }
         function sendMessage( message ){
             connection.send('say:'+ message);
-            $("#content").prepend( $("<p class='sent'></p>").html( you + ": " + message ) );
+            $("#content").append( $("<p class='sent'></p>").html( you + ": " + message ) );
         }
         $("#sayer input[type=submit]").click(function(){
             if( $("#sayer input[name=say]").val().replace(/\s/gi,'').length )

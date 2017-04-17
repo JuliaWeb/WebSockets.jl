@@ -1,3 +1,4 @@
+__precompile__()
 module WebSockets
 
 # This module implements the server side of the WebSockets protocol. Some
@@ -136,7 +137,7 @@ else
   function locked_write(io::IO, islast::Bool, data, opcode)
     isa(io, TCPSock) && lock(io.lock)
     try
-      write_fragment(io, islast, data, opcode)
+      write_fragment(io, islast, Vector{UInt8}(data), opcode)
     finally
       if isa(io, TCPSock)
         flush(io)
@@ -282,15 +283,15 @@ function read_frame(io::IO)
     payload_len = ntoh(read(io,UInt64))  # 8 bytes
   end
 
-  maskkey = Array(UInt8,4)
+ maskkey = Array{UInt8,1}(4)
   for i in 1:4
     maskkey[i] = read(io,UInt8)
   end
 
-  data = Array(UInt8, payload_len)
+  data = Array{UInt8,1}(payload_len)
   for i in 1:payload_len
     d = read(io, UInt8)
-    d = d $ maskkey[mod(i - 1, 4) + 1]
+    d = xor(d , maskkey[mod(i - 1, 4) + 1])
     data[i] = d
   end
 
