@@ -4,8 +4,8 @@ WebSockets.jl
 [![Build Status](https://travis-ci.org/JuliaWeb/WebSockets.jl.png)](https://travis-ci.org/JuliaWeb/WebSockets.jl)
 [![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg)](https://coveralls.io/r/JuliaWeb/WebSockets.jl)
 
-[![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.3.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.3)
-[![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.4.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.4)
+[![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.5.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.5)
+[![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6)
 
 This is a server-side implementation of the WebSockets protocol in Julia. If you want to write a web app in Julia that uses WebSockets, you'll need this package.
 

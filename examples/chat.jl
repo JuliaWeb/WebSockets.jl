@@ -6,7 +6,7 @@ global connections = Dict{Int,WebSocket}()
 global usernames   = Dict{Int,String}()
 
 function decodeMessage( msg )
-    bytestring(msg)
+    String(copy(msg))
 end
 
 wsh = WebSocketHandler() do req, client
@@ -30,7 +30,7 @@ wsh = WebSocketHandler() do req, client
     end
 end
 
-onepage = readall(Pkg.dir("Websockets","examples","chat-client.html"))
+onepage = readstring(Pkg.dir("WebSockets","examples","chat-client.html"))
 httph = HttpHandler() do req::Request, res::Response
   Response(onepage)
 end
