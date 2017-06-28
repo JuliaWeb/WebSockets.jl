@@ -99,6 +99,36 @@ const OPCODE_PING = 0x9
 const OPCODE_PONG = 0xA
 # *  %xB-F are reserved for further control frames
 
+
+"""
+Handshakes with subprotocols are rejected by default.
+Add to supported SUBProtocols through e.g.
+# Examples
+```
+   WebSockets.@addsubproto "special-protocol"
+   WebSockets.@addsubproto json
+```   
+In the general websocket handler function, specialize 
+further by checking 
+# Example
+```
+if get(wsrequest.headers, "Sec-WebSocket-Protocol", "") = "special-protocol"
+    specialhandler(websocket)
+else
+    generalhandler(websocket)
+end
+```
+"""
+const SUBProtocols= Array{String,1}() 
+
+"Used in handshake. See SUBProtocols"
+hasprotocol(s::String) = in(s,SUBProtocols)
+
+"Used to specify handshake response. See SUBProtocols"
+macro addsubproto(name)
+	push!(SUBProtocols, string(name))
+	return true
+end
 """ 
     write_fragment(io, islast, data::Array{UInt8}, opcode)
 Write the raw frame to a bufffer
@@ -133,7 +163,8 @@ end
 
 """ 
     write_fragment(io, islast, data::String, opcode)
-A version of send_fragment for text data."""
+A version of send_fragment for text data.
+"""
 function write_fragment(io::IO, islast::Bool, data::String, opcode)
     write_fragment(io, islast, data.data, opcode)
 end
@@ -381,6 +412,16 @@ function websocket_handshake(request,client)
   response.headers["Upgrade"] = "websocket"
   response.headers["Connection"] = "Upgrade"
   response.headers["Sec-WebSocket-Accept"] = resp_key
+ 
+  if haskey(request.headers, "Sec-WebSocket-Protocol") 
+      if hasprotocol(request.headers["Sec-WebSocket-Protocol"])
+          response.headers["Sec-WebSocket-Protocol"] =  request.headers["Sec-WebSocket-Protocol"]
+      else
+          Base.write(client.sock, Response(400))
+          return
+      end
+  end 
+  
   Base.write(client.sock, response)
 end
 
