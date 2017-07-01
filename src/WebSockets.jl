@@ -105,8 +105,8 @@ Handshakes with subprotocols are rejected by default.
 Add to supported SUBProtocols through e.g.
 # Examples
 ```
-   WebSockets.@addsubproto "special-protocol"
-   WebSockets.@addsubproto json
+   WebSockets.addsubproto "special-protocol"
+   WebSockets.addsubproto json
 ```   
 In the general websocket handler function, specialize 
 further by checking 
@@ -125,7 +125,7 @@ const SUBProtocols= Array{String,1}()
 hasprotocol(s::String) = in(s,SUBProtocols)
 
 "Used to specify handshake response. See SUBProtocols"
-macro addsubproto(name)
+function addsubproto(name)
 	push!(SUBProtocols, string(name))
 	return true
 end
