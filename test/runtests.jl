@@ -186,10 +186,10 @@ for request in [chromerequest, firefoxrequest]
 end
 
 info("add simple subprotocol to acceptable list")
-@test true == WebSockets.addsubproto xml 
+@test true == WebSockets.addsubproto("xml") 
 
 info("add subprotocol with difficult name")
-@test true == WebSockets.addsubproto "my.server/json-zmq"
+@test true == WebSockets.addsubproto("my.server/json-zmq")
 
 info("Test handshake subprotocol now acceptable")
 for request in [chromerequest, firefoxrequest]
