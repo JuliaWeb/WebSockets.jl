@@ -282,7 +282,17 @@ function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
             # The other side initiated the disconnect, so the action must be
             # acknowledged by replying with an empty CLOSE frame and cleaning
             # up
-            locked_write(ws.socket, true, "", OPCODE_CLOSE)
+            try
+                locked_write(ws.socket, true, "", OPCODE_CLOSE)
+            catch exception
+              # On sudden disconnects, the other side may be gone before the
+              # close acknowledgement can be sent. This will cause an
+              # ArgumentError to be thrown due to the underlying stream being
+              # closed. These are swallowed here and will be replaced by a
+              # WebSocketClosedError below
+              !isa(exception, ArgumentError) && rethrow(exception)
+            end
+
             close(ws.socket)
         end
 
