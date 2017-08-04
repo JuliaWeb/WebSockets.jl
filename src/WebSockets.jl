@@ -127,8 +127,8 @@ hasprotocol(s::String) = in(s,SUBProtocols)
 
 "Used to specify handshake response. See SUBProtocols"
 function addsubproto(name)
-	push!(SUBProtocols, string(name))
-	return true
+    push!(SUBProtocols, string(name))
+    return true
 end
 """ 
     write_fragment(io, islast, data::Array{UInt8}, opcode)
@@ -483,10 +483,10 @@ function handle(handler::WebSocketHandler, req::Request, client::HttpServer.Clie
     sock = WebSocket(client.id, client.sock)
     handler.handle(req, sock)
     if isopen(sock) 
-		try
-		close(sock)
-		end
-	end
+        try
+        close(sock)
+        end
+    end
 end
 function is_websocket_handshake(handler::WebSocketHandler, req::Request)
     is_get = req.method == "GET"
