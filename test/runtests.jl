@@ -201,3 +201,4 @@ for request in [chromerequest, firefoxrequest]
     @test handshakeresponse(request) == SWITCH
 end
 close(io)
+include("browsertest.jl")

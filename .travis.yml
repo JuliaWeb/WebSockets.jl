@@ -3,10 +3,11 @@ os:
     - linux
     - osx
 julia:
-    - 0.4
     - 0.5
-    - nightly
+    - 0.6
 sudo: false
+addons:
+  firefox: "latest"
 notifications:
     email: false
 after_success:
