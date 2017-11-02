@@ -1,6 +1,6 @@
 // Note that the console log output does not appear in Julia REPL when
-// this is called using spawn. For debugging, use "run". These functions 
-// are run in the layer outside the web page.
+// this is called using spawn. For debugging, use "run". These functions
+// are run in a shell outside the web page.
 var page = require('webpage').create(),
   system = require('system'),
   t, address;
@@ -25,12 +25,10 @@ page.open(address, function(status) {
       console.log('PhantomJS loading time ' + t + ' msec');
       window.setTimeout( (function() {
                                     page.render("phantomjs.png");
-                                    console.log("PhantomJS saved render, exits after 10s")
+                                    console.log("PhantomJS saved render, exits after 20s")
                                     phantom.exit()
                                   }),
-                       10000)
+                       20000)
     }
-    clearTimeout(timer)
-    timer = setTimeout(closedown, 10000)
   }
 );

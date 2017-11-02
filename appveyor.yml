@@ -41,3 +41,7 @@ build_script:
       julia --depwarn=no -e 'redirect_stderr(STDOUT);Pkg.add(\"HttpServer\");using HttpServer;'
       julia -e 'redirect_stderr(STDOUT);Pkg.clone(pwd(), \"WebSockets\");Pkg.build(\"WebSockets\")'
       Write-Host "This is PowerShell, build script finished."
+test_script:
+  - ps: |
+      Write-Host "This is PS"
+      julia -e 'redirect_stderr(STDOUT);info(\"Local websockets directory:\", Pkg.dir(\"WebSockets\"));Pkg.test(\"WebSockets\")'
