@@ -35,7 +35,7 @@ function pwc(io::IO, args...)
             print(io,arg)
         end
     end
-    print(io, Base.color_normal)
+    print(io, :normal)
     nothing
 end
 "Type piracy on dictionaries, not nice normally"
@@ -55,7 +55,7 @@ function print(io::IO, headers::Dict{String, Function})
 end
 
 "Add color code"
-print_color(io::IO, color::Symbol) = print(io, get(Base.text_colors, color, Base.color_normal))
+print_color(io::IO, color::Symbol) = print(io, get(Base.text_colors, color, :normal))
  "Return an IO stream with colored heading and tabs"
 function startbuf(prefix = "INFO:")
             buf = IOBuffer()

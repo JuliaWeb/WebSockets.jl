@@ -25,10 +25,10 @@ page.open(address, function(status) {
       console.log('PhantomJS loading time ' + t + ' msec');
       window.setTimeout( (function() {
                                     page.render("phantomjs.png");
-                                    console.log("PhantomJS saved render, exits after 20s")
+                                    console.log("PhantomJS saved render, exits after 30s")
                                     phantom.exit()
                                   }),
-                       20000)
+                       30000)
     }
   }
 );

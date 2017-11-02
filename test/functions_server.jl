@@ -44,7 +44,7 @@ function websockethandle(wsrequest::Request, websocket::WebSocket)
             ws_test_protocol(websocket)
             clog(id, "Websocket-testprotocol, exiting handler\n")
         else
-            clog(id, Base.error_color(), "Unknown sub protocol let through WebSockets.jl, not responding further. \n")
+            clog(id, :red, "Unknown sub protocol let through WebSockets.jl, not responding further. \n")
         end
     else
         clog(id, "General websocket, calling handler\n")

@@ -37,7 +37,7 @@ function wsmsg_testprotocol(ws::WebSockets.WebSocket)
         if typeof(e) == WebSockets.WebSocketClosedError
             clog(id, :green, " Websocket was or is being closed.\n")
         else
-            clog(id, "Caught exception..\n", "\t\t", Base.error_color(), e, "\n")
+            clog(id, "Caught exception..\n", "\t\t", :red, e, "\n")
             if isopen(ws)
                 clog(id, "Closing\n")
                 close(ws)
