@@ -1,12 +1,11 @@
 environment:
   matrix:
-  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x86/0.4/julia-0.4-latest-win32.exe"
-  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x64/0.4/julia-0.4-latest-win64.exe"
-  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x86/0.5/julia-0.5-latest-win32.exe"
+  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x64/0.6/julia-0.6-latest-win64.exe"
   - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x64/0.5/julia-0.5-latest-win64.exe"
-  - JULIA_URL: "https://julialangnightlies-s3.julialang.org/bin/winnt/x86/julia-latest-win32.exe"
-  - JULIA_URL: "https://julialangnightlies-s3.julialang.org/bin/winnt/x64/julia-latest-win64.exe"
-
+  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x86/0.6/julia-0.6-latest-win32.exe"
+  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x86/0.5/julia-0.5-latest-win32.exe"
+# HttpCommon not building yet  - JULIA_URL: "https://julialangnightlies-s3.julialang.org/bin/winnt/x64/julia-latest-win64.exe"
+# HttpCommon not building yet  - JULIA_URL: "https://julialangnightlies-s3.julialang.org/bin/winnt/x86/julia-latest-win32.exe"
 branches:
   only:
     - master
@@ -18,7 +17,11 @@ notifications:
     on_build_failure: false
     on_build_status_changed: false
 
+# Not installing PhantomJS. It is being replaced by chrome headless browser in the long run.
 install:
+  - choco install firefox
+  - choco install googlechrome
+  - choco install ie11
   - ps: "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12"
 # Download most recent Julia Windows binary
   - ps: (new-object net.webclient).DownloadFile(
@@ -30,8 +33,15 @@ install:
 build_script:
 # Need to convert from shallow to complete for Pkg.clone to work
   - IF EXIST .git\shallow (git fetch --unshallow)
-  - C:\projects\julia\bin\julia -e "versioninfo();
-      Pkg.clone(pwd(), \"WebSockets\"); Pkg.build(\"WebSockets\")"
-
+  - ps: |
+      Write-Host "This is PowerShell - STDERR output will be red. Redirect! "
+      $env:PATH+=";C:\projects\julia\bin\"    
+      julia -e 'versioninfo();redirect_stderr(STDOUT);println(STDOUT, \"stdout\"); println(STDERR, \"stderr\")'
+      julia -e 'redirect_stderr(STDOUT);Pkg.init()'
+      julia --depwarn=no -e 'redirect_stderr(STDOUT);Pkg.add(\"HttpServer\");using HttpServer;'
+      julia -e 'redirect_stderr(STDOUT);Pkg.clone(pwd(), \"WebSockets\");Pkg.build(\"WebSockets\")'
+      Write-Host "This is PowerShell, build script finished."
 test_script:
-  - C:\projects\julia\bin\julia -e "Pkg.test(\"WebSockets\")"
+  - ps: |
+      Write-Host "This is PS"
+      julia -e 'redirect_stderr(STDOUT);info(\"Local websockets directory:\", Pkg.dir(\"WebSockets\"));Pkg.test(\"WebSockets\")'

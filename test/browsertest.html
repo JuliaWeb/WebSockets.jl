@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>WebSockets browsertest.html</title>
+  </head>
+<body>
+<p>Test tries to open some websockets, browser says hello from browser, and continues to echo messages from server.</p>
+<p id = "init"></p>
+<p>&nbsp;&nbsp;This is <b id = "browserid"> ... </b></p>
+<div id = "ws1" style="border:thick solid black;"><p>ws1 Websocket</p></div>
+<div id = "ws2" style="border:thick solid black;"><p>ws2 Websocket: websocket-testprotocol</p></div>
+<div id = "ws3" style="border:thick solid black;"><p>ws3 Websocket: server_denies_protocol</p></div>
+</body>
+<script>
+
+function addwebsocket_test(){console.log("Add websocket general");
+	var wsuri = document.URL.replace("http:","ws:");
+	return new WebSocket(wsuri)
+} // addwebsocket_test
+
+function addwebsocket_subprotocol_test(){console.log("Add websocket acceptable subprotocol");
+	var wsuri = document.URL.replace("http:","ws:");
+	return new WebSocket(wsuri, "websocket-testprotocol")
+} // addwebsocket_subprotocol_test
+
+function addwebsocket_server_denies(){console.log("Add websocket inacceptable subprotocol");
+	var wsuri = document.URL.replace("http:","ws:");
+	return new WebSocket(wsuri, "server_denies")
+} // addwebsocket_server_denies
+
+var codeDesc ={1000:"Normal",
+1001:"Going Away",
+1002:"Protocol Error",
+1003:"Unsupported Data",
+1004:"Reserved",
+1005:"No Status Recvd- reserved",
+1006:"Abnormal Closure- reserved",
+1007:"Invalid frame payload data",
+1008:"Policy Violation",
+1009:"Message too big",
+1010:"Missing Extension",
+1011:"Internal Error",
+1012:"Service Restart",
+1013:"Try Again Later",
+1014:"Bad Gateway",
+1015:"TLS Handshake"};
+
+var readystateDesc ={0:"CONNECTING",
+1:"OPEN",
+2:"CLOSING",
+3:"CLOSED"};
+
+window.onload= function(){
+		document.getElementById("init").innerHTML = "<p>:window.onload";
+		document.getElementById("browserid").innerHTML = getBrowser();
+
+		ws1 = addwebsocket_test();
+		ws1.onclose = function(e){
+				document.getElementById("ws1").innerHTML +=
+					"<p>: ws1.onclose event called with " +
+					"wasClean: " + e.wasClean + ";  " +
+					"code: " + e.code + ";  " + codeDesc[e.code] + ";  " +
+					"reason: " + e.reason + ";  " +
+					"<br>&nbsp;&nbsp;Websocket state is now " + ws1.readyState +
+					" " + readystateDesc[ws1.readyState] + ".</p>";
+					}
+		ws1.onerror = function(e){
+				document.getElementById("ws1").innerHTML += "<p>: ws1.onerror. " +
+					"<br>&nbsp;&nbsp;Websocket state is now " + ws1.readyState +
+					" " + readystateDesc[ws2.readyState] + ".</p>";
+						}
+		ws1.onopen = function(){
+				document.getElementById("ws1").innerHTML += "<p>: ws1.onopen. " +
+					"<br>&nbsp;&nbsp;Websocket state is now " + ws1.readyState +
+					" " + readystateDesc[ws1.readyState] + ".</p>";
+				msg = "Hello from socket ws1 in browser " + getBrowser();
+				document.getElementById("ws1").innerHTML += "<p>&nbsp;&nbsp;..Sending message: " + msg + "</p>";
+				ws1.send(msg);
+						}
+		ws1.onmessage	= function(e){
+				document.getElementById("ws1").innerHTML += "<p>: ws1.onmessage: " + e.data + "  </p>";
+				if(e.data=="YOU hang up!"){
+						document.getElementById("ws1").innerHTML += "<p>&nbsp;&nbsp; (hanging up, no echo).</p>";
+						ws1.close()
+					} else {
+						document.getElementById("ws1").innerHTML += "<p>&nbsp;&nbsp; echo: " + e.data + "  </p>";
+						ws1.send(e.data)
+					}
+				}
+
+		ws2 = addwebsocket_subprotocol_test();
+		ws2.onclose = function(e){
+				document.getElementById("ws2").innerHTML +=
+					"<p>: ws2.onclose event called with " +
+					"wasClean: " + e.wasClean + ";  " +
+					"code: " + e.code + ";  " + codeDesc[e.code] + ";  " +
+					"reason: " + e.reason + ";  " +
+					"<br>&nbsp;&nbsp;Websocket state is now " + ws2.readyState +
+					" " + readystateDesc[ws2.readyState] + ".</p>";
+					}
+		ws2.onerror = function(e){
+				document.getElementById("ws2").innerHTML += "<p>: ws2.onerror. " +
+					"<br>&nbsp;&nbsp;Websocket state is now " + ws2.readyState +
+					" " + readystateDesc[ws2.readyState] + ".</p>";
+						}
+		ws2.onopen = function(){
+				document.getElementById("ws2").innerHTML += "<p>: ws2.onopen. " +
+					"<br>&nbsp;&nbsp;Websocket state is now " + ws2.readyState +
+					" " + readystateDesc[ws2.readyState] + ".</p>";
+				msg = "Hello from socket ws2 in browser " + getBrowser();
+				document.getElementById("ws2").innerHTML += "<p>&nbsp;&nbsp;..Sending message: " + msg + "</p>";
+				ws2.send(msg);
+						}
+		ws2.onmessage	= function(e){
+				document.getElementById("ws2").innerHTML += "<p>: ws2.onmessage: " + e.data + "  </p>";
+				if(e.data=="YOU hang up!"){
+						document.getElementById("ws2").innerHTML += "<p>&nbsp;&nbsp; (hanging up, no echo).</p>";
+						ws2.close()
+					} else {
+						document.getElementById("ws2").innerHTML += "<p>&nbsp;&nbsp; echo: " + e.data + "  </p>";
+						ws2.send(e.data)
+					}
+				}
+
+		ws3 = addwebsocket_server_denies();
+		ws3.onclose = function(e){
+				document.getElementById("ws3").innerHTML +=
+					"<p>: ws3.onclose event called with " +
+					"wasClean: " + e.wasClean + ";  " +
+					"code: " + e.code + ";  " + codeDesc[e.code] + ";  " +
+					"reason: " + e.reason + ";  " +
+					"<br>&nbsp;&nbsp;Websocket state is now " + ws3.readyState +
+					" " + readystateDesc[ws3.readyState] + ".</p>";
+					}
+		ws3.onerror = function(e){
+				document.getElementById("ws3").innerHTML += "<p>: ws3.onerror. " +
+					"<br>&nbsp;&nbsp;Websocket state is now " + ws3.readyState +
+					" " + readystateDesc[ws3.readyState] + ".</p>";
+						}
+		ws3.onopen = function(){
+				document.getElementById("ws3").innerHTML += "<p>: ws3.onopen. " +
+					"<br>&nbsp;&nbsp;Websocket state is now " + ws3.readyState +
+					" " + readystateDesc[ws3.readyState] + ".</p>";
+				msg = "Hello from socket 3 in browser " + getBrowser();
+				document.getElementById("ws3").innerHTML += "<br>&nbsp;&nbsp;..Sending message: " + msg + "</p>";
+				ws3.send(msg);
+						}
+		ws3.onmessage	= function(e){
+				document.getElementById("ws3").innerHTML += "<p>: ws3.onmessage: " + e.data + "  </p>";
+				if(e.data=="YOU hang up!"){
+						document.getElementById("ws3").innerHTML += "<p>&nbsp;&nbsp; (hanging up, no echo).</p>";
+						ws3.close()
+					} else {
+						document.getElementById("ws3").innerHTML += "<p>&nbsp;&nbsp; echo: " + e.data + "  </p>";
+						ws3.send(e.data)
+					}
+				}
+		} // window.onload
+
+// https://stackoverflow.com/questions/9847580/how-to-detect-safari-chrome-ie-firefox-and-opera-browser
+// small change Chrome > Blink.
+var getBrowser = function() {
+  var isPhantom =  (navigator.userAgent == 'PhantomJS')
+	// Opera 8.0+
+	var isOpera = (!!window.opr && !!opr.addons) || !!window.opera || navigator.userAgent.indexOf(' OPR/') >= 0;
+	// Firefox 1.0+
+	var isFirefox = typeof InstallTrigger !== 'undefined';
+	// Safari 3.0+ "[object HTMLElementConstructor]"
+	var isSafari = /constructor/i.test(window.HTMLElement) || (function (p) { return p.toString() === "[object SafariRemoteNotification]"; })(!window['safari'] || (typeof safari !== 'undefined' && safari.pushNotification));
+	// Internet Explorer 6-11
+	var isIE = /*@cc_on!@*/false || !!document.documentMode;
+	// Edge 20+
+	var isEdge = !isIE && !!window.StyleMedia;
+	// Chrome 1+
+	var isChrome = !!window.chrome && !!window.chrome.webstore;
+	// Blink engine detection
+	var isBlink = (isChrome || isOpera) && !!window.CSS;
+  if(isPhantom){return "Phantom"};
+	if(isChrome){return "Chrome"};
+	if(isBlink){return "Blink"};
+	if(isEdge){return "Edge"};
+	if(isIE){return "Internet Explorer"};
+	if(isSafari){return "Safari"};
+	if(isFirefox){return "Firefox"};
+	if(isOpera){return "Opera"};
+	return "unknown";
+	}
+</script>
+</html>
