@@ -78,7 +78,7 @@ function start_ws_server_async()
     server = Server(httpha, wsh )
     clog(id, "Server to be started:\n", server )
     servertask = @async run( server, 8080)
-    clog(id, "Server listening on localhost:8080\n")
+    clog(id, "Server listening on 127.0.0.1:8080\n")
     server
 end
 "Closes websockets and server; other existing sockets, if any, remain open."
