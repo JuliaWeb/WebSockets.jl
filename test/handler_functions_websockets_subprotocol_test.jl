@@ -1,7 +1,7 @@
 #     These functions deal with specified websocket protocols.
 #      Included in server_functions.jl
 
-using Base.Profile
+
 function ws_test_protocol(ws::WebSockets.WebSocket)
     id = "ws_test_protocol #$(ws.id)\t"
     WEBSOCKETS[ws.id] = ws
