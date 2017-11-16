@@ -32,7 +32,7 @@ server = start_ws_server_async()
 include("functions_open_browsers.jl")
 info("This OS is $(string(Sys.KERNEL))\n")
 n_browsers = 0
-#n_browsers += open_testpage("phantomjs")
+#n_browsers += open_testpage("iexplore")
 n_browsers += open_all_browsers()
 
 # Control flow passes to async handler functions
@@ -135,4 +135,4 @@ else
 end
 
 @test n_opensockets == 0
-@test n_msgs == n_responders * 21
+@test n_msgs == n_responders * 37
