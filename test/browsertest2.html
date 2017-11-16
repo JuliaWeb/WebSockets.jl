@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+	<title>WS binary</title>  
+	<meta charset="utf-8">
+  </head>
+<body>
+<p>This second test page </p>
+<ul>
+<li>opens a websocket subprotocol ""websocket-test-binary" </li>
+<li>sends a small image cropped from the box below</li>
+<li>when pictures are received on the websocket, displays them in the next box</li>
+<li>each received picture triggers sending a larger image, up to a </li>
+<li>Closes websocket when an image on or over the limit size is received.</li>
+</ul>
+
+<p id = "init">
+</p>
+<p>&nbsp;&nbsp;This is <b id = "browserid"> ... </b>
+</p>
+<div>
+<h3>Source image </h3>
+<canvas id = "canv" width = "1920" height = "400" style="border:thick solid green;">Canvas</canvas>
+<p>
+</div>
+<div>
+<h3>Destination image </h3>
+<canvas id = "canv_viajulia" width = "1920" height = "400" style="border:thick solid green;">Canvas</canvas>
+</div>
+<div id = "ws10" style="border:thick solid black;"><p>ws10 Websocket</p></div>
+
+<script>
+var recvwidth = 0;
+var recvheight = 0;
+var recvbyteperpixel = 0;
+var width = 0;
+var height = 0;
+var widthstep = 30*2;
+var heightstep = 17*2;
+var maxwidth = 1920/4; // reduced because of slow Internet Explorer 11 canvas draw option.
+var maxheight = 1088/4;
+var recvbyteperpixel = 0;
+
+window.onload= function(){
+	plog("init", "<p>:window.onload</p>");
+	plog("browserid", getBrowser());
+	ws10 = addwebsocket("ws10", "websocket-test-binary");
+	// control flow cedes to events.
+}
+
+// log to DOM element ws 
+function plog(ws, shtm){
+	document.getElementById(ws).innerHTML += shtm
+} 
+
+function addwebsocket(instancename, subprotocol){
+	var wsuri = document.URL.replace("http:","ws:");
+	if (typeof subprotocol === "undefined") {
+		var ws = new WebSocket(wsuri)
+	} else {
+		var ws = new WebSocket(wsuri, subprotocol)
+	}
+	ws.mynam = instancename;
+	ws.onclose = function(e){
+		plog(e.target.mynam, "<p>: " + e.target.mynam + ".onclose:" +
+			"wasClean: " + e.wasClean + ";  " +
+			"code: " + e.code + ";  " + codeDesc[e.code] + ";  " +
+			"reason: " + e.reason + ";  " +
+			"<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
+			" " + readystateDesc[e.target.readyState] + ".</p>");
+	}
+	ws.onerror = function(e){
+		plog(e.target.mynam, "<p>: " + e.target.mynam + ".onerror: " +
+			"<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
+			" " + readystateDesc[e.target.readyState] + ".</p>");
+	}
+	ws.onopen = function(e){
+		plog(e.target.mynam, "<p>: " + e.target.mynam + ".onopen: " +
+			"<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
+			" " + readystateDesc[e.target.readyState] + 
+			"</p><p>&nbsp;&nbsp;..Setting binaryType = &quot;arraybuffer&quot;</p>");
+		e.target.binaryType = "arraybuffer";
+		plog(e.target.mynam, "<p>&nbsp;&nbsp;..Calling send_increasing_size_image</p>");
+		send_increasing_size_image()	
+	}
+	ws.onmessage	= function(e){
+		plog(e.target.mynam, "<p>: " + e.target.mynam + ".onmessage:</p>");
+		plog(e.target.mynam, "<p>: Negotiated extensions: " + e.target.extensions + "</p>");
+		if(e.data instanceof ArrayBuffer){
+			plog(e.target.mynam, "<p>&nbsp;&nbsp; Received an ArrayBuffer</p>");
+			var inarray = new Uint8ClampedArray(e.data);
+			var inbytelen = inarray.byteLength;
+			if(inbytelen ==6){
+				// Reveive a header, store variables in outside scope.
+				plog(e.target.mynam, 
+						"<p>&nbsp;&nbsp;&nbsp;&nbsp;which is a header of length 6 bytes.</p>");
+				var inarray16 = new Uint16Array(e.data);
+				recvheight = inarray16[0]
+				recvwidth = inarray16[1]
+				recvbyteperpixel = inarray16[2]
+				plog(e.target.mynam, 
+					"<p>&nbsp;&nbsp;&nbsp;&nbsp;width: " + recvwidth + " height: " + 
+					 recvheight + " byteperpixel: " + recvbyteperpixel + "</p>");		
+			} else if (inbytelen == recvheight*recvwidth*recvbyteperpixel) {
+				// Display this picture
+				plog(e.target.mynam, 
+					"<p>&nbsp;&nbsp;&nbsp;&nbsp;which corresponds to height * width * byteperpixel.</p>");
+				var canva = document.getElementById("canv_viajulia");
+				var context = canva.getContext("2d");
+				if(getBrowser()=="Internet Explorer"){
+					putImageDataExplorer(context, inarray, recvwidth, recvheight);
+				} else {
+					try {
+						var image =  new ImageData(inarray, recvwidth, recvheight); 
+						context.putImageData(image, 0, 0);
+						}
+					catch(err) {
+						plog(e.target.mynam, "new ImageData constructor not supported by " + getBrowser() + ", can't display but that's okay.")
+					}
+				}
+				// Continue the exchange by sending a larger picture up to a limit.
+				send_increasing_size_image()
+			} else {
+				plog(e.target.mynam, "<p>&nbsp;&nbsp;&nbsp;&nbsp;which is of unexpected length.</p>");
+			}
+		} else {
+				plog(e.target.mynam, "<p>&nbsp;&nbsp; Received something other than arraybuffer</p>");
+		}
+	}
+	plog(instancename, "<p>" + instancename + " created with event handlers.</p>");
+	return ws
+} // addwebsocket
+
+function send_increasing_size_image(){
+	// start by sending a small image. Increase size of image
+	// every time called.
+	width += widthstep;
+	height += heightstep;
+	if (width <= maxwidth){
+		var canva = document.getElementById("canv");
+		var context = canva.getContext("2d");
+		if(width==widthstep){
+			// first time called, assuming the global starts at zero.
+			context.fillStyle = "green";
+			context.fillRect(0,0,99,99);
+		}
+		var byteperpixel = 4;
+		var buffer = new ArrayBuffer(6);
+		var dv = new DataView(buffer, 0);
+		dv.setInt16(0, width)
+		dv.setInt16(2, height)
+		dv.setInt16(4, byteperpixel)
+		ws10.send(buffer)
+		ws10.send(context.getImageData(0,0, width, height).data.buffer)
+		plog("ws10", "<p>&nbsp;&nbsp;..sending arraybuffer, " + buffer.byteLength/1024 + " kB</p>");
+	} else {
+		finishtest()
+	}
+}
+function finishtest(){
+	plog("ws10", "<p>&nbsp;&nbsp;..Closing without sending anything since images size limit is reached</p>");
+	ws10.close(1000, codeDesc[1000]);
+	// add navigation here if adding more tests.
+}
+// this is of course terribly slow and may hang the browser for a good while.
+function putImageDataExplorer(ctx, data, width, height) {
+  var existimage = ctx.getImageData(0, 0, width, height);
+  var existdata = existimage.data;
+  console.log(typeof(existdata));
+  for (var y = 0; y < height; y++) {
+	for (var x = 0; x < width; x++) {
+	  var pos = y * width + x;
+	  ctx.fillStyle = 'rgba(' + data[pos*4+0]
+						+ ',' + data[pos*4+1]
+						+ ',' + data[pos*4+2]
+						+ ',' + (data[pos*4+3]/255) + ')';
+	  ctx.fillRect(x , y , 1, 1);
+	}
+  }
+}
+
+
+
+
+
+var codeDesc ={1000:"Normal",
+1001:"Going Away",
+1002:"Protocol Error",
+1003:"Unsupported Data",
+1004:"Reserved",
+1005:"No Status Recvd- reserved",
+1006:"Abnormal Closure- reserved",
+1007:"Invalid frame payload data",
+1008:"Policy Violation",
+1009:"Message too big",
+1010:"Missing Extension",
+1011:"Internal Error",
+1012:"Service Restart",
+1013:"Try Again Later",
+1014:"Bad Gateway",
+1015:"TLS Handshake"};
+
+var readystateDesc ={0:"CONNECTING",
+1:"OPEN",
+2:"CLOSING",
+3:"CLOSED"};
+
+	
+// https://stackoverflow.com/questions/9847580/how-to-detect-safari-chrome-ie-firefox-and-opera-browser
+// small change Chrome > Blink, PhantomJS.
+var getBrowser = function() {
+	var isPhantom =  (navigator.userAgent == 'PhantomJS')
+	// Opera 8.0+
+	var isOpera = (!!window.opr && !!opr.addons) || !!window.opera || navigator.userAgent.indexOf(' OPR/') >= 0;
+	// Firefox 1.0+
+	var isFirefox = typeof InstallTrigger !== 'undefined';
+	// Safari 3.0+ "[object HTMLElementConstructor]"
+	var isSafari = /constructor/i.test(window.HTMLElement) || (function (p) { return p.toString() === "[object SafariRemoteNotification]"; })(!window['safari'] || (typeof safari !== 'undefined' && safari.pushNotification));
+	// Internet Explorer 6-11
+	var isIE = /*@cc_on!@*/false || !!document.documentMode;
+	// Edge 20+
+	var isEdge = !isIE && !!window.StyleMedia;
+	// Chrome 1+
+	var isChrome = !!window.chrome && !!window.chrome.webstore;
+	// Blink engine detection
+	var isBlink = (isChrome || isOpera) && !!window.CSS;
+	if(isPhantom){return "Phantom"};
+	if(isChrome){return "Chrome"};
+	if(isBlink){return "Blink"};
+	if(isEdge){return "Edge"};
+	if(isIE){return "Internet Explorer"};
+	if(isSafari){return "Safari"};
+	if(isFirefox){return "Firefox"};
+	if(isOpera){return "Opera"};
+	return "unknown";
+}
+</script>
+</body>
+</html>

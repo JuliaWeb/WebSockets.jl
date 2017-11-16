@@ -14,9 +14,9 @@ import WebSockets.WebSocketHandler
 import WebSockets.WebSocket
 import Base.print
 "Date time group string"
-dtg() = Dates.format(now(), "d u yy HH:MM:SS")
+dtg() = Dates.format(now(), "HH:MM:SS")
 """
-Console log with a heading, buffer and no mixing with output from other simultaneous tasks.
+Console log with a heading, buffer and no mixing with output from other tasks.
 We may, of course, be interrupting other tasks like stacktrace output.
 """
 function clog(args...)
@@ -25,6 +25,7 @@ function clog(args...)
     lock(STDERR)
     print(STDERR, String(take!(buf)))
     unlock(STDERR)
+    nothing
 end
 "Print with 'color' arguments Base.text_colors placed anywhere. Color_normal is set after the call is finished. "
 function pwc(io::IO, args...)
