@@ -8,6 +8,7 @@
 # and a summary is output.
 
 cd(Pkg.dir("WebSockets","test"))
+using Compat
 using WebSockets
 using Base.Test
 const WEBSOCKETS = Dict{Int, WebSockets.WebSocket}()
@@ -31,8 +32,8 @@ server = start_ws_server_async()
 include("functions_open_browsers.jl")
 info("This OS is $(string(Sys.KERNEL))\n")
 n_browsers = 0
-n_browsers += open_testpage("phantomjs")
-#n_browsers += open_all_browsers()
+#n_browsers += open_testpage("phantomjs")
+n_browsers += open_all_browsers()
 
 # Control flow passes to async handler functions
 
@@ -88,7 +89,9 @@ n_binary = n_msgs - n_text
 info("Spawned $n_browsers browsers. $n_browsers made requests. Opened $n_ws sockets, $n_opensockets did not close as intended.")
 info("Received $n_msgs messages, $n_text text and $n_binary binary, $(round(sum(lengths)/ 1000 / 1000,3)) Mb, sent a similar amount.")
 info("Text messages received per websocket:")
-display.(RECEIVED_WS_MSGS)
+for m in RECEIVED_WS_MSGS
+	display(m)
+end
 
 if n_msgs > 0
     maxlength = maximum( lengths )
