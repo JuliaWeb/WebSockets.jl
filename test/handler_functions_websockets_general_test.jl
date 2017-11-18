@@ -3,20 +3,30 @@
 
 
 function ws_general(ws::WebSockets.WebSocket)
-    id = "ws_general #$(ws.id)\t"
+    id = "ws_general     $(ws.id)\t"
     WEBSOCKETS[ws.id] = ws
     RECEIVED_WS_MSGS[ws.id] = String[]
-    clog(id,  " Entering to read websocket.\n")
-    stri = wsmsg_general(ws)
-    clog(id,  " Send a message\n")
-    push!(RECEIVED_WS_MSGS[ws.id], stri)
-    writeto(ws.id, "Here, have a message!")
-    clog(id,  " Continue to listen for message\n")
+    RECEIVED_WS_MSGS_LENGTH[ws.id] = Vector{Int64}()
+    RECEIVED_WS_MSGS_TIME[ws.id] = Vector{Float64}()
+    RECEIVED_WS_MSGS_ALLOCATED[ws.id] = Vector{Int64}()
+    sendmsg = "Welcome, general websocket. Our ref.: $(ws.id)"
+    clog(id,  " Send: $sendmsg\n")
     while isopen(ws)
-        stri = wsmsg_general(ws)
+        stri = wsmsg_listen(ws)
         push!(RECEIVED_WS_MSGS[ws.id], stri)
+        clog(id, "Received: \n", :yellow, :bold, stri, "\n")
+        if startswith(stri, "Ping me!")
+            send_ping(ws)
+            sendmsg = "Your browser just got pinged (and presumably ponged back). Our ref.: $(ws.id)"
+            clog(id,  " Sending: $sendmsg\n")
+            writeto(ws.id, sendmsg)
+        elseif startswith(stri, "ws1 echo: Your browser just got pinged ")
+                sendmsg = "Close, wait, and navigate to: browsertest2.html"
+            clog(id,  " Sending: $sendmsg\n")
+            writeto(ws.id, sendmsg)
+        end
     end
-    clog(id, "Websocket was closed; exiting read loop\n")
+    clog(id, "Websocket $(ws.id) was closed; exits handler.\n")
     nothing
 end
 
@@ -24,22 +34,26 @@ function writeto(wsid::Int, message)
     if haskey(WEBSOCKETS, wsid)
         write(WEBSOCKETS[wsid], message)
     end
+    return nothing
 end
 
 """
 Listens for the next websocket message
 """
-function wsmsg_general(ws::WebSockets.WebSocket)
-    id = "wsmsg_general #$(ws.id)\t"
-    clog(id,  " Entering to read websocket.\n")
+function wsmsg_listen(ws::WebSockets.WebSocket)
+    id = "wsmsg_listen     $(ws.id)\t"
+    clog(id,  " Listening...\n")
     stri = ""
+    data = Vector{UInt8}()
+    t = 0.0
+    allocbytes = 0
     try
-        # Holding here. Cleanup code could work with InterruptException and Base.throwto.
-        # This is not considered necessary for the test (and doesn't really work well).
-        # So, this may continue running after the test is finished.
-        stri = ws|> read  |> String
-        clog(id, "Received: \n", :yellow, :bold, stri, "\n")
-        # push!
+        # Holding here. 
+        data , t, allocbytes = @timed ws|> read
+        push!(RECEIVED_WS_MSGS_LENGTH[ws.id], length(data))
+        push!(RECEIVED_WS_MSGS_TIME[ws.id], t)
+        push!(RECEIVED_WS_MSGS_ALLOCATED[ws.id], allocbytes)
+        stri = data |> String
     catch e
         if typeof(e) == WebSockets.WebSocketClosedError
             clog(id, :green, " Websocket was or is being closed.\n")
@@ -51,7 +65,6 @@ function wsmsg_general(ws::WebSockets.WebSocket)
             end
         end
     end
-
-    clog(id, "Exiting\n")
     return stri
 end
+return nothing

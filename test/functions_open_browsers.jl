@@ -82,7 +82,7 @@ function browser_path_windows(shortname)
     return ""
 end
 function launch_command(shortbrowsername)
-    url = "http://localhost:8080/browsertest.html"
+    url = "http://127.0.0.1:8080/browsertest.html"
     if Sys.is_windows()
         pt = browser_path_windows(shortbrowsername)
     else
@@ -117,7 +117,13 @@ function open_testpage(shortbrowsername)
         return false
     else
         try
-            spawn(dmc)
+            if shortbrowsername == "phantomjs"
+                # Run enables text output of phantom messages in the REPL. In Windows  
+                # standalone REPL, run will freeze the main thread if not run async.
+                @async run(dmc)
+            else
+                spawn(dmc)
+            end
         catch
             info("\tFailed to spawn " * shortbrowsername)
             return false
@@ -131,6 +137,7 @@ function open_all_browsers()
     openbrowsers = 0
     for b in brs
         openbrowsers += open_testpage(b)
+        sleep(8) # Reduce simultaneous connections to server. This is not a httpserver stress test. width:  
     end
     info("Out of google chrome, firefox, iexplore, safari and phantomjs, tried to spawn ", openbrowsers)
     openbrowsers
