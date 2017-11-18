@@ -16,14 +16,10 @@ function httphandle(request::Request, response::Response)
     if request.method=="GET"
         if request.resource =="/favicon.ico"
             response =  HttpServer.FileResponse(joinpath(@__DIR__, "favicon.ico"))
-            push!(response.headers, "Connection" => "close")
-
         elseif startswith(request.resource, "/browser")
             response =  HttpServer.FileResponse(joinpath(@__DIR__, splitdir(request.resource)[2]))
             if request.resource == "/browsertest.html"
                 n_responders += 1
-            else
-                push!(response.headers, "Connection" => "close")
             end
         else
             response = Response(404, "$id, can't serve $request.resource.")
@@ -32,6 +28,7 @@ function httphandle(request::Request, response::Response)
         response = Response(404, "$id, unexpected request.")
     end
     clog(id, response, "\n")
+    push!(response.headers, "Connection" => "close")
     return response
 end
 
