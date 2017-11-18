@@ -3,7 +3,7 @@
 
 
 function ws_general(ws::WebSockets.WebSocket)
-    id = "ws_general #$(ws.id)\t"
+    id = "ws_general     $(ws.id)\t"
     WEBSOCKETS[ws.id] = ws
     RECEIVED_WS_MSGS[ws.id] = String[]
     RECEIVED_WS_MSGS_LENGTH[ws.id] = Vector{Int64}()
@@ -41,18 +41,14 @@ end
 Listens for the next websocket message
 """
 function wsmsg_listen(ws::WebSockets.WebSocket)
-    id = "wsmsg_listen #$(ws.id)\t"
+    id = "wsmsg_listen     $(ws.id)\t"
     clog(id,  " Listening...\n")
     stri = ""
     data = Vector{UInt8}()
     t = 0.0
     allocbytes = 0
     try
-        # Holding here. Cleanup code could work with InterruptException and Base.throwto.
-        # This is not considered necessary for the test (and doesn't really work well).
-        # So, this may continue running after the test is finished.
-        push!(RECEIVED_WS_MSGS_TIME[ws.id], t)
-        push!(RECEIVED_WS_MSGS_ALLOCATED[ws.id], allocbytes)
+        # Holding here. 
         data , t, allocbytes = @timed ws|> read
         push!(RECEIVED_WS_MSGS_LENGTH[ws.id], length(data))
         push!(RECEIVED_WS_MSGS_TIME[ws.id], t)

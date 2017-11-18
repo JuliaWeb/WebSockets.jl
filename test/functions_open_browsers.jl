@@ -119,8 +119,8 @@ function open_testpage(shortbrowsername)
         try
             if shortbrowsername == "phantomjs"
                 # Run enables text output of phantom messages in the REPL. In Windows  
-				# standalone REPL, run will freeze the main thread if not run async.
-				@async run(dmc)
+                # standalone REPL, run will freeze the main thread if not run async.
+                @async run(dmc)
             else
                 spawn(dmc)
             end
@@ -137,6 +137,7 @@ function open_all_browsers()
     openbrowsers = 0
     for b in brs
         openbrowsers += open_testpage(b)
+        sleep(8) # Reduce simultaneous connections to server. This is not a httpserver stress test. width:  
     end
     info("Out of google chrome, firefox, iexplore, safari and phantomjs, tried to spawn ", openbrowsers)
     openbrowsers

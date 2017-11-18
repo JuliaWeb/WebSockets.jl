@@ -23,7 +23,7 @@ const RECEIVED_WS_MSGS = Dict{Int, Vector{String}}()
 # Logs from travis indicate it takes 7 s to fire up Safari and
 # have the first websocket open. This can easily increase if more
 # browsers become available.
-const FIRSTWAIT = Base.Dates.Second(20)
+const FIRSTWAIT = Base.Dates.Second(2)
 const MAXWAIT = Base.Dates.Second(60*15)
 global n_responders = 0
 include("functions_server.jl")
@@ -32,7 +32,7 @@ server = start_ws_server_async()
 include("functions_open_browsers.jl")
 info("This OS is $(string(Sys.KERNEL))\n")
 n_browsers = 0
-#n_browsers += open_testpage("iexplore")
+#n_browsers += open_testpage("firefox")
 n_browsers += open_all_browsers()
 
 # Control flow passes to async handler functions
@@ -61,7 +61,7 @@ end
 n_opensockets = count_open_websockets()
 
 closeall()
-
+info(Dates.format(now(), "HH:MM:SS"), "\tClosed web sockets and servers.")
 # sum up
 allocs = Vector{Int64}()
 times = Vector{Float64}()
@@ -88,10 +88,10 @@ n_binary = n_msgs - n_text
 # print summary
 info("Spawned $n_browsers browsers. $n_browsers made requests. Opened $n_ws sockets, $n_opensockets did not close as intended.")
 info("Received $n_msgs messages, $n_text text and $n_binary binary, $(round(sum(lengths)/ 1000 / 1000,3)) Mb, sent a similar amount.")
-info("Text messages received per websocket:")
-for m in RECEIVED_WS_MSGS
-	display(m)
-end
+
+
+
+
 
 if n_msgs > 0
     maxlength = maximum( lengths )
@@ -129,6 +129,11 @@ if n_msgs > 0
         "\t\tAverage allocation:\t", round(avgaloc, 3), "\n",
         "\t\t\Minimum :\t\t", round(minaloc, 3), "\n",
         "\t\t\Maximum :\t\t", round(maxaloc, 3), "\n",)
+
+    info("Text messages received per websocket:")
+    for m in RECEIVED_WS_MSGS
+        display(m)
+    end
 
 else
     info("Failure on speed / allocation test.")

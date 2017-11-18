@@ -3,7 +3,7 @@
 
 
 function ws_test_protocol(ws::WebSockets.WebSocket)
-    id = "ws_test_protocol #$(ws.id)\t"
+    id = "ws_test_protocol $(ws.id)\t"
     WEBSOCKETS[ws.id] = ws
     WEBSOCKETS_SUBPROTOCOL[ws.id] = ws
     WEBSOCKETS[ws.id] = ws
@@ -32,7 +32,7 @@ function ws_test_protocol(ws::WebSockets.WebSocket)
 end
 
 function ws_test_binary(ws::WebSockets.WebSocket)
-    id = "ws_test_binary #$(ws.id)\t"
+    id = "ws_test_binary $(ws.id)\t"
     WEBSOCKETS[ws.id] = ws
     WEBSOCKETS_BINARY[ws.id] = ws
     RECEIVED_WS_MSGS_LENGTH[ws.id] = Vector{Int64}()
