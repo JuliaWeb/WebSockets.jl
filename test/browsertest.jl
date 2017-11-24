@@ -32,8 +32,8 @@ server = start_ws_server_async()
 include("functions_open_browsers.jl")
 info("This OS is $(string(Sys.KERNEL))\n")
 n_browsers = 0
-#n_browsers += open_testpage("firefox")
-n_browsers += open_all_browsers()
+#n_browsers += open_testpage("phantom")
+n_browsers += open_all_browsers()#
 
 # Control flow passes to async handler functions
 
