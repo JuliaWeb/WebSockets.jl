@@ -9,62 +9,123 @@
         .received {
             color: green;
         }
+        #chat {
+          position:fixed;
+          bottom:0;
+          height:50px;
+          width:100%;          
+          background:#333;
+          display: none;
+        }  
+      
     </style>
 </head>
 <body>
+<span id="username"></span>
 <div id="content">
-
-    </div>
-    <div id="sayer" style="position:fixed;bottom:0;height:50px;background:#333;width:100%;">
-        <span></span><input name="say" type="text" value="" /><input type="submit" value="say" />
-    </div>
 </div>
 <div id="welcome">
-    <h1>Select a username</h1>
+    <h1>Select a userinput</h1>
     <form id="pick_username">
-        <input class="username" name="username" type="text" value="" />
+        <input class="userinput" name="userinput" type="text" value="" />
         <input type="submit" value="Enter Chat" />
     </form>
 </div>
-<script src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
+<div id="chat">
+  <form id="say_message">
+      <input name="say" type="text" value="" />
+      <input type="submit" value="say" />
+  </form>
+</div>
+
+
 <script type="text/javascript">
-    $(function(){
-        var connection = new WebSocket('ws://'+window.location.host);
-        var you = "you";
+
+    class SocketConnection {
+      constructor(onMessage) {
+        this.store = { connection: undefined, onMessage };
+      }
+      start() {
+        const {onMessage} = this.store;
+        let connection = new WebSocket('ws://'+window.location.host);
         connection.onmessage = function( message ){
             window.lastmessage = message;
-            $("#content").append( $("<p class='received'></p>").html( message.data ) );
+            onMessage(message.data)
         }
-        function changeUsername( username ){
-            you = username;
-            connection.send('setusername:'+ username);
-            $("#sayer span").html( username );
-        }
-        function sendMessage( message ){
-            connection.send('say:'+ message);
-            $("#content").append( $("<p class='sent'></p>").html( you + ": " + message ) );
-        }
-        $("#sayer input[type=submit]").click(function(){
-            if( $("#sayer input[name=say]").val().replace(/\s/gi,'').length )
-                sendMessage( $("#sayer input[name=say]").val() );
-            $("#sayer input[name=say]").val("").focus();
-        });
-        $("#sayer input[name=say]").keypress(function(e){
-            if( e.which === 13 ) $("#sayer input[type=submit]").click();
-        });
-        $("#pick_username").submit(function(e){
-            var uname = $(this).find("input.username").val();
-            if( !uname.replace(/\s/gi,'').length ) alert("Please select a valid username");
-            else {
-                changeUsername( uname );
-                $("#welcome").hide();
-                $("#chat").show();
-            }
-            e.stopImmediatePropagation();
-            e.preventDefault();
-            return false
-        });
+        this.store.connection = connection;
+      }
+      send(msg) {
+        const {connection} = this.store
+        connection.send(msg)
+      }
+    }
+    
+    let you = "you";
+    var $userForm  = document.querySelector("#pick_username");
+    var $chatForm  = document.querySelector("#say_message");
+    var $chatInput = $chatForm.querySelector("input[name=say]");
+
+    function addContent(html) {
+      var $content   = document.querySelector("#content");
+      var div = document.createElement("div");
+      div.innerHTML = html;
+      $content.appendChild(div);
+    }
+    
+    function onMessageReceived(msg) {
+      addContent(`<p class='received'>${msg}</p>`)
+    }
+
+    function whenUserName() {
+      var $userInput = $userForm.querySelector("input[name=userinput]");
+      var $userName  = document.querySelector("#username");
+      var $welcome = document.querySelector("#welcome");
+      var $chat = document.querySelector("#chat");
+
+      var uname = $userInput.value;
+      if( !uname.replace(/\s/gi,'').length ) {
+        alert("Please select a valid userinput");
+      }  else {
+        connection.send('setusername:'+ uname);
+        $userName.innerHTML    = uname;
+        $welcome.style.display = "none";
+        $chat.style.display    = "block";
+      }
+    }
+    
+    function whenChatMessage() {
+      var msg = $chatInput.value;
+      if(!msg.replace(/\s/gi,'').length) {  
+         /* nothing to do */
+      } else {
+        connection.send('say:'+ msg);
+        addContent(`<p class='sent'>${you}: ${msg}</p>`);
+        $chatInput.focus();
+      }
+    }
+    
+    $chatForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      whenChatMessage();
+      return false;
+    })
+    
+    $chatInput.addEventListener("keypress", (e) => {
+      if( e.keyCode === 13 ) { whenChatMessage(); } ;
+      return false;
+    }, false)
+    
+    $userForm.addEventListener("submit", function(e){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        whenUserName();
+        return false;
     });
+    
+    const connection = new SocketConnection(onMessageReceived);
+    connection.start();
+
 </script>
 </body>
 </html>
