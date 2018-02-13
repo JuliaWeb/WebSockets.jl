@@ -20,14 +20,11 @@ an http server.
 """
 module WebSockets
 
-using HttpCommon
-using HttpServer
-using Codecs
-using MbedTLS
-using Compat; import Compat.String
+using HTTP
+import HTTP: digest, MD_SHA1
+
 
 export WebSocket,
-       WebSocketHandler,
        write,
        read,
        close,
@@ -42,23 +39,29 @@ const TCPSock = Base.TCPSocket
 init_socket(sock) = Base.buffer_writes(sock) 
 
 
-type WebSocketClosedError <: Exception end
+struct WebSocketClosedError <: Exception end
 Base.showerror(io::IO, e::WebSocketClosedError) = print(io, "Error: client disconnected")
+
+struct WebSocketError <: Exception
+    status::Int16
+    message::String
+end
 
 """
 A WebSocket is a wrapper over a TcpSocket. It takes care of wrapping outgoing
 data in a frame and unwrapping (and concatenating) incoming data.
 """
-type WebSocket
-    id::Int
-    socket::TCPSock
+mutable struct WebSocket{T <: IO} <: IO
+    socket::T
+    server::Bool
     state::ReadyState
 
-    function WebSocket(id::Int,socket::TCPSock)
+    function WebSocket{T}(socket::T,server::Bool) where T
         init_socket(socket)
-        new(id, socket, CONNECTED)
+        new(socket, server, CONNECTED)
     end
 end
+WebSocket(socket,server) = WebSocket{typeof(socket)}(socket,server)
 
 # WebSocket Frames
 #
@@ -131,50 +134,36 @@ function addsubproto(name)
     return true
 end
 """ 
-    write_fragment(io, islast, data::Array{UInt8}, opcode)
+    write_fragment(io, islast, opcode, hasmask, data::Array{UInt8})
 Write the raw frame to a bufffer
 """
-function write_fragment(io::IO, islast::Bool, data::Array{UInt8}, opcode)
+function write_fragment(io::IO, islast::Bool, opcode, hasmask::Bool, data::Array{UInt8})
     l = length(data)
     b1::UInt8 = (islast ? 0b1000_0000 : 0b0000_0000) | opcode
 
-    # TODO: Do the mask xor thing??
-    # 1. set bit 8 to 1,
-    # 2. set a mask
-    # 3. xor data with mask
+    mask::UInt8 = hasmask ? 0b1000_0000 : 0b0000_0000
 
+    write(io, b1)
     if l <= 125
-        write(io, b1)
-        write(io, @compat UInt8(l))
-        write(io, data)
+        write(io, mask | UInt8(l))
     elseif l <= typemax(UInt16)
-        write(io, b1)
-        write(io, @compat UInt8(126))
-        write(io, hton(@compat UInt16(l)))
-        write(io, data)
+        write(io, mask | UInt8(126))
+        write(io, hton(UInt16(l)))
     elseif l <= typemax(UInt64)
-        write(io, b1)
-        write(io, @compat UInt8(127))
-        write(io, hton(@compat UInt64(l)))
-        write(io, data)
+        write(io, mask | UInt8(127))
+        write(io, hton(UInt64(l)))
     else
         error("Attempted to send too much data for one websocket fragment\n")
     end
-end
-
-""" 
-    write_fragment(io, islast, data::String, opcode)
-A version of send_fragment for text data.
-"""
-function write_fragment(io::IO, islast::Bool, data::String, opcode)
-    write_fragment(io, islast, data.data, opcode)
+    hasmask && write(io,mask!(data))
+    write(io, data)
 end
 
 """ Write without interruptions"""
-function locked_write(io::IO, islast::Bool, data, opcode)
+function locked_write(io::IO, islast::Bool, opcode, hasmask, data)
     isa(io, TCPSock) && lock(io.lock)
     try
-        write_fragment(io, islast, Vector{UInt8}(data), opcode)
+        write_fragment(io, islast, opcode, hasmask, Vector{UInt8}(data))
     finally
         if isa(io, TCPSock)
             flush(io)
@@ -189,7 +178,7 @@ function Base.write(ws::WebSocket,data::String)
         @show ws
         error("Attempted write to closed WebSocket\n")
     end
-    locked_write(ws.socket, true, data, OPCODE_TEXT)
+    locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, data)
 end
 
 """ Write binary data; will be sent as one frame."""
@@ -198,22 +187,22 @@ function Base.write(ws::WebSocket, data::Array{UInt8})
         @show ws
         error("attempt to write to closed WebSocket\n")
     end
-    locked_write(ws.socket, true, data, OPCODE_BINARY)
+    locked_write(ws.socket, true, OPCODE_BINARY, !ws.server, data)
 end
 
 
-function write_ping(io::IO, data = "")
-    locked_write(io, true, data, OPCODE_PING)
+function write_ping(io::IO, hasmask, data = "")
+    locked_write(io, true, OPCODE_PING, hasmask, data)
 end
 """ Send a ping message, optionally with data."""
-send_ping(ws, data...) = write_ping(ws.socket, data...)
+send_ping(ws, data...) = write_ping(ws.socket, !ws.server, data...)
 
 
-function write_pong(io::IO, data = "")
-    locked_write(io, true, data, OPCODE_PONG)
+function write_pong(io::IO, hasmask, data = "")
+    locked_write(io, true, OPCODE_PONG, hasmask, data)
 end
 """ Send a pong message, optionally with data."""
-send_pong(ws, data...) = write_pong(ws.socket, data...)
+send_pong(ws, data...) = write_pong(ws.socket, !ws.server, data...)
 
 """ 
     close(ws::WebSocket)
@@ -225,7 +214,7 @@ function Base.close(ws::WebSocket)
     end
 
     # Ask client to acknowledge closing the connection
-    locked_write(ws.socket, true, "", OPCODE_CLOSE)
+    locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, "")
     ws.state = CLOSING
 
     # Wait till the client responds with an OPCODE_CLOSE. This process is
@@ -242,7 +231,7 @@ function Base.close(ws::WebSocket)
     try
         while ws.state === CLOSING
             wsf = read_frame(ws.socket)
-            # ALERT: stuff might get lost in ether here
+            # ALERT: stuff might get lost in ether here    
             if is_control_frame(wsf) && (wsf.opcode == OPCODE_CLOSE)
               ws.state = CLOSED
             end
@@ -262,7 +251,7 @@ Base.isopen(ws::WebSocket) = (ws.state === CONNECTED) && isopen(ws.socket)
 
 
 """ Represents one (received) message frame."""
-type WebSocketFragment
+mutable struct WebSocketFragment
     is_last::Bool
     rsv1::Bool
     rsv2::Bool
@@ -314,7 +303,7 @@ function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
             # acknowledged by replying with an empty CLOSE frame and cleaning
             # up
             try
-                locked_write(ws.socket, true, "", OPCODE_CLOSE)
+                locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, "")
             catch exception
               # On sudden disconnects, the other side may be gone before the
               # close acknowledgement can be sent. This will cause an
@@ -333,7 +322,7 @@ function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
 
         throw(WebSocketClosedError())
     elseif wsf.opcode == OPCODE_PING
-        write_pong(ws.socket,wsf.data)
+        send_pong(ws,wsf.data)
     elseif wsf.opcode == OPCODE_PONG
         # Nothing to do here; no reply is needed for a pong message.
     else  # %xB-F are reserved for further control frames
@@ -352,12 +341,13 @@ function read_frame(io::IO)
     # TODO: add validation somewhere to ensure rsv, opcode, mask, etc are valid.
 
     b = read(io,UInt8)
-    mask = b & 0b1000_0000 >>> 7  # If not 1, fail.
+    mask = b & 0b1000_0000 >>> 7
+    has_mask = mask != 0
 
-    if mask != 1
-    error("WebSocket reader cannot handle incoming messages without mask. " *
-        "See http://tools.ietf.org/html/rfc6455#section-5.3")
-    end
+    # if mask != 1
+    # error("WebSocket reader cannot handle incoming messages without mask. " *
+    #     "See http://tools.ietf.org/html/rfc6455#section-5.3")
+    # end
 
     payload_len::UInt64 = b & 0b0111_1111
     if payload_len == 126
@@ -366,16 +356,25 @@ function read_frame(io::IO)
         payload_len = ntoh(read(io,UInt64))  # 8 bytes
     end
 
-    maskkey = Array{UInt8,1}(4)
-    for i in 1:4
-        maskkey[i] = read(io,UInt8)
+    if has_mask
+        maskkey = Array{UInt8,1}(4)
+        for i in 1:4
+            maskkey[i] = read(io,UInt8)
+        end
+    else
+        maskkey = UInt8[]
     end
 
     data = Array{UInt8,1}(payload_len)
-    for i in 1:payload_len
-        d = read(io, UInt8)
-        d = xor(d , maskkey[mod(i - 1, 4) + 1])
-        data[i] = d
+    if has_mask
+        for i in 1:payload_len
+            d = read(io, UInt8)
+            data[i] = xor(d , maskkey[mod(i - 1, 4) + 1])
+        end
+    else
+        for i in 1:payload_len
+            data[i] = read(io, UInt8)
+        end
     end
 
     return WebSocketFragment(fin,rsv1,rsv2,rsv3,opcode,mask,payload_len,maskkey,data)
@@ -422,78 +421,170 @@ value. This is done in three steps:
 This function then returns the string of the base64-encoded value.
 """
 function generate_websocket_key(key)
-    hashed_key = digest(MD_SHA1, key*"258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
-    String(encode(Base64, hashed_key))
+    hashkey = "$(key)258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+    return base64encode(digest(MD_SHA1, hashkey))
 end
 
-"""
-Responds to a WebSocket handshake request.
-Checks for required headers and subprotocols; sends Response(400) if they're missing or bad. Otherwise, transforms client key into accept value, and sends Reponse(101).
-Function returns true for accepted handshakes.
-"""
-function websocket_handshake(request,client)
-    if !haskey(request.headers, "Sec-WebSocket-Key")
-        Base.write(client.sock, Response(400))
-        return false
-    end
-    if get(request.headers, "Sec-WebSocket-Version", "13") != "13"
-        response = Response(400)
-        response.headers["Sec-WebSocket-Version"] = "13"
-        Base.write(client.sock, response)
-        return false
-    end
+# """
+# Responds to a WebSocket handshake request.
+# Checks for required headers and subprotocols; sends Response(400) if they're missing or bad. Otherwise, transforms client key into accept value, and sends Reponse(101).
+# Function returns true for accepted handshakes.
+# """
+# function websocket_handshake(request,client)
+#     if !haskey(request.headers, "Sec-WebSocket-Key")
+#         Base.write(client.sock, Response(400))
+#         return false
+#     end
+#     if get(request.headers, "Sec-WebSocket-Version", "13") != "13"
+#         response = Response(400)
+#         response.headers["Sec-WebSocket-Version"] = "13"
+#         Base.write(client.sock, response)
+#         return false
+#     end
 
-    key = request.headers["Sec-WebSocket-Key"]
-    if length(decode(Base64,key)) != 16 # Key must be 16 bytes
-        Base.write(client.sock, Response(400))
-        return false
-    end
-  resp_key = generate_websocket_key(key)
+#     key = request.headers["Sec-WebSocket-Key"]
+#     if length(decode(Base64,key)) != 16 # Key must be 16 bytes
+#         Base.write(client.sock, Response(400))
+#         return false
+#     end
+#   resp_key = generate_websocket_key(key)
 
-  response = Response(101)
-  response.headers["Upgrade"] = "websocket"
-  response.headers["Connection"] = "Upgrade"
-  response.headers["Sec-WebSocket-Accept"] = resp_key
+#   response = Response(101)
+#   response.headers["Upgrade"] = "websocket"
+#   response.headers["Connection"] = "Upgrade"
+#   response.headers["Sec-WebSocket-Accept"] = resp_key
  
-  if haskey(request.headers, "Sec-WebSocket-Protocol") 
-      if hasprotocol(request.headers["Sec-WebSocket-Protocol"])
-          response.headers["Sec-WebSocket-Protocol"] =  request.headers["Sec-WebSocket-Protocol"]
-      else
-          Base.write(client.sock, Response(400))
-          return false
-      end
-  end 
+#   if haskey(request.headers, "Sec-WebSocket-Protocol") 
+#       if hasprotocol(request.headers["Sec-WebSocket-Protocol"])
+#           response.headers["Sec-WebSocket-Protocol"] =  request.headers["Sec-WebSocket-Protocol"]
+#       else
+#           Base.write(client.sock, Response(400))
+#           return false
+#       end
+#   end 
   
-  Base.write(client.sock, response)
-  return true
+#   Base.write(client.sock, response)
+#   return true
+# end
+
+function mask!(data, mask=rand(UInt8, 4))
+    for i in 1:length(data)
+        data[i] = data[i] ⊻ mask[((i-1) % 4)+1]
+    end
+    return mask
 end
 
-""" Implement the WebSocketInterface, for compatilibility with HttpServer."""
-immutable WebSocketHandler <: HttpServer.WebSocketInterface
-    handle::Function
-end
+function open(f::Function, url; binary=false, verbose=false, kw...)
 
-import HttpServer: handle, is_websocket_handshake
-"""
-Performs handshake. If successfull, establishes WebSocket type and calls
-handler with the WebSocket and the original request. On exit from handler, closes websocket. No return value.
-"""
-function handle(handler::WebSocketHandler, req::Request, client::HttpServer.Client)
-    websocket_handshake(req, client) || return
-    sock = WebSocket(client.id, client.sock)
-    handler.handle(req, sock)
-    if isopen(sock) 
-        try
-        close(sock)
+    key = HTTP.base64encode(rand(UInt8, 16))
+
+    headers = [
+        "Upgrade" => "websocket",
+        "Connection" => "Upgrade",
+        "Sec-WebSocket-Key" => key,
+        "Sec-WebSocket-Version" => "13"
+    ]
+
+    HTTP.open("GET", url, headers;
+              reuse_limit=0, verbose=verbose ? 2 : 0, kw...) do http
+
+        HTTP.startread(http)
+
+        status = http.message.status
+        if status != 101
+            return
         end
+
+        check_upgrade(http)
+
+        if HTTP.header(http, "Sec-WebSocket-Accept") != generate_websocket_key(key)
+            throw(WebSocketError(0, "Invalid Sec-WebSocket-Accept\n" *
+                                    "$(http.message)"))
+        end
+
+        io = HTTP.ConnectionPool.getrawstream(http)
+        f(WebSocket(io,false))
     end
 end
-function is_websocket_handshake(handler::WebSocketHandler, req::Request)
-    is_get = req.method == "GET"
-    # "upgrade" for Chrome and "keep-alive, upgrade" for Firefox.
-    is_upgrade = contains(lowercase(get(req.headers, "Connection", "")),"upgrade")
-    is_websockets = lowercase(get(req.headers, "Upgrade", "")) == "websocket"
-    return is_get && is_upgrade && is_websockets
+
+# mutable struct WebSocket
+#     id::Int
+#     socket::TCPSock
+#     state::ReadyState
+
+#     function WebSocket(id::Int,socket::TCPSock)
+#         init_socket(socket)
+#         new(id, socket, CONNECTED)
+#     end
+# end
+
+# function listen(f::Function, host::String="localhost", port::UInt16=UInt16(8081); binary=false, verbose=false)
+#     HTTP.listen(host, port; verbose=verbose) do http
+#         upgrade(f, http; binary=binary)
+#     end
+# end
+
+function upgrade(f::Function, http::HTTP.Stream; binary=false)
+
+    check_upgrade(http)
+    if !HTTP.hasheader(http, "Sec-WebSocket-Version", "13")
+        throw(WebSocketError(0, "Expected \"Sec-WebSocket-Version: 13\"!\n$(http.message)"))
+    end
+
+    HTTP.setstatus(http, 101)
+    HTTP.setheader(http, "Upgrade" => "websocket")
+    HTTP.setheader(http, "Connection" => "Upgrade")
+    key = HTTP.header(http, "Sec-WebSocket-Key")
+    HTTP.setheader(http, "Sec-WebSocket-Accept" => generate_websocket_key(key))
+
+    HTTP.startwrite(http)
+
+    io = HTTP.ConnectionPool.getrawstream(http)
+    f(WebSocket(io, true))
 end
+
+function check_upgrade(http)
+    if !HTTP.hasheader(http, "Upgrade", "websocket")
+        throw(WebSocketError(0, "Expected \"Upgrade: websocket\"!\n$(http.message)"))
+    end
+
+    if !HTTP.hasheader(http, "Connection", "upgrade")
+        throw(WebSocketError(0, "Expected \"Connection: upgrade\"!\n$(http.message)"))
+    end
+end
+
+function is_upgrade(r::HTTP.Message)
+    (r isa HTTP.Request && r.method == "GET" || r.status == 101) &&
+    HTTP.hasheader(r, "Connection", "upgrade") &&
+    HTTP.hasheader(r, "Upgrade", "websocket")
+end
+
+# """ Implement the WebSocketInterface, for compatilibility with HttpServer."""
+# struct WebSocketHandler <: HttpServer.WebSocketInterface
+#     handle::Function
+# end
+
+# import HttpServer: handle, is_websocket_handshake
+# """
+# Performs handshake. If successfull, establishes WebSocket type and calls
+# handler with the WebSocket and the original request. On exit from handler, closes websocket. No return value.
+# """
+# function handle(handler::WebSocketHandler, req::Request, client::HttpServer.Client)
+#     websocket_handshake(req, client) || return
+#     sock = WebSocket(client.id, client.sock)
+#     handler.handle(req, sock)
+#     if isopen(sock) 
+#         try
+#         close(sock)
+#         end
+#     end
+# end
+# function is_websocket_handshake(handler::WebSocketHandler, req::Request)
+#     is_get = req.method == "GET"
+#     # "upgrade" for Chrome and "keep-alive, upgrade" for Firefox.
+#     is_upgrade = contains(lowercase(get(req.headers, "Connection", "")),"upgrade")
+#     is_websockets = lowercase(get(req.headers, "Upgrade", "")) == "websocket"
+#     return is_get && is_upgrade && is_websockets
+# end
 
 end # module WebSockets
