@@ -332,7 +332,8 @@ end
 
 """ Read a frame: turn bytes from the websocket into a WebSocketFragment."""
 function read_frame(io::IO)
-    a = read(io,UInt8)
+    ab = read(io,2)
+    a = ab[1]
     fin    = a & 0b1000_0000 >>> 7  # If fin, then is final fragment
     rsv1   = a & 0b0100_0000  # If not 0, fail.
     rsv2   = a & 0b0010_0000  # If not 0, fail.
@@ -340,9 +341,9 @@ function read_frame(io::IO)
     opcode = a & 0b0000_1111  # If not known code, fail.
     # TODO: add validation somewhere to ensure rsv, opcode, mask, etc are valid.
 
-    b = read(io,UInt8)
+    b = ab[2]
     mask = b & 0b1000_0000 >>> 7
-    has_mask = mask != 0
+    hasmask = mask != 0
 
     # if mask != 1
     # error("WebSocket reader cannot handle incoming messages without mask. " *
@@ -356,26 +357,10 @@ function read_frame(io::IO)
         payload_len = ntoh(read(io,UInt64))  # 8 bytes
     end
 
-    if has_mask
-        maskkey = Array{UInt8,1}(4)
-        for i in 1:4
-            maskkey[i] = read(io,UInt8)
-        end
-    else
-        maskkey = UInt8[]
-    end
+    maskkey = hasmask ? read(io,4) : UInt8[]
 
-    data = Array{UInt8,1}(payload_len)
-    if has_mask
-        for i in 1:payload_len
-            d = read(io, UInt8)
-            data[i] = xor(d , maskkey[mod(i - 1, 4) + 1])
-        end
-    else
-        for i in 1:payload_len
-            data[i] = read(io, UInt8)
-        end
-    end
+    data = read(io,Int(payload_len))
+    hasmask && mask!(data,maskkey)
 
     return WebSocketFragment(fin,rsv1,rsv2,rsv3,opcode,mask,payload_len,maskkey,data)
 end

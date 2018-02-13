@@ -19,16 +19,23 @@ import WebSockets: CONNECTED, CLOSING, CLOSED
 
 @testset "WebSockets" begin
 
-for s in ["ws"] # ["ws", "wss"]
-    info("Testing $(s)...")
-    WebSockets.open("$s://echo.websocket.org") do ws
-        write(ws, "Foo")
-        @test String(read(ws)) == "Foo"
+info("Testing ws...")
+WebSockets.open("ws://echo.websocket.org") do ws
+    write(ws, "Foo")
+    @test String(read(ws)) == "Foo"
 
-        close(ws)
-    end
+    close(ws)
 end
+sleep(1)
 
+info("Testing wss...")
+WebSockets.open("wss://echo.websocket.org") do ws
+    write(ws, "Foo")
+    @test String(read(ws)) == "Foo"
+
+    close(ws)
+end
+sleep(1)
 
 p = UInt16(8000)
 @async HTTP.listen("127.0.0.1",p) do http
