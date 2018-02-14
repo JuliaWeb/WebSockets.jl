@@ -1,6 +1,6 @@
 info("Loading HttpServer methods...")
 
-export WebSocketHandler, is_websocket_handshake, handle
+export WebSocketHandler
 
 
 """
@@ -54,9 +54,9 @@ end
 Performs handshake. If successfull, establishes WebSocket type and calls
 handler with the WebSocket and the original request. On exit from handler, closes websocket. No return value.
 """
-function handle(handler::WebSocketHandler, req::HttpServer.Request, client::HttpServer.Client)
+function HttpServer.handle(handler::WebSocketHandler, req::HttpServer.Request, client::HttpServer.Client)
     websocket_handshake(req, client) || return
-    sock = WebSocket(client.id, client.sock)
+    sock = WebSocket(client.sock,true)
     handler.handle(req, sock)
     if isopen(sock) 
         try
@@ -65,7 +65,7 @@ function handle(handler::WebSocketHandler, req::HttpServer.Request, client::Http
     end
 end
 
-function is_websocket_handshake(handler::WebSocketHandler, req::HttpServer.Request)
+function HttpServer.is_websocket_handshake(handler::WebSocketHandler, req::HttpServer.Request)
     is_get = req.method == "GET"
     # "upgrade" for Chrome and "keep-alive, upgrade" for Firefox.
     is_upgrade = contains(lowercase(get(req.headers, "Connection", "")),"upgrade")
