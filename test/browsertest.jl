@@ -9,6 +9,7 @@
 
 cd(Pkg.dir("WebSockets","test"))
 using Compat
+using HttpServer
 using WebSockets
 using Base.Test
 const WEBSOCKETS = Dict{Int, WebSockets.WebSocket}()
