@@ -24,6 +24,14 @@ Websocket initiates with sending "Ping me!" with signature.<br>
 <div id = "ws3" style="border:thick solid black;"><p>ws3 Websocket: server_denies_protocol</p></div>
 
 <script>
+
+function uuid4() {
+    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    )
+}
+var id = uuid4();
+
 var exitmsg = "Close, wait, and navigate to: browsertest2.html"
 
 window.onload= function(){
@@ -73,22 +81,30 @@ function addwebsocket(instancename, subprotocol){
 			"<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
 			" " + readystateDesc[e.target.readyState] + 
 			"</p><p>&nbsp;&nbsp;..Sending message: " + msg + "</p>");
-		e.target.send(msg);
+		var data = {
+			"id": id,
+			"msg": msg
+		} 
+		e.target.send(JSON.stringify(data));
 	}
 	ws.onmessage	= function(e){
 		var msg = e.data;
 		plog(e.target.mynam, "<p>: " + e.target.mynam + ".onmessage: " + msg + "  </p>");
 		if(msg == exitmsg) {
-				plog(e.target.mynam, "<p>&nbsp;&nbsp; Reveived :" + msg + "</p>");
-				var file = msg.split(": ")[1];
-				plog(e.target.mynam, "<p>&nbsp;&nbsp; Calling close, will navigate to "+ file + " in 2 seconds</p>");
-				e.target.close()
-				setTimeout(navigate, 2000, file);
-			} else {
-				var msgecho = e.target.mynam + " echo: " + e.data;
-				plog(e.target.mynam, "<p>&nbsp;&nbsp;" + msgecho + "</p>");
-				e.target.send(e.target.mynam + " echo: " + e.data)
+			plog(e.target.mynam, "<p>&nbsp;&nbsp; Reveived :" + msg + "</p>");
+			var file = msg.split(": ")[1];
+			plog(e.target.mynam, "<p>&nbsp;&nbsp; Calling close, will navigate to "+ file + " in 2 seconds</p>");
+			e.target.close()
+			setTimeout(navigate, 2000, file);
+		} else {
+			var msgecho = e.target.mynam + " echo: " + e.data;
+			plog(e.target.mynam, "<p>&nbsp;&nbsp;" + msgecho + "</p>");
+			var data = {
+				"id": id,
+				"msg": e.target.mynam + " echo: " + e.data
 			}
+			e.target.send(JSON.stringify(data))
+		}
 	}
 	plog(instancename, "<p>" + instancename + " created with event handlers.</p>");
 	return ws

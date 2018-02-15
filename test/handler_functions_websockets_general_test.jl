@@ -3,34 +3,33 @@
 
 
 function ws_general(ws::WebSockets.WebSocket)
-    id = "ws_general     $(ws.id)\t"
-    WEBSOCKETS[ws.id] = ws
-    RECEIVED_WS_MSGS[ws.id] = String[]
-    RECEIVED_WS_MSGS_LENGTH[ws.id] = Vector{Int64}()
-    RECEIVED_WS_MSGS_TIME[ws.id] = Vector{Float64}()
-    RECEIVED_WS_MSGS_ALLOCATED[ws.id] = Vector{Int64}()
-    sendmsg = "Welcome, general websocket. Our ref.: $(ws.id)"
-    clog(id,  " Send: $sendmsg\n")
+    id = cid = ""
     while isopen(ws)
-        stri = wsmsg_listen(ws)
-        push!(RECEIVED_WS_MSGS[ws.id], stri)
-        clog(id, "Received: \n", :yellow, :bold, stri, "\n")
-        if startswith(stri, "Ping me!")
+        id, msg = wsmsg_listen(ws)
+        cid = "ws_general     $(id)\t"
+        # RECEIVED_WS_MSGS[id] = String[]
+        # RECEIVED_WS_MSGS_LENGTH[id] = Vector{Int64}()
+        # RECEIVED_WS_MSGS_TIME[id] = Vector{Float64}()
+        # RECEIVED_WS_MSGS_ALLOCATED[id] = Vector{Int64}()
+        sendmsg = "Welcome, general websocket. Our ref.: $(id)"
+        clog(cid,  " Send: $sendmsg\n")
+        clog(cid, "Received: \n", :yellow, :bold, msg, "\n")
+        if startswith(msg, "Ping me!")
             send_ping(ws)
-            sendmsg = "Your browser just got pinged (and presumably ponged back). Our ref.: $(ws.id)"
-            clog(id,  " Sending: $sendmsg\n")
-            writeto(ws.id, sendmsg)
-        elseif startswith(stri, "ws1 echo: Your browser just got pinged ")
+            sendmsg = "Your browser just got pinged (and presumably ponged back). Our ref.: $(id)"
+            clog(cid,  " Sending: $sendmsg\n")
+            writeto(id, sendmsg)
+        elseif startswith(msg, "ws1 echo: Your browser just got pinged ")
                 sendmsg = "Close, wait, and navigate to: browsertest2.html"
-            clog(id,  " Sending: $sendmsg\n")
-            writeto(ws.id, sendmsg)
+            clog(cid,  " Sending: $sendmsg\n")
+            writeto(id, sendmsg)
         end
     end
-    clog(id, "Websocket $(ws.id) was closed; exits handler.\n")
+    clog(cid, "Websocket $(id) was closed; exits handler.\n")
     nothing
 end
 
-function writeto(wsid::Int, message)
+function writeto(wsid::String, message)
     if haskey(WEBSOCKETS, wsid)
         write(WEBSOCKETS[wsid], message)
     end
@@ -41,30 +40,38 @@ end
 Listens for the next websocket message
 """
 function wsmsg_listen(ws::WebSockets.WebSocket)
-    id = "wsmsg_listen     $(ws.id)\t"
-    clog(id,  " Listening...\n")
-    stri = ""
-    data = Vector{UInt8}()
-    t = 0.0
-    allocbytes = 0
+    id = msg = cid = ""
     try
         # Holding here. 
-        data , t, allocbytes = @timed ws|> read
-        push!(RECEIVED_WS_MSGS_LENGTH[ws.id], length(data))
-        push!(RECEIVED_WS_MSGS_TIME[ws.id], t)
-        push!(RECEIVED_WS_MSGS_ALLOCATED[ws.id], allocbytes)
-        stri = data |> String
+        data , t, allocbytes = @timed JSON.parse(String(read(ws)))
+        id = data["id"]
+        msg = data["msg"]
+        cid = "wsmsg_listen     $(id)\t"
+        clog(cid,  " Listening...\n")
+     
+        if !haskey(WEBSOCKETS,id) 
+            WEBSOCKETS[id] = ws
+            WEBSOCKETS_SUBPROTOCOL[id] = ws
+            RECEIVED_WS_MSGS[id] = Vector{String}()
+            RECEIVED_WS_MSGS_LENGTH[id] = Vector{Int64}()
+            RECEIVED_WS_MSGS_TIME[id] = Vector{Float64}()
+            RECEIVED_WS_MSGS_ALLOCATED[id] = Vector{Int64}()
+        end
+        push!(RECEIVED_WS_MSGS[id],msg)
+        push!(RECEIVED_WS_MSGS_LENGTH[id], length(msg))
+        push!(RECEIVED_WS_MSGS_TIME[id], t)
+        push!(RECEIVED_WS_MSGS_ALLOCATED[id], allocbytes)
     catch e
         if typeof(e) == WebSockets.WebSocketClosedError
-            clog(id, :green, " Websocket was or is being closed.\n")
+            clog(cid, :green, " Websocket was or is being closed.\n")
         else
-            clog(id, "Caught exception..\n", "\t\t", :red, e, "\n")
+            clog(cid, "Caught exception..\n", "\t\t", :red, e, "\n")
             if isopen(ws)
-                clog(id, "Closing\n")
+                clog(cid, "Closing\n")
                 close(ws)
             end
         end
     end
-    return stri
+    return id, msg
 end
 return nothing

@@ -12,14 +12,15 @@ using Compat
 using HttpServer
 using WebSockets
 using Base.Test
-const WEBSOCKETS = Dict{Int, WebSockets.WebSocket}()
-const RECEIVED_WS_MSGS_TIME = Dict{Int, Vector{Float64}}()
-const RECEIVED_WS_MSGS_ALLOCATED = Dict{Int, Vector{Int64}}()
-const RECEIVED_WS_MSGS_LENGTH = Dict{Int, Vector{Int64}}()
-const WEBSOCKETS_SUBPROTOCOL = Dict{Int, WebSockets.WebSocket}()
-const WEBSOCKETS_BINARY = Dict{Int, WebSockets.WebSocket}()
+using JSON
+const WEBSOCKETS = Dict{String, WebSockets.WebSocket}()
+const RECEIVED_WS_MSGS_TIME = Dict{String, Vector{Float64}}()
+const RECEIVED_WS_MSGS_ALLOCATED = Dict{String, Vector{Int64}}()
+const RECEIVED_WS_MSGS_LENGTH = Dict{String, Vector{Int64}}()
+const WEBSOCKETS_SUBPROTOCOL = Dict{String, WebSockets.WebSocket}()
+const WEBSOCKETS_BINARY = Dict{String, WebSockets.WebSocket}()
 # Note that only text messages are stored. Binary messages are discarded.
-const RECEIVED_WS_MSGS = Dict{Int, Vector{String}}()
+const RECEIVED_WS_MSGS = Dict{String, Vector{String}}()
 
 # Logs from travis indicate it takes 7 s to fire up Safari and
 # have the first websocket open. This can easily increase if more

@@ -139,7 +139,7 @@ firefoxrequest= Request(
 wshandler = WebSocketHandler((x,y)->nothing);#Dummy wshandler
 
 for request in [chromerequest, firefoxrequest]
-    @test is_websocket_handshake(wshandler,request) == true
+    @test HttpServer.is_websocket_handshake(wshandler,request) == true
 end
 
 info("Test of handshake response")
