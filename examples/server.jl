@@ -1,10 +1,6 @@
 using HttpServer
 using WebSockets
 
-#global Dict to store open connections in
-global connections = Dict{Int,WebSocket}()
-global usernames   = Dict{Int,String}()
-
 function decodeMessage( msg )
     String(copy(msg))
 end
@@ -19,8 +15,6 @@ function eval_or_describe_error(strmsg)
 end
        
 wsh = WebSocketHandler() do req, client
-    global connections
-    connections[client.id] = client
     while true
         val = client |> read |> decodeMessage |> eval_or_describe_error
         output = String(take!(Base.mystreamvar))

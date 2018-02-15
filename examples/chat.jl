@@ -2,9 +2,12 @@ using HttpServer
 using WebSockets
 using JSON
 
+struct User
+    name::String
+    client::WebSocket
+end
 #global Dict to store open connections in
-global connections = Dict{String,WebSocket}()
-global usernames   = Dict{String,String}()
+global connections = Dict{String,User}()
 
 function decodeMessage( msg )
     JSON.parse(String(copy(msg)))
@@ -12,7 +15,6 @@ end
 
 wsh = WebSocketHandler() do req, client
     global connections
-    # @show connections[client.id] = client
     while true
         msg = read(client)
         msg = decodeMessage(msg)
@@ -20,15 +22,14 @@ wsh = WebSocketHandler() do req, client
         if haskey(msg,"userName") && !haskey(connections,id)
             uname = msg["userName"]
             println("SETTING USERNAME: $(uname)")
-            connections[id] = client
-            usernames[id] = uname
+            connections[id] = User(uname,client)
         end
         if haskey(msg,"say")
             content = msg["say"]
             println("EMITTING MESSAGE: $(content)")
             for (k,v) in connections
                 if k != id
-                    write(v, (usernames[id] * ": " * content))
+                    write(v.client, (v.name * ": " * content))
                 end
             end
         end

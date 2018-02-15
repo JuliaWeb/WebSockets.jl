@@ -126,19 +126,14 @@
       whenChatMessage();
       return false;
     })
-    
-    $chatInput.addEventListener("keypress", (e) => {
-      if( e.keyCode === 13 ) { whenChatMessage(); } ;
-      return false;
-    }, false)
-    
+      
     $userForm.addEventListener("submit", function(e){
         e.preventDefault();
         e.stopImmediatePropagation();
         whenUserName();
         return false;
     });
-    
+
     const connection = new SocketConnection(onMessageReceived);
     connection.start();
 
