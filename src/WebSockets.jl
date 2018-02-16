@@ -23,7 +23,6 @@ module WebSockets
 import MbedTLS: digest, MD_SHA1
 using Requires
 
-
 export WebSocket,
        write,
        read,
