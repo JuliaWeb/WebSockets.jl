@@ -65,6 +65,14 @@
     var $chatForm  = document.querySelector("#say_message");
     var $chatInput = $chatForm.querySelector("input[name=say]");
 
+    
+    function uuid4() {
+        return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        )
+    }
+    var id = uuid4();
+
     function addContent(html) {
       var $content   = document.querySelector("#content");
       var div = document.createElement("div");
@@ -86,7 +94,11 @@
       if( !uname.replace(/\s/gi,'').length ) {
         alert("Please select a valid userinput");
       }  else {
-        connection.send('setusername:'+ uname);
+        var msg = {
+          "id": id,
+          "userName": uname
+        };
+        connection.send(JSON.stringify(msg));
         $userName.innerHTML    = uname;
         $welcome.style.display = "none";
         $chat.style.display    = "block";
@@ -94,12 +106,16 @@
     }
     
     function whenChatMessage() {
-      var msg = $chatInput.value;
-      if(!msg.replace(/\s/gi,'').length) {  
+      var content = $chatInput.value;
+      if( !content.replace(/\s/gi,'').length) {  
          /* nothing to do */
       } else {
-        connection.send('say:'+ msg);
-        addContent(`<p class='sent'>${you}: ${msg}</p>`);
+        var msg = {
+          "id": id,
+          "say": content
+        };
+        connection.send(JSON.stringify(msg));
+        addContent(`<p class='sent'>${you}: ${content}</p>`);
         $chatInput.focus();
       }
     }
@@ -110,19 +126,14 @@
       whenChatMessage();
       return false;
     })
-    
-    $chatInput.addEventListener("keypress", (e) => {
-      if( e.keyCode === 13 ) { whenChatMessage(); } ;
-      return false;
-    }, false)
-    
+      
     $userForm.addEventListener("submit", function(e){
         e.preventDefault();
         e.stopImmediatePropagation();
         whenUserName();
         return false;
     });
-    
+
     const connection = new SocketConnection(onMessageReceived);
     connection.start();
 

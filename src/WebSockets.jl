@@ -20,9 +20,8 @@ an http server.
 """
 module WebSockets
 
-using HTTP
-import HTTP: digest, MD_SHA1
-
+import MbedTLS: digest, MD_SHA1
+using Requires
 
 export WebSocket,
        write,
@@ -410,48 +409,6 @@ function generate_websocket_key(key)
     return base64encode(digest(MD_SHA1, hashkey))
 end
 
-# """
-# Responds to a WebSocket handshake request.
-# Checks for required headers and subprotocols; sends Response(400) if they're missing or bad. Otherwise, transforms client key into accept value, and sends Reponse(101).
-# Function returns true for accepted handshakes.
-# """
-# function websocket_handshake(request,client)
-#     if !haskey(request.headers, "Sec-WebSocket-Key")
-#         Base.write(client.sock, Response(400))
-#         return false
-#     end
-#     if get(request.headers, "Sec-WebSocket-Version", "13") != "13"
-#         response = Response(400)
-#         response.headers["Sec-WebSocket-Version"] = "13"
-#         Base.write(client.sock, response)
-#         return false
-#     end
-
-#     key = request.headers["Sec-WebSocket-Key"]
-#     if length(decode(Base64,key)) != 16 # Key must be 16 bytes
-#         Base.write(client.sock, Response(400))
-#         return false
-#     end
-#   resp_key = generate_websocket_key(key)
-
-#   response = Response(101)
-#   response.headers["Upgrade"] = "websocket"
-#   response.headers["Connection"] = "Upgrade"
-#   response.headers["Sec-WebSocket-Accept"] = resp_key
- 
-#   if haskey(request.headers, "Sec-WebSocket-Protocol") 
-#       if hasprotocol(request.headers["Sec-WebSocket-Protocol"])
-#           response.headers["Sec-WebSocket-Protocol"] =  request.headers["Sec-WebSocket-Protocol"]
-#       else
-#           Base.write(client.sock, Response(400))
-#           return false
-#       end
-#   end 
-  
-#   Base.write(client.sock, response)
-#   return true
-# end
-
 function mask!(data, mask=rand(UInt8, 4))
     for i in 1:length(data)
         data[i] = data[i] ⊻ mask[((i-1) % 4)+1]
@@ -459,117 +416,8 @@ function mask!(data, mask=rand(UInt8, 4))
     return mask
 end
 
-function open(f::Function, url; binary=false, verbose=false, kw...)
+@require HTTP include("HTTP.jl")
 
-    key = HTTP.base64encode(rand(UInt8, 16))
-
-    headers = [
-        "Upgrade" => "websocket",
-        "Connection" => "Upgrade",
-        "Sec-WebSocket-Key" => key,
-        "Sec-WebSocket-Version" => "13"
-    ]
-
-    HTTP.open("GET", url, headers;
-              reuse_limit=0, verbose=verbose ? 2 : 0, kw...) do http
-
-        HTTP.startread(http)
-
-        status = http.message.status
-        if status != 101
-            return
-        end
-
-        check_upgrade(http)
-
-        if HTTP.header(http, "Sec-WebSocket-Accept") != generate_websocket_key(key)
-            throw(WebSocketError(0, "Invalid Sec-WebSocket-Accept\n" *
-                                    "$(http.message)"))
-        end
-
-        io = HTTP.ConnectionPool.getrawstream(http)
-        f(WebSocket(io,false))
-    end
-end
-
-# mutable struct WebSocket
-#     id::Int
-#     socket::TCPSock
-#     state::ReadyState
-
-#     function WebSocket(id::Int,socket::TCPSock)
-#         init_socket(socket)
-#         new(id, socket, CONNECTED)
-#     end
-# end
-
-# function listen(f::Function, host::String="localhost", port::UInt16=UInt16(8081); binary=false, verbose=false)
-#     HTTP.listen(host, port; verbose=verbose) do http
-#         upgrade(f, http; binary=binary)
-#     end
-# end
-
-function upgrade(f::Function, http::HTTP.Stream; binary=false)
-
-    check_upgrade(http)
-    if !HTTP.hasheader(http, "Sec-WebSocket-Version", "13")
-        throw(WebSocketError(0, "Expected \"Sec-WebSocket-Version: 13\"!\n$(http.message)"))
-    end
-
-    HTTP.setstatus(http, 101)
-    HTTP.setheader(http, "Upgrade" => "websocket")
-    HTTP.setheader(http, "Connection" => "Upgrade")
-    key = HTTP.header(http, "Sec-WebSocket-Key")
-    HTTP.setheader(http, "Sec-WebSocket-Accept" => generate_websocket_key(key))
-
-    HTTP.startwrite(http)
-
-    io = HTTP.ConnectionPool.getrawstream(http)
-    f(WebSocket(io, true))
-end
-
-function check_upgrade(http)
-    if !HTTP.hasheader(http, "Upgrade", "websocket")
-        throw(WebSocketError(0, "Expected \"Upgrade: websocket\"!\n$(http.message)"))
-    end
-
-    if !HTTP.hasheader(http, "Connection", "upgrade")
-        throw(WebSocketError(0, "Expected \"Connection: upgrade\"!\n$(http.message)"))
-    end
-end
-
-function is_upgrade(r::HTTP.Message)
-    (r isa HTTP.Request && r.method == "GET" || r.status == 101) &&
-    HTTP.hasheader(r, "Connection", "upgrade") &&
-    HTTP.hasheader(r, "Upgrade", "websocket")
-end
-
-# """ Implement the WebSocketInterface, for compatilibility with HttpServer."""
-# struct WebSocketHandler <: HttpServer.WebSocketInterface
-#     handle::Function
-# end
-
-# import HttpServer: handle, is_websocket_handshake
-# """
-# Performs handshake. If successfull, establishes WebSocket type and calls
-# handler with the WebSocket and the original request. On exit from handler, closes websocket. No return value.
-# """
-# function handle(handler::WebSocketHandler, req::Request, client::HttpServer.Client)
-#     websocket_handshake(req, client) || return
-#     sock = WebSocket(client.id, client.sock)
-#     handler.handle(req, sock)
-#     if isopen(sock) 
-#         try
-#         close(sock)
-#         end
-#     end
-# end
-# function is_websocket_handshake(handler::WebSocketHandler, req::Request)
-#     is_get = req.method == "GET"
-#     # "upgrade" for Chrome and "keep-alive, upgrade" for Firefox.
-#     is_upgrade = contains(lowercase(get(req.headers, "Connection", "")),"upgrade")
-#     is_websockets = lowercase(get(req.headers, "Upgrade", "")) == "websocket"
-#     return is_get && is_upgrade && is_websockets
-# end
+@require HttpServer include("HttpServer.jl")
 
 end # module WebSockets
