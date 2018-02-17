@@ -36,7 +36,7 @@ info("Start HTTP server on port $(port_HTTP)")
     end
 end
 
-port_HttpServer = 8080
+port_HttpServer = 8081
 info("Start HttpServer on port $(port_HttpServer)")
 wsh = WebSocketHandler() do req,ws
     while !eof(ws)
@@ -57,6 +57,9 @@ WebSockets.open("ws://127.0.0.1:$(port_HTTP)") do ws
     write(ws, "Bar")
     @test String(read(ws)) == "Bar"
 
+    send_ping(ws)
+    read(ws)
+
     close(ws)
 end
 
@@ -67,6 +70,9 @@ WebSockets.open("ws://127.0.0.1:$(port_HttpServer)") do ws
 
     write(ws, "Bar")
     @test String(read(ws)) == "Bar"
+
+    send_ping(ws)
+    read(ws)
 
     close(ws)
 end

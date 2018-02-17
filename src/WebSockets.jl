@@ -287,11 +287,14 @@ is_control_frame(msg::WebSocketFragment) = (msg.opcode & 0b0000_1000) > 0
 """ Respond to pings, ignore pongs, respond to close."""
 function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
     if wsf.opcode == OPCODE_CLOSE
+        info("$(ws.server ? "Server" : "Client") received OPCODE_CLOSE")
         ws.state = CLOSED
         locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, "")
     elseif wsf.opcode == OPCODE_PING
+        info("$(ws.server ? "Server" : "Client") received OPCODE_PING")
         send_pong(ws,wsf.data)
     elseif wsf.opcode == OPCODE_PONG
+        info("$(ws.server ? "Server" : "Client") received OPCODE_PONG")
         # Nothing to do here; no reply is needed for a pong message.
     else  # %xB-F are reserved for further control frames
         error("Unknown opcode $(wsf.opcode)")
