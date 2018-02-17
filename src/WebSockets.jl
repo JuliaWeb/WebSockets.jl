@@ -173,19 +173,11 @@ end
 
 """ Write text data; will be sent as one frame."""
 function Base.write(ws::WebSocket,data::String)
-    if !isopen(ws)
-        @show ws
-        error("Attempted write to closed WebSocket\n")
-    end
     locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, data)
 end
 
 """ Write binary data; will be sent as one frame."""
 function Base.write(ws::WebSocket, data::Array{UInt8})
-    if !isopen(ws)
-        @show ws
-        error("attempt to write to closed WebSocket\n")
-    end
     locked_write(ws.socket, true, OPCODE_BINARY, !ws.server, data)
 end
 
@@ -208,46 +200,49 @@ send_pong(ws, data...) = write_pong(ws.socket, !ws.server, data...)
 Send a close message.
 """
 function Base.close(ws::WebSocket)
-    if !isopen(ws)
-        error("Attempt to close closed WebSocket")
-    end
+    if isopen(ws)
+        ws.state = CLOSING
+        locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, "")
 
-    # Ask client to acknowledge closing the connection
-    locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, "")
-    ws.state = CLOSING
-
-    # Wait till the client responds with an OPCODE_CLOSE. This process is
-    # complicated by potential blocking reads on the WebSocket in other Tasks
-    # which may receive the response control frame. Synchronization of who is
-    # responsible for closing the underlying socket is done using the
-    # WebSocket's state. When this side initiates closing the connection it is
-    # responsible for cleaning up, when the other side initiates the close the
-    # read method is
-    #
-    # The exception handling is necessary as read_frame will error when the
-    # OPCODE_CLOSE control frame is received by a potentially blocking read in
-    # another Task
-    try
-        while ws.state === CLOSING
-            wsf = read_frame(ws.socket)
-            # ALERT: stuff might get lost in ether here    
-            if is_control_frame(wsf) && (wsf.opcode == OPCODE_CLOSE)
-              ws.state = CLOSED
+        # Wait till the other end responds with an OPCODE_CLOSE. This process is
+        # complicated by potential blocking reads on the WebSocket in other Tasks
+        # which may receive the response control frame. Synchronization of who is
+        # responsible for closing the underlying socket is done using the
+        # WebSocket's state. When this side initiates closing the connection it is
+        # responsible for cleaning up, when the other side initiates the close the
+        # read method is
+        #
+        # The exception handling is necessary as read_frame will error when the
+        # OPCODE_CLOSE control frame is received by a potentially blocking read in
+        # another Task
+        try
+            while isopen(ws)
+                wsf = read_frame(ws)
+                # ALERT: stuff might get lost in ether here    
+                if is_control_frame(wsf) && (wsf.opcode == OPCODE_CLOSE)
+                    ws.state = CLOSED
+                end
             end
-        end
 
-        close(ws.socket)
-    catch exception
-        !isa(exception, EOFError) && rethrow(exception)
+            if isopen(ws.socket)
+                close(ws.socket)
+            end
+        catch exception
+            !isa(exception, EOFError) && rethrow(exception)
+        end
+    else
+        ws.state = CLOSED
     end
 end
+
 """
     isopen(WebSocket)-> Bool
 A WebSocket is closed if the underlying TCP socket closes, or if we send or
 receive a close message.
 """
-Base.isopen(ws::WebSocket) = (ws.state === CONNECTED) && isopen(ws.socket)
+Base.isopen(ws::WebSocket) = (ws.state != CLOSED) && isopen(ws.socket)
 
+Base.eof(ws::WebSocket) = (ws.state == CLOSED) || eof(ws.socket)
 
 """ Represents one (received) message frame."""
 mutable struct WebSocketFragment
@@ -292,34 +287,8 @@ is_control_frame(msg::WebSocketFragment) = (msg.opcode & 0b0000_1000) > 0
 """ Respond to pings, ignore pongs, respond to close."""
 function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
     if wsf.opcode == OPCODE_CLOSE
-        # A close OPCODE can be received for two reasons. Either the other side
-        # is initiating a disconnection, or the this side is (through a call to
-        # close on the WebSocket) and the client has replied that it is okay
-        # with closing the connection. This can be derived from the current
-        # state of the WebSocket
-        if ws.state !== CLOSING
-            # The other side initiated the disconnect, so the action must be
-            # acknowledged by replying with an empty CLOSE frame and cleaning
-            # up
-            try
-                locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, "")
-            catch exception
-              # On sudden disconnects, the other side may be gone before the
-              # close acknowledgement can be sent. This will cause an
-              # ArgumentError to be thrown due to the underlying stream being
-              # closed. These are swallowed here and will be replaced by a
-              # WebSocketClosedError below
-              !isa(exception, ArgumentError) && rethrow(exception)
-            end
-
-            close(ws.socket)
-        end
-
-        # In the other case the close method is expected to clean-up, which can
-        # be triggered by changing the state of the WebSocket
         ws.state = CLOSED
-
-        throw(WebSocketClosedError())
+        locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, "")
     elseif wsf.opcode == OPCODE_PING
         send_pong(ws,wsf.data)
     elseif wsf.opcode == OPCODE_PONG
@@ -330,8 +299,8 @@ function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
 end
 
 """ Read a frame: turn bytes from the websocket into a WebSocketFragment."""
-function read_frame(io::IO)
-    ab = read(io,2)
+function read_frame(ws::WebSocket)
+    ab = read(ws.socket,2)
     a = ab[1]
     fin    = a & 0b1000_0000 >>> 7  # If fin, then is final fragment
     rsv1   = a & 0b0100_0000  # If not 0, fail.
@@ -344,25 +313,21 @@ function read_frame(io::IO)
     mask = b & 0b1000_0000 >>> 7
     hasmask = mask != 0
 
-    # if mask != 1
-    # error("WebSocket reader cannot handle incoming messages without mask. " *
-    #     "See http://tools.ietf.org/html/rfc6455#section-5.3")
-    # end
-
     payload_len::UInt64 = b & 0b0111_1111
     if payload_len == 126
-        payload_len = ntoh(read(io,UInt16))  # 2 bytes
+        payload_len = ntoh(read(ws.socket,UInt16))  # 2 bytes
     elseif payload_len == 127
-        payload_len = ntoh(read(io,UInt64))  # 8 bytes
+        payload_len = ntoh(read(ws.socket,UInt64))  # 8 bytes
     end
 
-    maskkey = hasmask ? read(io,4) : UInt8[]
+    maskkey = hasmask ? read(ws.socket,4) : UInt8[]
 
-    data = read(io,Int(payload_len))
+    data = read(ws.socket,Int(payload_len))
     hasmask && mask!(data,maskkey)
 
     return WebSocketFragment(fin,rsv1,rsv2,rsv3,opcode,mask,payload_len,maskkey,data)
 end
+
 """
     read(ws::WebSocket)
 Read one non-control message from a WebSocket. Any control messages that are
@@ -376,15 +341,13 @@ function Base.read(ws::WebSocket)
     if !isopen(ws)
         error("Attempt to read from closed WebSocket")
     end
-    frame = read_frame(ws.socket)
+    frame = read_frame(ws)
 
     # Handle control (non-data) messages.
     if is_control_frame(frame)
         # Don't return control frames; they're not interesting to users.
         handle_control_frame(ws,frame)
-
-        # Recurse to return the next data frame.
-        return read(ws)
+        return frame.data
     end
 
     # Handle data message that uses multiple fragments.
