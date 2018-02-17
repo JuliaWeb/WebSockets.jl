@@ -61,7 +61,7 @@ for len = [8, 125], op = (rand(UInt8) & 0b1111), fin=[true, false]
         maskkey,
         xor_payload(maskkey, frame[3:end])
     )
-    frame_back = read_frame(IOBuffer(data))
+    frame_back = read_frame(WebSocket(IOBuffer(data),true))
 
     @test frame_back.is_last == fin
     @test frame_back.rsv1 == false
@@ -97,7 +97,7 @@ for len = 126:129, op = 0b1111, fin=[true, false]
         maskkey,
         xor_payload(maskkey, frame[5:end])
     )
-    frame_back = read_frame(IOBuffer(data))
+    frame_back = read_frame(WebSocket(IOBuffer(data),true))
 
     @test frame_back.is_last == fin
     @test frame_back.rsv1 == false

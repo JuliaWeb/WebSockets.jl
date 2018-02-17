@@ -47,7 +47,7 @@ function websockethandle(wsrequest::Request, websocket::WebSocket)
         elseif wsrequest.headers["Sec-WebSocket-Protocol"] == "websocket-test-binary"
             ws_test_binary(websocket)
         else
-            clog(id, :red, "Unknown sub protocol let through, not responding further to #$(websocket.id). \n")
+            clog(id, :red, "Unknown sub protocol let through, not responding further. \n")
         end
     else
         ws_general(websocket)

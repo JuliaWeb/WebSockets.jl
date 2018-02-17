@@ -4,12 +4,13 @@ WebSockets.jl
 [![Build Status](https://travis-ci.org/JuliaWeb/WebSockets.jl.png)](https://travis-ci.org/JuliaWeb/WebSockets.jl)
 [![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg)](https://coveralls.io/r/JuliaWeb/WebSockets.jl)
 
-[![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.5.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.5)
 [![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6)
 
-This is a server-side implementation of the WebSockets protocol in Julia. If you want to write a web app in Julia that uses WebSockets, you'll need this package.
+This is an implementation of the WebSockets protocol in Julia for both server-side and client-side applications.
 
-This package works with [HttpServer.jl](https://github.com/JuliaWeb/HttpServer.jl), which is what you use to set up a server that accepts HTTP(S) connections.
+This package works with either [HttpServer.jl](https://github.com/JuliaWeb/HttpServer.jl) or [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl), which is what you use to set up a server that accepts HTTP(S) connections.
+
+## Using with HttpServer.jl
 
 As a first example, we can create a WebSockets echo server:
 
@@ -20,6 +21,7 @@ using WebSockets
 wsh = WebSocketHandler() do req,client
     while true
         msg = read(client)
+        println(msg) # Write the received message to the REPL
         write(client, msg)
     end
   end
@@ -37,6 +39,45 @@ The function that you pass to the `WebSocketHandler` constructor takes two argum
 a `Request` from [HttpCommon.jl](https://github.com/JuliaWeb/HttpCommon.jl/blob/master/src/HttpCommon.jl#L142),
 and a `WebSocket` from [here](https://github.com/JuliaWeb/WebSockets.jl/blob/master/src/WebSockets.jl#L17).
 
+## Using with HTTP.jl
+
+The following example demonstrates how to use WebSockets.jl as bother a server and client.
+
+```julia
+
+using HTTP
+using WebSockets
+using Base.Test
+
+port = 8000
+
+# Start the echo server
+@async HTTP.listen("127.0.0.1",UInt16(port)) do http
+    if WebSockets.is_upgrade(http.message)
+        WebSockets.upgrade(http) do ws
+            while ws.state == WebSockets.CONNECTED
+                msg = String(read(ws))
+                println(msg) # Write the received message to the REPL
+                write(ws,msg)
+            end
+        end
+    end
+end
+
+sleep(2)
+
+# Connect a client to the server above
+WebSockets.open("ws://127.0.0.1:$(port)") do ws
+    write(ws, "Foo")
+    @test String(read(ws)) == "Foo"
+
+    write(ws, "Bar")
+    @test String(read(ws)) == "Bar"
+
+    close(ws)
+end
+```
+
 ## What can you do with a `WebSocket`?
 You can:
 
@@ -47,6 +88,20 @@ You can:
 
 ## Installation/Setup
 
+WebSockets.jl must be used with either HttpServer.jl or HTTP.jl, but neither is a dependency of this package, so you will need to first add one of the two, i.e.
+
+~~~julia
+julia> Pkg.add("HttpServer")
+~~~
+
+or 
+
+~~~julia
+julia> Pkg.add("HTTP")
+~~~
+
+Once you have one of the two, you can add WebSockets.jl via
+
 ~~~julia
 julia> Pkg.add("WebSockets")
 ~~~
@@ -55,10 +110,14 @@ At this point, you can use the examples below to test that it all works.
 
 ## [Chat client/server example](https://github.com/JuliaWeb/WebSockets.jl/blob/master/examples/chat.jl):
 
-1. Move to the `~/.julia/<version>/WebSockets` directory
-2. Run `julia examples/chat.jl`
-3. In a web browser, open `localhost:8000`
-4. You should see a basic IRC-like chat application
+1. From the REPL, run
+
+```julia
+include(joinpath(Pkg.dir("WebSockets"),"examples","chat.jl"));
+```
+
+2. In a web browser, open `localhost:8000`
+3. You should see a basic IRC-like chat application
 
 
 ## Echo server example:
@@ -84,7 +143,7 @@ To play with a WebSockets echo server, you can:
 2. Open `localhost:8080` in Chrome
 3. Open the Chrome developers tools console
 4. Type `ws = new WebSocket("ws://localhost:8080");` into the console
-5. Type `ws.send("hi")` into the console.
+5. Type `ws.send("hi")` into the console and you should see "hi" printed to the REPL
 6. Switch to the 'Network' tab; click on the request; click on the 'frames' tab.
 7. You will see the two frames containing "hi": one sent and one received.
 
