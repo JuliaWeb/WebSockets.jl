@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+    <title>Websockets client</title>
+    <style>
+        .sent {
+            color: blue;
+        }
+        .received {
+            color: green;
+        }
+        #chat {
+          position:fixed;
+          bottom:0;
+          height:50px;
+          width:100%;
+          background:#333;
+          display: none;
+        }
+
+    </style>
+</head>
+<body>
+<span id="username"></span>
+<div id="content">
+</div>
+<div id="welcome">
+    <h1>Select a username</h1>
+    <form id="pick_username">
+        <input class="userinput" name="userinput" type="text" value="" />
+        <input type="submit" value="Enter Chat" />
+    </form>
+</div>
+<div id="chat">
+  <form id="say_message">
+      <input name="say" type="text" value="" />
+      <input type="submit" value="say" />
+  </form>
+</div>
+
+
+<script>
+    class SocketConnection {
+      constructor(onMessage) {
+        this.store = { connection: undefined, onMessage };
+      }
+      start() {
+        const {onMessage} = this.store;
+        let connection = new WebSocket('ws://'+window.location.host);
+        connection.onmessage = function( message ){
+            window.lastmessage = message;
+            onMessage(message.data)
+        }
+        this.store.connection = connection;
+      }
+      send(msg) {
+        const {connection} = this.store
+        connection.send(msg)
+      }
+    }
+
+    let you = "you";
+    var $userForm  = document.querySelector("#pick_username");
+    var $chatForm  = document.querySelector("#say_message");
+    var $chatInput = $chatForm.querySelector("input[name=say]");
+
+
+    function addContent(html) {
+      var $content   = document.querySelector("#content");
+      var div = document.createElement("div");
+      div.innerHTML = html;
+      $content.appendChild(div);
+    }
+
+    function onMessageReceived(msg) {
+      addContent(`<p class='received'>${msg}</p>`)
+    }
+
+    function whenUserName() {
+      var $userInput = $userForm.querySelector("input[name=userinput]");
+      var $userName  = document.querySelector("#username");
+      var $welcome = document.querySelector("#welcome");
+      var $chat = document.querySelector("#chat");
+      var uname = $userInput.value;
+      if( !uname.replace(/\s/gi,'').length ) {
+        alert("Please select a valid user name");
+      }  else {
+              connection.send("userName:" + uname)
+        };
+        $userName.innerHTML    = uname;
+        $welcome.style.display = "none";
+        $chat.style.display    = "block";
+      }
+
+    function whenChatMessage() {
+      var content = $chatInput.value;
+      if( !content.replace(/\s/gi,'').length) {
+         /* nothing to do */
+      } else {
+        connection.send(content);
+        addContent(`<p class='sent'>${you}: ${content}</p>`);
+        $chatInput.focus();
+      }
+    }
+
+    $chatForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      whenChatMessage();
+      return false;
+    })
+
+    $userForm.addEventListener("submit", function(e){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        whenUserName();
+        return false;
+    });
+
+    const connection = new SocketConnection(onMessageReceived);
+    connection.start();
+
+</script>
+</body>
+</html>
