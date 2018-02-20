@@ -49,7 +49,7 @@ for (s, url) in servers
     
         send_ping(ws)
         read(ws)
-        end
+    end
 end
 
 end # testset
