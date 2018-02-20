@@ -173,7 +173,7 @@ end
 
 """ Write text data; will be sent as one frame."""
 function Base.write(ws::WebSocket,data::String)
-    locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, copy(Vector{UInt8}(data)))
+    locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, copy(Vector{UInt8}(data))) # Remove this `copy` after v0.7!
 end
 
 """ Write binary data; will be sent as one frame."""
