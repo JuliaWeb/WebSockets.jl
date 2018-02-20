@@ -5,25 +5,9 @@ using Base.Test
 
 @testset "HTTP" begin
 
-info("Testing ws...")
-WebSockets.open("ws://echo.websocket.org") do ws
-    write(ws, "Foo")
-    @test String(read(ws)) == "Foo"
-
-    close(ws)
-end
-sleep(1)
-
-info("Testing wss...")
-WebSockets.open("wss://echo.websocket.org") do ws
-    write(ws, "Foo")
-    @test String(read(ws)) == "Foo"
-
-    close(ws)
-end
-sleep(1)
-
 port_HTTP = 8000
+port_HttpServer = 8081
+
 info("Start HTTP server on port $(port_HTTP)")
 @async HTTP.listen("127.0.0.1",UInt16(port_HTTP)) do http
     if WebSockets.is_upgrade(http.message)
@@ -36,7 +20,6 @@ info("Start HTTP server on port $(port_HTTP)")
     end
 end
 
-port_HttpServer = 8081
 info("Start HttpServer on port $(port_HttpServer)")
 wsh = WebSocketHandler() do req,ws
     while !eof(ws)
@@ -49,32 +32,24 @@ server = Server(wsh)
 
 sleep(2)
 
-info("Testing local HTTP server...")
-WebSockets.open("ws://127.0.0.1:$(port_HTTP)") do ws
-    write(ws, "Foo")
-    @test String(read(ws)) == "Foo"
+servers = [
+    ("ws",          "ws://echo.websocket.org"),
+    ("wss",         "wss://echo.websocket.org"),
+    ("HTTP",        "ws://127.0.0.1:$(port_HTTP)"), 
+    ("HttpServer",  "ws://127.0.0.1:$(port_HttpServer)")]
 
-    write(ws, "Bar")
-    @test String(read(ws)) == "Bar"
-
-    send_ping(ws)
-    read(ws)
-
-    close(ws)
-end
-
-info("Testing local HttpServer...")
-WebSockets.open("ws://127.0.0.1:$(port_HttpServer)") do ws
-    write(ws, "Foo")
-    @test String(read(ws)) == "Foo"
-
-    write(ws, "Bar")
-    @test String(read(ws)) == "Bar"
-
-    send_ping(ws)
-    read(ws)
-
-    close(ws)
+for (s, url) in servers
+    info("Testing local $(s) server at $(url)...")
+    WebSockets.open(url) do ws
+        write(ws, "Foo")
+        @test String(read(ws)) == "Foo"
+    
+        write(ws, "Bar")
+        @test String(read(ws)) == "Bar"
+    
+        send_ping(ws)
+        read(ws)
+    end
 end
 
 end # testset

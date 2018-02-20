@@ -25,24 +25,24 @@ function websocket_handshake(request,client)
         Base.write(client.sock, HttpServer.Response(400))
         return false
     end
-  resp_key = generate_websocket_key(key)
+    resp_key = generate_websocket_key(key)
 
-  response = HttpServer.Response(101)
-  response.headers["Upgrade"] = "websocket"
-  response.headers["Connection"] = "Upgrade"
-  response.headers["Sec-WebSocket-Accept"] = resp_key
- 
-  if haskey(request.headers, "Sec-WebSocket-Protocol") 
-      if hasprotocol(request.headers["Sec-WebSocket-Protocol"])
-          response.headers["Sec-WebSocket-Protocol"] =  request.headers["Sec-WebSocket-Protocol"]
-      else
-          Base.write(client.sock, HttpServer.Response(400))
-          return false
-      end
-  end 
-  
-  Base.write(client.sock, response)
-  return true
+    response = HttpServer.Response(101)
+    response.headers["Upgrade"] = "websocket"
+    response.headers["Connection"] = "Upgrade"
+    response.headers["Sec-WebSocket-Accept"] = resp_key
+    
+    if haskey(request.headers, "Sec-WebSocket-Protocol") 
+        if hasprotocol(request.headers["Sec-WebSocket-Protocol"])
+            response.headers["Sec-WebSocket-Protocol"] =  request.headers["Sec-WebSocket-Protocol"]
+        else
+            Base.write(client.sock, HttpServer.Response(400))
+            return false
+        end
+    end 
+    
+    Base.write(client.sock, response)
+    return true
 end
 
 """ Implement the WebSocketInterface, for compatilibility with HttpServer."""
