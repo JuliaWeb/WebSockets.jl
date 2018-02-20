@@ -136,7 +136,7 @@ end
     write_fragment(io, islast, opcode, hasmask, data::Array{UInt8})
 Write the raw frame to a bufffer
 """
-function write_fragment(io::IO, islast::Bool, opcode, hasmask::Bool, data::Array{UInt8})
+function write_fragment(io::IO, islast::Bool, opcode, hasmask::Bool, data::Vector{UInt8})
     l = length(data)
     b1::UInt8 = (islast ? 0b1000_0000 : 0b0000_0000) | opcode
 
@@ -159,10 +159,10 @@ function write_fragment(io::IO, islast::Bool, opcode, hasmask::Bool, data::Array
 end
 
 """ Write without interruptions"""
-function locked_write(io::IO, islast::Bool, opcode, hasmask, data)
+function locked_write(io::IO, islast::Bool, opcode, hasmask::Bool, data::Vector{UInt8})
     isa(io, TCPSock) && lock(io.lock)
     try
-        write_fragment(io, islast, opcode, hasmask, Vector{UInt8}(data))
+        write_fragment(io, islast, opcode, hasmask, data)
     finally
         if isa(io, TCPSock)
             flush(io)
@@ -173,7 +173,7 @@ end
 
 """ Write text data; will be sent as one frame."""
 function Base.write(ws::WebSocket,data::String)
-    locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, data)
+    locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, copy(Vector{UInt8}(data)))
 end
 
 """ Write binary data; will be sent as one frame."""
@@ -182,14 +182,14 @@ function Base.write(ws::WebSocket, data::Array{UInt8})
 end
 
 
-function write_ping(io::IO, hasmask, data = "")
+function write_ping(io::IO, hasmask, data = UInt8[])
     locked_write(io, true, OPCODE_PING, hasmask, data)
 end
 """ Send a ping message, optionally with data."""
 send_ping(ws, data...) = write_ping(ws.socket, !ws.server, data...)
 
 
-function write_pong(io::IO, hasmask, data = "")
+function write_pong(io::IO, hasmask, data = UInt8[])
     locked_write(io, true, OPCODE_PONG, hasmask, data)
 end
 """ Send a pong message, optionally with data."""
@@ -202,7 +202,7 @@ Send a close message.
 function Base.close(ws::WebSocket)
     if isopen(ws)
         ws.state = CLOSING
-        locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, "")
+        locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, UInt8[])
 
         # Wait till the other end responds with an OPCODE_CLOSE. This process is
         # complicated by potential blocking reads on the WebSocket in other Tasks
@@ -289,7 +289,7 @@ function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
     if wsf.opcode == OPCODE_CLOSE
         info("$(ws.server ? "Server" : "Client") received OPCODE_CLOSE")
         ws.state = CLOSED
-        locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, "")
+        locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, UInt8[])
     elseif wsf.opcode == OPCODE_PING
         info("$(ws.server ? "Server" : "Client") received OPCODE_PING")
         send_pong(ws,wsf.data)
