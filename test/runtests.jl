@@ -8,23 +8,23 @@ port_HttpServer = 8081
 
 @testset "HTTP" begin
 
-# info("Testing ws...")
-# WebSockets.open("ws://echo.websocket.org") do ws
-#     write(ws, "Foo")
-#     @test String(read(ws)) == "Foo"
+info("Testing ws...")
+WebSockets.open("ws://echo.websocket.org") do ws
+    write(ws, "Foo")
+    @test String(read(ws)) == "Foo"
 
-#     close(ws)
-# end
-# sleep(1)
+    close(ws)
+end
+sleep(1)
 
-# info("Testing wss...")
-# WebSockets.open("wss://echo.websocket.org") do ws
-#     write(ws, "Foo")
-#     @test String(read(ws)) == "Foo"
+info("Testing wss...")
+WebSockets.open("wss://echo.websocket.org") do ws
+    write(ws, "Foo")
+    @test String(read(ws)) == "Foo"
 
-#     close(ws)
-# end
-# sleep(1)
+    close(ws)
+end
+sleep(1)
 
 info("Start HTTP server on port $(port_HTTP)")
 @async HTTP.listen("127.0.0.1",UInt16(port_HTTP)) do http
@@ -98,7 +98,5 @@ for s in servers
         sleep(1);println("Bytes: $(nb_available(ws.socket))")
     end
 end
-# gc_enable(true)
-
 
 end # testset

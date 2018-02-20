@@ -6,6 +6,13 @@ WebSockets.jl
 
 [![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6)
 
+Temporary badges:
+[![Build status](https://ci.appveyor.com/api/projects/status/sx6i51rjc9ajjdh8?svg=true)](https://ci.appveyor.com/project/hustf/websockets-jl-nfuiv)
+
+[![Build status](https://ci.appveyor.com/api/projects/status/sx6i51rjc9ajjdh8/branch/master?svg=true)](https://ci.appveyor.com/project/hustf/websockets-jl-nfuiv/branch/master)
+
+[![Build status](https://ci.appveyor.com/api/projects/status/sx6i51rjc9ajjdh8/branch/master?svg=true)](https://ci.appveyor.com/project/hustf/websockets-jl-nfuiv/branch/change_dependencies)
+
 This is an implementation of the WebSockets protocol in Julia for both server-side and client-side applications.
 
 This package works with either [HttpServer.jl](https://github.com/JuliaWeb/HttpServer.jl) or [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl), which is what you use to set up a server that accepts HTTP(S) connections.
@@ -94,7 +101,7 @@ WebSockets.jl must be used with either HttpServer.jl or HTTP.jl, but neither is 
 julia> Pkg.add("HttpServer")
 ~~~
 
-or 
+or
 
 ~~~julia
 julia> Pkg.add("HTTP")
