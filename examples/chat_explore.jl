@@ -18,7 +18,10 @@ by the browser.
 
 # Globals, where used in functions will change the type
 global lastreq = 0
+global lastreqheaders = 0
+
 global lastws= 0
+global lastwsHTTP = 0
 global lastdata= 0
 global lastmsg= 0
 global lasthttp= 0
@@ -29,7 +32,6 @@ global lasthttp= 0
 using HttpServer
 using HTTP
 using WebSockets
-
 
 const CLOSEAFTER = Base.Dates.Second(30)
 const HTTPPORT = 8080
@@ -43,29 +45,30 @@ Redefinition of functions defined in WebSockets/ HTTP.jl.
 To be removed after a choice of structure vs function solution,
 ref. issue #91 20-21/2-18
 =#
-
+import WebSockets.upgrade
+import WebSockets.check_upgrade
+import WebSockets.generate_websocket_key
 function upgrade(f::Function, http::HTTP.Stream; binary=false)
-
+    global lasthttp
+    lasthttp = http
     check_upgrade(http)
     if !HTTP.hasheader(http, "Sec-WebSocket-Version", "13")
         throw(WebSocketError(0, "Expected \"Sec-WebSocket-Version: 13\"!\n$(http.message)"))
     end
-
     HTTP.setstatus(http, 101)
     HTTP.setheader(http, "Upgrade" => "websocket")
     HTTP.setheader(http, "Connection" => "Upgrade")
     key = HTTP.header(http, "Sec-WebSocket-Key")
     HTTP.setheader(http, "Sec-WebSocket-Accept" => generate_websocket_key(key))
-
     HTTP.startwrite(http)
-
     io = HTTP.ConnectionPool.getrawstream(http)
     ws = WebSocket(io, true)
+    lastws = ws
     try
-        if applicable(f, http.Request, ws, binary)
-            f(http.Request, ws, binary)
-        elseif applicable(f, http.Request, ws)
-            f(http.Request, ws)
+        if applicable(f, http.message.headers, ws, binary)
+            f(http.message.headers, ws, binary)
+        elseif applicable(f, http.message.headers, ws)
+            f(http.message.headers, ws)
         else
             f(ws)
         end
@@ -77,11 +80,6 @@ function upgrade(f::Function, http::HTTP.Stream; binary=false)
         close(ws)
     end
 end
-
-
-
-
-
 
 #=
 low level functions, works on old and new type.
@@ -255,10 +253,12 @@ We'll start by defining the input functions for HTTP's listen method
 =#
 
 
-function gatekeeper_newtype(req::HTTP.Request, ws)
-    global lastreq
-    lastreq = req
-    # Inspect http.Request to pick the right function. 
+function gatekeeper_newtype(reqheaders, ws)
+    global lastreqheaders
+    lastreqheaders = reqheaders
+    global lastwsHTTP
+    lastwsHTTP = ws
+    # Inspect header Sec-WebSocket-Protocol to pick the right function. 
     wsfunc(ws)
 end
 
