@@ -154,7 +154,12 @@ function write_fragment(io::IO, islast::Bool, opcode, hasmask::Bool, data::Vecto
     else
         error("Attempted to send too much data for one websocket fragment\n")
     end
-    hasmask && write(io,mask!(data))
+    if hasmask
+        if opcode == OPCODE_TEXT
+            data = copy(data) # Avoid masking Strings bytes in place
+        end
+        write(io,mask!(data))
+    end
     write(io, data)
 end
 
@@ -173,7 +178,7 @@ end
 
 """ Write text data; will be sent as one frame."""
 function Base.write(ws::WebSocket,data::String)
-    locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, copy(Vector{UInt8}(data))) # Remove this `copy` after v0.7!
+    locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, Vector{UInt8}(data)) # Vector{UInt8}(String) will give a warning in v0.7.
 end
 
 """ Write binary data; will be sent as one frame."""
