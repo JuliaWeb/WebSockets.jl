@@ -3,122 +3,149 @@
 <head>
     <title>Websockets client</title>
     <style>
-        .sent {
-            color: blue;
-        }
-        .received {
-            color: green;
-        }
-        #chat {
-          position:fixed;
-          bottom:0;
-          height:50px;
-          width:100%;
-          background:#333;
-          display: none;
-        }
-
+        .sent {color: blue;}
+        .received {color: green;}
     </style>
 </head>
 <body>
-<span id="username"></span>
-<div id="content">
-</div>
-<div id="welcome">
-    <h1>Select a username</h1>
-    <form id="pick_username">
-        <input class="userinput" name="userinput" type="text" value="" />
+    <span id="username"></span>
+    <div id="welcome">
+      <h1>Select a username</h1>
+      <form id="pick_username">
+        <input id="userinput" value="" />
         <input type="submit" value="Enter Chat" />
-    </form>
-</div>
-<div id="chat">
-  <form id="say_message">
-      <input name="say" type="text" value="" />
+      </form>
+    </div>
+    <div id="content"></div>
+    <form id="say_message">
+      <input name="say" type="text" value=""/>
       <input type="submit" value="say" />
-  </form>
-</div>
-
-
+    </form>
 <script>
-    class SocketConnection {
-      constructor(onMessage) {
-        this.store = { connection: undefined, onMessage };
-      }
-      start() {
-        const {onMessage} = this.store;
-        let connection = new WebSocket('ws://'+window.location.host);
-        connection.onmessage = function( message ){
-            window.lastmessage = message;
-            onMessage(message.data)
-        }
-        this.store.connection = connection;
-      }
-      send(msg) {
-        const {connection} = this.store
-        connection.send(msg)
-      }
-    }
-
-    let you = "you";
-    var $userForm  = document.querySelector("#pick_username");
-    var $chatForm  = document.querySelector("#say_message");
-    var $chatInput = $chatForm.querySelector("input[name=say]");
+var username = "";
+var appliedusername = "";
+var ws;
+document.getElementById("say_message").style.display ="none";
+window.onload = load;
 
 
-    function addContent(html) {
-      var $content   = document.querySelector("#content");
-      var div = document.createElement("div");
-      div.innerHTML = html;
-      $content.appendChild(div);
-    }
+function load(){  
+    ws = addwebsocket("ws");
+    ws.onmessage	= function(e){receiveMessage(e.data)}
+} // load
 
-    function onMessageReceived(msg) {
-      addContent(`<p class='received'>${msg}</p>`)
-    }
 
-    function whenUserName() {
-      var $userInput = $userForm.querySelector("input[name=userinput]");
-      var $userName  = document.querySelector("#username");
-      var $welcome = document.querySelector("#welcome");
-      var $chat = document.querySelector("#chat");
-      var uname = $userInput.value;
-      if( !uname.replace(/\s/gi,'').length ) {
-        alert("Please select a valid user name");
-      }  else {
-              connection.send("userName:" + uname)
-        };
-        $userName.innerHTML    = uname;
-        $welcome.style.display = "none";
-        $chat.style.display    = "block";
-      }
-
-    function whenChatMessage() {
-      var content = $chatInput.value;
-      if( !content.replace(/\s/gi,'').length) {
-         /* nothing to do */
+function receiveMessage(msgdata){
+    if(username == ""){
+      if(msgdata == appliedusername){
+            username = msgdata;
+            document.getElementById("username").innerHTML = "<h1>" + username + "</h1>";
+            document.getElementById("welcome").style.display = "none";
+            document.getElementById("content").style.display = "";
+            document.getElementById("say_message").style.display =""
       } else {
-        connection.send(content);
-        addContent(`<p class='sent'>${you}: ${content}</p>`);
-        $chatInput.focus();
-      }
-    }
+            if(msgdata=="Username taken!"){
+                addContent(msgdata)
+            }
+      } // if
+    } else {
+        addContent("<p class='received'>" + msgdata + "</p>")
+    } // if
+  } // receiveMessage
 
-    $chatForm.addEventListener("submit", (e) => {
+function addwebsocket(instancename, subprotocol){
+      var wsuri = document.URL.replace("http:","ws:");
+      if (typeof subprotocol === "undefined") {
+        ws = new WebSocket(wsuri)
+      } else {
+        ws = new WebSocket(wsuri, subprotocol)
+      } //if
+      ws.mynam = instancename;
+      ws.onerror = function(e){
+          addContent("WebSocket " + instancename +  ".onerror: " +
+            "<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
+            " " + readystateDesc[e.target.readyState])
+        }
+      ws.onopen = function(e){
+          addContent("WebSocket " + instancename + ".onopen: " +
+            "<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
+            " " + readystateDesc[e.target.readyState])	
+        }
+      ws.onclose = function(e){
+          addContent("WebSocket " + instancename + ".onclose: Reload page to chat again.");
+          document.getElementById("say_message").style.display = "hidden"
+          document.getElementById("welcome").style.display = "hidden"
+        }
+      return ws
+  } // addwebsocket
+
+function addContent(html) {
+              var div = document.createElement("div");
+              div.innerHTML = html;
+              document.getElementById("content").appendChild(div);
+  } // addContent
+
+function applyUserName(applyfor) {
+            if( !applyfor.replace(/\s/gi,'').length ) {
+                    alert("Please select a valid user name")
+            } else {
+                    if(sendonws(ws, "userName:" + applyfor)){
+                      appliedusername = applyfor
+                    }
+            }
+  } // applyUserName
+
+function sendonws(websocket, msg){
+  if(websocket.readyState == 1){
+                      websocket.send(msg);
+                      return true;
+                    } else {
+                      alert("WebSocket not ready. Reload page or check server!");
+                      return false
+                    } // if
+} // sendonws
+
+
+document.getElementById("pick_username").addEventListener("submit", function(e){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        applyUserName(e.target.firstElementChild.value);
+        return false;
+    })
+
+document.getElementById("say_message").addEventListener("submit", (e) => {
       e.preventDefault();
       e.stopImmediatePropagation();
-      whenChatMessage();
+      var content = e.target.firstElementChild.value;
+      if(sendonws(ws, content)){ 
+          addContent("<p class='sent'>" + username + " : " + content + "</p>")
+      }
+      e.target.firstElementChild.value = "";
       return false;
     })
 
-    $userForm.addEventListener("submit", function(e){
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        whenUserName();
-        return false;
-    });
+ 
+var codeDesc ={1000:"Normal",
+                   1001:"Going Away",
+                   1002:"Protocol Error",
+                   1003:"Unsupported Data",
+                   1004:"Reserved",
+                   1005:"No Status Recvd- reserved",
+                   1006:"Abnormal Closure- reserved",
+                   1007:"Invalid frame payload data",
+                   1008:"Policy Violation",
+                   1009:"Message too big",
+                   1010:"Missing Extension",
+                   1011:"Internal Error",
+                   1012:"Service Restart",
+                   1013:"Try Again Later",
+                   1014:"Bad Gateway",
+                   1015:"TLS Handshake"};
 
-    const connection = new SocketConnection(onMessageReceived);
-    connection.start();
+var readystateDesc = {0:"CONNECTING",
+                   1:"OPEN",
+                   2:"CLOSING",
+                   3:"CLOSED"};
 
 </script>
 </body>
