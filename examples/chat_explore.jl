@@ -16,7 +16,7 @@ named functions may improve error message readability.
 
 # Globals, where used in functions will change the type
 global lastreq = 0
-global lastreqheaders = 0
+global lastreqheadersdict = 0
 global lastws= 0
 global lastwsHTTP = 0
 global lastdata= 0
@@ -35,47 +35,6 @@ const PORT_OLDTYPE = 8000
 const USERNAMES = Dict{String, WebSocket}()
 const WEBSOCKETS = Dict{WebSocket, Int}()
 
-#=
-Redefinition of functions defined in WebSockets/ HTTP.jl.
-To be removed after a choice of structure vs function solution,
-ref. issue #91 20-21/2-18
-=#
-import WebSockets.upgrade
-import WebSockets.check_upgrade
-import WebSockets.generate_websocket_key
-function upgrade(f::Function, http::HTTP.Stream; binary=false)
-    global lasthttp
-    global laste
-    global lastwsHTTP
-    lasthttp = http
-    check_upgrade(http)
-    if !HTTP.hasheader(http, "Sec-WebSocket-Version", "13")
-        throw(WebSocketError(0, "Expected \"Sec-WebSocket-Version: 13\"!\n$(http.message)"))
-    end
-    HTTP.setstatus(http, 101)
-    HTTP.setheader(http, "Upgrade" => "websocket")
-    HTTP.setheader(http, "Connection" => "Upgrade")
-    key = HTTP.header(http, "Sec-WebSocket-Key")
-    HTTP.setheader(http, "Sec-WebSocket-Accept" => generate_websocket_key(key))
-    HTTP.startwrite(http)
-    io = HTTP.ConnectionPool.getrawstream(http)
-    ws = WebSocket(io, true)
-    lastwsHTTP = ws
-    try
-        if applicable(f, http.message.headers, ws, binary)
-            f(http.message.headers, ws, binary)
-        elseif applicable(f, http.message.headers, ws)
-            f(http.message.headers, ws)
-        else
-            f(ws)
-        end
-    catch e
-        warn("chat_explore.upgrade: " , e)
-        laste = e
-    finally
-        close(ws)
-    end
-end
 
 #=
 low level functions, works on old and new type.
@@ -255,9 +214,9 @@ We'll start by defining the input functions for HTTP's listen method
 =#
 
 
-function gatekeeper_newtype(reqheaders, ws)
-    global lastreqheaders
-    lastreqheaders = reqheaders
+function gatekeeper_newtype(reqheadersdict, ws)
+    global lastreqheadersdict
+    lastreqheadersdict = reqheadersdict
     global lastwsHTTP
     lastwsHTTP = ws
     # Inspect header Sec-WebSocket-Protocol to pick the right function. 

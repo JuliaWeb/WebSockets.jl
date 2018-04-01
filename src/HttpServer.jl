@@ -65,10 +65,20 @@ function HttpServer.handle(handler::WebSocketHandler, req::HttpServer.Request, c
     end
 end
 
+"""
+Fast checking for websockets vs http requests, performed on all new HttpServer requests.
+Similar to is_upgrade(r::HTTP.Message)
+"""
 function HttpServer.is_websocket_handshake(handler::WebSocketHandler, req::HttpServer.Request)
-    is_get = req.method == "GET"
-    # "upgrade" for Chrome and "keep-alive, upgrade" for Firefox.
-    is_upgrade = contains(lowercase(get(req.headers, "Connection", "")),"upgrade")
-    is_websockets = lowercase(get(req.headers, "Upgrade", "")) == "websocket"
-    return is_get && is_upgrade && is_websockets
+    if req.method == "GET"
+        if get(req.headers, "Connection", "") != "keep-alive"
+            if contains(lowercase(get(req.headers, "Connection", "")), "upgrade")
+                # "Connection => upgrade" for most and "Connection => keep-alive, upgrade" for Firefox.
+                if lowercase(get(req.headers, "Upgrade", "")) == "websocket"
+                    return true
+                end
+            end
+        end
+    end
+    return false
 end
