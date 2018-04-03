@@ -72,7 +72,7 @@ Similar to is_upgrade(r::HTTP.Message)
 function HttpServer.is_websocket_handshake(handler::WebSocketHandler, req::HttpServer.Request)
     if req.method == "GET"
         if get(req.headers, "Connection", "") != "keep-alive"
-            if contains(lowercase(get(req.headers, "Connection", "")), "upgrade")
+            if get(req.headers, "Connection", "") == "upgrade" || get(req.headers, "Connection", "") == "keep alive, upgrade"
                 # "Connection => upgrade" for most and "Connection => keep-alive, upgrade" for Firefox.
                 if lowercase(get(req.headers, "Upgrade", "")) == "websocket"
                     return true

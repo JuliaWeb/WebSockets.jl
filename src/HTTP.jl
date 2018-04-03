@@ -36,11 +36,7 @@ function open(f::Function, url; binary=false, verbose=false, optionalProtocol = 
         try
             f(ws)
         finally
-            print_with_color(:yellow, STDERR, "HTTP.open has run f, now closing websocket:")
-            println(STDERR, ws)
             close(ws)
-            print_with_color(:yellow, STDERR, "HTTP.open has closed websocket:")
-            println(STDERR, ws)
         end
     end
 end
@@ -73,11 +69,7 @@ function upgrade(f::Function, http::HTTP.Stream; binary=false)
         print_with_color(:yellow, STDERR, "f = ", string(f) * " at " * fnam * ":" * string(mt.defs.func.line) * "\nERROR:\t")
         showerror(STDERR, err, backtrace())
     finally
-        print_with_color(:yellow, STDERR, "HTTP.upgrade has run f, now closing websocket:")
-        println(STDERR, ws)
         close(ws)
-        print_with_color(:yellow, STDERR, "HTTP.upgrade has closed websocket:")
-        println(STDERR, ws)
     end
 end
 
@@ -86,7 +78,7 @@ function check_upgrade(http)
     if !HTTP.hasheader(http, "Upgrade", "websocket")
         throw(WebSocketError(0, "Check upgrade: Expected \"Upgrade => websocket\"!\n$(http.message)"))
     end
-    if !contains(lowercase(HTTP.header(http, "Connection")), "upgrade")
+    if !(HTTP.hasheader(http, "Connection", "upgrade") || HTTP.hasheader(http, "Connection", "keep-alive, upgrade"))
         throw(WebSocketError(0, "Check upgrade: Expected \"Connection => upgrade or Connection => keep alive, upgrad\"!\n$(http.message)"))
     end
 end
@@ -99,10 +91,8 @@ function is_upgrade(r::HTTP.Message)
     if (r isa HTTP.Request && r.method == "GET" || r.status == 101) 
         if HTTP.header(r, "Connection", "") != "keep-alive"
             # "Connection => upgrade" for most and "Connection => keep-alive, upgrade" for Firefox.
-            if contains(lowercase(HTTP.header(r, "Connection", "")), "upgrade")
+            if HTTP.hasheader(r, "Connection", "upgrade") || HTTP.hasheader(r, "Connection", "keep-alive, upgrade")
                 if lowercase(HTTP.header(r, "Upgrade", "")) == "websocket"
-                    warn("The check is ok. Just testing..")
-                    warn(HTTP.header(r, "NotExist","ha!"))
                     return true
                 end
             end
