@@ -2,7 +2,6 @@ info("Loading HttpServer methods...")
 
 export WebSocketHandler
 
-
 """
 Responds to a WebSocket handshake request.
 Checks for required headers and subprotocols; sends Response(400) if they're missing or bad. Otherwise, transforms client key into accept value, and sends Reponse(101).
@@ -71,12 +70,9 @@ Similar to is_upgrade(r::HTTP.Message)
 """
 function HttpServer.is_websocket_handshake(handler::WebSocketHandler, req::HttpServer.Request)
     if req.method == "GET"
-        if get(req.headers, "Connection", "") != "keep-alive"
-            if get(req.headers, "Connection", "") == "upgrade" || get(req.headers, "Connection", "") == "keep alive, upgrade"
-                # "Connection => upgrade" for most and "Connection => keep-alive, upgrade" for Firefox.
-                if lowercase(get(req.headers, "Upgrade", "")) == "websocket"
-                    return true
-                end
+        if ismatch(r"upgrade"i, get(req.headers, "Connection", ""))
+            if lowercase(get(req.headers, "Upgrade", "")) == "websocket"
+                return true
             end
         end
     end

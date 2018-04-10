@@ -55,9 +55,7 @@ function upgrade(f::Function, http::HTTP.Stream; binary=false)
     io = HTTP.ConnectionPool.getrawstream(http)
     ws = WebSocket(io, true)
     try
-        if applicable(f, Dict(http.message.headers), ws, binary)
-            f(Dict(http.message.headers), ws, binary)
-        elseif applicable(f, Dict(http.message.headers), ws)
+        if applicable(f, Dict(http.message.headers), ws)
             f(Dict(http.message.headers), ws)
         else
             f(ws)
@@ -88,7 +86,7 @@ Fast checking for websockets vs http requests, performed on all new HTTP request
 Similar to HttpServer.is_websocket_handshake
 """
 function is_upgrade(r::HTTP.Message)
-    if (r isa HTTP.Request && r.method == "GET")  || (r isa HTTP.Request && r.status == 101)
+    if (r isa HTTP.Request && r.method == "GET")  || (r isa HTTP.Response && r.status == 101)
         if HTTP.header(r, "Connection", "") != "keep-alive"
             # "Connection => upgrade" for most and "Connection => keep-alive, upgrade" for Firefox.
             if HTTP.hasheader(r, "Connection", "upgrade") || HTTP.hasheader(r, "Connection", "keep-alive, upgrade")
