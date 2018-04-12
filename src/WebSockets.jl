@@ -125,7 +125,7 @@ end
 const SUBProtocols= Array{String,1}() 
 
 "Used in handshake. See SUBProtocols"
-hasprotocol(s::String) = in(s,SUBProtocols)
+hasprotocol(s::AbstractString) = in(s, SUBProtocols)
 
 "Used to specify handshake response. See SUBProtocols"
 function addsubproto(name)

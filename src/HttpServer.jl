@@ -3,11 +3,18 @@ info("Loading HttpServer methods...")
 export WebSocketHandler
 
 """
-Responds to a WebSocket handshake request.
-Checks for required headers and subprotocols; sends Response(400) if they're missing or bad. Otherwise, transforms client key into accept value, and sends Reponse(101).
-Function returns true for accepted handshakes.
+Called by HttpServer. Responds to a WebSocket handshake request. 
+If the connection is acceptable, sends status code 101 
+and headers according to RFC 6455. Function returns
+a WebSocket instance with the open socket as one of the fields.
+
+Otherwise responds with '400' and returns false.
+
+Any other response means 'decline', so a reason can be given.
+The function returns 'true' to HttpServer, which then calls the
+user's websocket handler.
 """
-function websocket_handshake(request,client)
+function websocket_handshake(request, client)
     if !haskey(request.headers, "Sec-WebSocket-Key")
         Base.write(client.sock, HttpServer.Response(400))
         return false
@@ -30,7 +37,7 @@ function websocket_handshake(request,client)
     response.headers["Upgrade"] = "websocket"
     response.headers["Connection"] = "Upgrade"
     response.headers["Sec-WebSocket-Accept"] = resp_key
-    
+    # TODO move this part further up, similar to in HTTP.jl
     if haskey(request.headers, "Sec-WebSocket-Protocol") 
         if hasprotocol(request.headers["Sec-WebSocket-Protocol"])
             response.headers["Sec-WebSocket-Protocol"] =  request.headers["Sec-WebSocket-Protocol"]

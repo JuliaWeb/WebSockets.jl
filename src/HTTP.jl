@@ -40,18 +40,48 @@ function open(f::Function, url; binary=false, verbose=false, optionalProtocol = 
         end
     end
 end
-
-function upgrade(f::Function, http::HTTP.Stream; binary=false)
+"""
+Responds to a WebSocket handshake request. Checks for required 
+headers; sends Response(400) if they're missing or bad. 
+Otherwise, transforms client key into accept value, and sends Reponse(101).
+Calls user's handler function f upon a successful upgrade.
+"""
+function upgrade(f::Function, http::HTTP.Stream; binary=false) # TODO check dropping last...
+    # Double check the request. is_upgrade should already have been calle.
     check_upgrade(http)
+    browserclient = HTTP.hasheader(http, "Origin")
     if !HTTP.hasheader(http, "Sec-WebSocket-Version", "13")
-        throw(WebSocketError(0, "Expected \"Sec-WebSocket-Version: 13\"!\n$(http.message)"))
+        HTTP.setheader(http, "Sec-WebSocket-Version" => "13")
+        HTTP.setstatus(http, 400)
+        HTTP.startwrite(http)
+        return
     end
-    HTTP.setstatus(http, 101)
+    if HTTP.hasheader(http, "Sec-WebSocket-Protocol")
+        requestedprotocol = HTTP.header(http, "Sec-WebSocket-Protocol")
+        warn(requestedprotocol)
+        warn(typeof(requestedprotocol))
+        if !hasprotocol(requestedprotocol)
+            HTTP.setheader(http, "Sec-WebSocket-Protocol" => requestedprotocol)
+            HTTP.setstatus(http, 400)
+            HTTP.startwrite(http)
+            return
+        else
+            HTTP.setheader(http, "Sec-WebSocket-Protocol" => requestedprotocol)
+        end
+    end
+    key = HTTP.header(http, "Sec-WebSocket-Key")
+    if length(base64decode(key)) != 16 # Key must be 16 bytes
+        HTTP.setstatus(http, 400)
+        HTTP.startwrite(http)
+        return
+    end
+    # This upgrade is acceptable. Send the response.
+    HTTP.setheader(http, "Sec-WebSocket-Accept" => generate_websocket_key(key))
     HTTP.setheader(http, "Upgrade" => "websocket")
     HTTP.setheader(http, "Connection" => "Upgrade")
-    key = HTTP.header(http, "Sec-WebSocket-Key")
-    HTTP.setheader(http, "Sec-WebSocket-Accept" => generate_websocket_key(key))
+    HTTP.setstatus(http, 101)
     HTTP.startwrite(http)
+    # Pass the connection on as a WebSocket.
     io = HTTP.ConnectionPool.getrawstream(http)
     ws = WebSocket(io, true)
     try
@@ -71,7 +101,8 @@ function upgrade(f::Function, http::HTTP.Stream; binary=false)
     end
 end
 
-"It is up to the user to call 'is_upgrade'. This provides feedback when that was forgotten."
+"It is up to the user to call 'is_upgrade' on received messages. 
+This provides double checking from within the 'upgrade' function."
 function check_upgrade(http)
     if !HTTP.hasheader(http, "Upgrade", "websocket")
         throw(WebSocketError(0, "Check upgrade: Expected \"Upgrade => websocket\"!\n$(http.message)"))
