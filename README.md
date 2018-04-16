@@ -17,6 +17,11 @@ This is an implementation of the WebSockets protocol in Julia for both server-si
 
 This package works with either [HttpServer.jl](https://github.com/JuliaWeb/HttpServer.jl) or [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl), which is what you use to set up a server that accepts HTTP(S) connections.
 
+## Temporary picture
+This test picture shows the package neighborhood prior to this change.
+Some of the dependencies are test-only dependencies.
+[Dependencies and test dependencies neighborhood](examples/serve_verbose/svg/ws_neighborhood.svg)
+
 ## Using with HttpServer.jl
 
 As a first example, we can create a WebSockets echo server:
