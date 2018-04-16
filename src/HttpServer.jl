@@ -96,8 +96,10 @@ function HttpServer.handle(handler::WebSocketHandler, req::HttpServer.Request, c
     websocket_handshake(req, client) || return
     sock = WebSocket(client.sock,true)
     handler.handle(req, sock)
-    if isopen(sock) 
-        close(sock)
+    if isopen(sock)
+        try
+            close(sock)
+        end
     end
 end
 
