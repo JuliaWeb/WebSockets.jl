@@ -21,7 +21,7 @@ an http server.
 module WebSockets
 
 import MbedTLS: digest, MD_SHA1
-using Requires
+using Requires 
 
 export WebSocket,
        write,
@@ -228,7 +228,6 @@ function Base.close(ws::WebSocket)
                     ws.state = CLOSED
                 end
             end
-
             if isopen(ws.socket)
                 close(ws.socket)
             end
@@ -309,6 +308,20 @@ end
 """ Read a frame: turn bytes from the websocket into a WebSocketFragment."""
 function read_frame(ws::WebSocket)
     ab = read(ws.socket,2)
+    #= 
+    TODO error handling decision...
+    Browsers will seldom close in the middle of writing to a socket,
+    but other clients often do, and the stacktraces can be very long.
+    ab is often not assigned.
+    We could check for and throw a WebSocketError:
+    isassigned(ab) && throw(WebSocketError(0, "Socket closed while reading"))
+    This is often triggered:
+    BoundsError: attempt to access 0-element Array{UInt8,1} at index [1]
+    ...and sometimes also:
+    BoundsError: attempt to access 0-element Array{UInt8,1} at index [2]
+    If the last message is thrown here, ab has been assigned but only partly
+    read.
+    =# 
     a = ab[1]
     fin    = a & 0b1000_0000 >>> 7  # If fin, then is final fragment
     rsv1   = a & 0b0100_0000  # If not 0, fail.
@@ -388,7 +401,5 @@ function mask!(data, mask=rand(UInt8, 4))
 end
 
 @require HTTP include("HTTP.jl")
-
 @require HttpServer include("HttpServer.jl")
-
 end # module WebSockets

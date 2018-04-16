@@ -1,6 +1,6 @@
 info("Loading HTTP methods...")
 
-function open(f::Function, url; binary=false, verbose=false, optionalProtocol = "", kw...)
+function open(f::Function, url; verbose=false, optionalProtocol = "", kw...)
 
     key = base64encode(rand(UInt8, 16))
 
@@ -41,13 +41,20 @@ function open(f::Function, url; binary=false, verbose=false, optionalProtocol = 
     end
 end
 """
-Responds to a WebSocket handshake request. Checks for required 
-headers; sends Response(400) if they're missing or bad. 
-Otherwise, transforms client key into accept value, and sends Reponse(101).
+Responds to a WebSocket handshake request. 
+If the connection is acceptable, sends status code 101 
+and headers according to RFC 6455, then calls
+user's handler function f with the connection wrapped in
+a WebSocket instance with the open socket as one of the fields.
+
+Closes the websocket after returning from f.
+
+Otherwise responds with '400' and returns nothing.
+
 Calls user's handler function f upon a successful upgrade.
 """
-function upgrade(f::Function, http::HTTP.Stream; binary=false) # TODO check dropping last...
-    # Double check the request. is_upgrade should already have been calle.
+function upgrade(f::Function, http::HTTP.Stream)
+    # Double check the request. is_upgrade should already have been called by user.
     check_upgrade(http)
     browserclient = HTTP.hasheader(http, "Origin")
     if !HTTP.hasheader(http, "Sec-WebSocket-Version", "13")
@@ -58,8 +65,6 @@ function upgrade(f::Function, http::HTTP.Stream; binary=false) # TODO check drop
     end
     if HTTP.hasheader(http, "Sec-WebSocket-Protocol")
         requestedprotocol = HTTP.header(http, "Sec-WebSocket-Protocol")
-        warn(requestedprotocol)
-        warn(typeof(requestedprotocol))
         if !hasprotocol(requestedprotocol)
             HTTP.setheader(http, "Sec-WebSocket-Protocol" => requestedprotocol)
             HTTP.setstatus(http, 400)
@@ -129,10 +134,4 @@ function is_upgrade(r::HTTP.Message)
     end
     return false
 end
-
-# function listen(f::Function, host::String="localhost", port::UInt16=UInt16(8081); binary=false, verbose=false)
-#     HTTP.listen(host, port; verbose=verbose) do http
-#         upgrade(f, http; binary=binary)
-#     end
-# end
 

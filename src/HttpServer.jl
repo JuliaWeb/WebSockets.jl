@@ -13,7 +13,39 @@ Otherwise responds with '400' and returns false.
 Any other response means 'decline', so a reason can be given.
 The function returns 'true' to HttpServer, which then calls the
 user's websocket handler.
-"""
+
+It is recommended to do further checks of the upgrade request in the
+user handler function.
+   - "Origin" header: Included by clients in browsers, e.g: => "http://localhost:8000"
+   - "Sec-WebSocket-Protocol" header: If included, e.g.: => "myOwnProtocol"
+   -  "Sec-WebSocket-Extensions" => "permessage-deflate"
+
+A WebSocketHandler may include:
+  .function
+  .acceptURI
+  .acceptsubprotocol
+  . acceptsource
+  . acceptOrin.
+Typical headers:
+  -
+   "Connection"               => "keep-alive, Upgrade"
+   "Sec-WebSocket-Version"    => "13"
+   "http_minor"               => "1"
+   "Keep-Alive"               => "1"
+   "User-Agent"               => "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:59.0) Gecko/20100101 Fi…
+   "Accept-Encoding"          => "gzip, deflate"
+   "Cache-Control"            => "no-cache"
+   "Origin"                   => "http://localhost:8000"
+   "Sec-WebSocket-Key"        => "R9b6CHWxy9cg3H+1WuCFCA=="
+   "Sec-WebSocket-Protocol"   => "relay_frontend"
+   "Sec-WebSocket-Extensions" => "permessage-deflate"
+   "Host"                     => "localhost:8000"
+   "Upgrade"                  => "websocket"
+   "Pragma"                   => "no-cache"
+   "http_major"               => "1"
+   "Accept"                   => "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+   "Accept-Language"          => "en-US,en;q=0.5"
+ """
 function websocket_handshake(request, client)
     if !haskey(request.headers, "Sec-WebSocket-Key")
         Base.write(client.sock, HttpServer.Response(400))
@@ -65,9 +97,7 @@ function HttpServer.handle(handler::WebSocketHandler, req::HttpServer.Request, c
     sock = WebSocket(client.sock,true)
     handler.handle(req, sock)
     if isopen(sock) 
-        try
         close(sock)
-        end
     end
 end
 
