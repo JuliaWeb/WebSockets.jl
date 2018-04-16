@@ -20,7 +20,7 @@ This package works with either [HttpServer.jl](https://github.com/JuliaWeb/HttpS
 ## Temporary picture
 This test picture shows the package neighborhood prior to this change.
 Some of the dependencies are test-only dependencies.
-[Dependencies and test dependencies neighborhood](examples/serve_verbose/svg/ws_neighborhood.svg)
+![Dependencies and test dependencies neighborhood](examples/serve_verbose/svg/ws_neighborhood.svg)
 
 ## Using with HttpServer.jl
 
