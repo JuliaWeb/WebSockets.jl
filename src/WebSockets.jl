@@ -21,8 +21,7 @@ an http server.
 module WebSockets
 
 import MbedTLS: digest, MD_SHA1
-using Requires 
-
+using Requires
 export WebSocket,
        write,
        read,
@@ -31,15 +30,17 @@ export WebSocket,
        send_pong
 
 const TCPSock = Base.TCPSocket
+"A reasonable amount of time"
+const TIMEOUT_CLOSEHANDSHAKE = 10.0
 
 @enum ReadyState CONNECTED=0x1 CLOSING=0x2 CLOSED=0x3
 
 """ Buffer writes to socket till flush (sock)"""
-init_socket(sock) = Base.buffer_writes(sock) 
+init_socket(sock) = Base.buffer_writes(sock)
 
 
-struct WebSocketClosedError <: Exception end
-Base.showerror(io::IO, e::WebSocketClosedError) = print(io, "Error: client disconnected")
+#struct WebSocketClosedError <: Exception end
+#Base.showerror(io::IO, e::WebSocketClosedError) = print(io, "Error: client disconnected")
 
 struct WebSocketError <: Exception
     status::Int16
@@ -110,9 +111,9 @@ Add to supported SUBProtocols through e.g.
 ```
    WebSockets.addsubproto("special-protocol")
    WebSockets.addsubproto("json")
-```   
-In the general websocket handler function, specialize 
-further by checking 
+```
+In the general websocket handler function, specialize
+further by checking
 # Example
 ```
 if get(wsrequest.headers, "Sec-WebSocket-Protocol", "") = "special-protocol"
@@ -122,7 +123,7 @@ else
 end
 ```
 """
-const SUBProtocols= Array{String,1}() 
+const SUBProtocols= Array{String,1}()
 
 "Used in handshake. See SUBProtocols"
 hasprotocol(s::AbstractString) = in(s, SUBProtocols)
@@ -132,7 +133,7 @@ function addsubproto(name)
     push!(SUBProtocols, string(name))
     return true
 end
-""" 
+"""
     write_fragment(io, islast, opcode, hasmask, data::Array{UInt8})
 Write the raw frame to a bufffer
 """
@@ -200,30 +201,41 @@ end
 """ Send a pong message, optionally with data."""
 send_pong(ws, data...) = write_pong(ws.socket, !ws.server, data...)
 
-""" 
+"""
     close(ws::WebSocket)
-Send a close message.
+Send an OPCODE_CLOSE frame, wait for the same response while dropping
+further received data. If not, consider as closed after waiting a
+reasonable amount of time, TIMEOUT_CLOSEHANDSHAKE.
 """
 function Base.close(ws::WebSocket)
     if isopen(ws)
         ws.state = CLOSING
         locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, UInt8[])
 
-        # Wait till the other end responds with an OPCODE_CLOSE. This process is
+        # Wait till the peer responds with an OPCODE_CLOSE while discarding any
+        # trailing bytes received.
+        #
+        # We have no guarantee that the peer is actually reading our OPCODE_CLOSE
+        # frame. If not, the peer's state will not change, and we will not receive 
+        # an aknowledgment of closing. We use a nonblocking read and give up
+        # after TIMEOUT_CLOSEHANDSHAKE
+        #
+        # This process is
         # complicated by potential blocking reads on the WebSocket in other Tasks
         # which may receive the response control frame. Synchronization of who is
         # responsible for closing the underlying socket is done using the
         # WebSocket's state. When this side initiates closing the connection it is
         # responsible for cleaning up, when the other side initiates the close the
-        # read method is
+        # read method is.
         #
         # The exception handling is necessary as read_frame will error when the
         # OPCODE_CLOSE control frame is received by a potentially blocking read in
         # another Task
+        # 
         try
-            while isopen(ws)
-                wsf = read_frame(ws)
-                # ALERT: stuff might get lost in ether here    
+            t1 = time() + TIMEOUT_CLOSEHANDSHAKE
+            while isopen(ws) && time() < t1
+                wsf = readframe_nonblocking(ws)
                 if is_control_frame(wsf) && (wsf.opcode == OPCODE_CLOSE)
                     ws.state = CLOSED
                 end
@@ -231,8 +243,14 @@ function Base.close(ws::WebSocket)
             if isopen(ws.socket)
                 close(ws.socket)
             end
-        catch exception
-            !isa(exception, EOFError) && rethrow(exception)
+        catch err
+            # Typical 'errors' received while closing down are neglected. 
+            errtyp = typeof(err)
+            errtyp != InterruptException &&
+                errtyp != Base.UVError &&
+                errtyp != Base.BoundsError &&
+                errtyp != Base.EOFError &&
+                rethrow(err)
         end
     else
         ws.state = CLOSED
@@ -307,21 +325,14 @@ end
 
 """ Read a frame: turn bytes from the websocket into a WebSocketFragment."""
 function read_frame(ws::WebSocket)
-    ab = read(ws.socket,2)
-    #= 
-    TODO error handling decision...
+    # Try to read two bytes. There is no guarantee that two bytes are actually allocated.
+    ab = read(ws.socket, 2)
+    #=
     Browsers will seldom close in the middle of writing to a socket,
     but other clients often do, and the stacktraces can be very long.
-    ab is often not assigned.
-    We could check for and throw a WebSocketError:
-    isassigned(ab) && throw(WebSocketError(0, "Socket closed while reading"))
-    This is often triggered:
-    BoundsError: attempt to access 0-element Array{UInt8,1} at index [1]
-    ...and sometimes also:
-    BoundsError: attempt to access 0-element Array{UInt8,1} at index [2]
-    If the last message is thrown here, ab has been assigned but only partly
-    read.
-    =# 
+    ab can be assigned, but of length 1. An enclosing try..catch in the calling function
+    seems to
+    =#
     a = ab[1]
     fin    = a & 0b1000_0000 >>> 7  # If fin, then is final fragment
     rsv1   = a & 0b0100_0000  # If not 0, fail.
@@ -351,32 +362,105 @@ end
 
 """
     read(ws::WebSocket)
+Typical use:
+    String(read(ws))
 Read one non-control message from a WebSocket. Any control messages that are
-read will be handled by the handle_control_frame function. This function will
-not return until a full non-control message has been read. If the other side
-doesn't ever complete its message, this function will never return. Only the
-data (contents/body/payload) of the message will be returned from this
-function.
+read will be handled by the handle_control_frame function.
+Only the data (contents/body/payload) of the message will be returned as a
+Vector{UInt8}.
+
+This function will not return until a full non-control message has been read. If the other side
+doesn't ever complete its message, this function will never return.
+If the socket is closed without following protocol, or this function receives
+an InterruptException, it :
+   - writes a warning to STDERR. This can be redirected using logging(..)
+   - returns an empty array and closes the socket from this side.
 """
 function Base.read(ws::WebSocket)
+    # TODO add a try..catch...finally with
+    # error(WebSocketClosedError())
+    # which also ensures Array{UInt8,1}()) is returned instead of Void() .
+    # EOF will fail conversion to String, but so will String(Void())
+    #
     if !isopen(ws)
         error("Attempt to read from closed WebSocket")
     end
-    frame = read_frame(ws)
+    # Previous versions would retrun any of the errors below or return Void(),
+    # which would result in the errors below during conversion to String()
+    # This try..catch adds roughly 20 ns to each read(ws)
+    try
+        frame = read_frame(ws)
+        # Handle control (non-data) messages.
+        if is_control_frame(frame)
+            # Don't return control frames; they're not interesting to users.
+            handle_control_frame(ws,frame)
+            return frame.data
+        end
 
-    # Handle control (non-data) messages.
-    if is_control_frame(frame)
-        # Don't return control frames; they're not interesting to users.
-        handle_control_frame(ws,frame)
+        # Handle data message that uses multiple fragments.
+        if !frame.is_last
+            return vcat(frame.data, read(ws))
+        end
         return frame.data
+    catch err
+        if typeof(err) == InterruptException
+            # This exception originates from this side. Follow protocol so no errors are triggered on the other side.
+            close(ws)
+            warn(STDERR, " While reading websocket, received InterruptException")
+        elseif typeof(err) == Base.UVError
+            warn(STDERR, " While reading websocket, received UVError, prefix:", err.prefix, ", code:", err.code)
+        elseif typeof(err) == Base.BoundsError
+            warn(STDERR, " While reading websocket, received incomplete frame")
+        elseif typeof(err) == Base.EOFError
+            warn(STDERR, " While reading, received EOFError")
+        else
+            # Unknown cause, give up continued execution.
+            # If this actually happens in a multiple fragment message, the accumulated
+            # stacktrace could be very long since read(ws) is iterative.
+            ws.state = CLOSED
+            if isopen(ws.socket)
+                close(ws.socket)
+            end
+            rethrow(err)
+        end
+        ws.state = CLOSED
+        if isopen(ws.socket)
+            close(ws.socket)
+        end
     end
+    return Vector{UInt8}()
+end
 
-    # Handle data message that uses multiple fragments.
-    if !frame.is_last
-        return vcat(frame.data, read(ws))
+"""
+For the closing handshake, we won't wait indefinitely for non-responsive clients.
+Returns a throwaway frame if the socket happens to be empty
+"""
+function readframe_nonblocking(ws)
+    chnl= Channel{WebSocketFragment}(1)
+    # Read, output put to Channel for type stability
+    function _readinterruptable(c::Channel{WebSocketFragment})
+        try
+            put!(chnl, read_frame(ws))
+        catch
+            # Output a dummy frame that is not a control frame.
+            put!(chnl, WebSocketFragment(false, false, false, false,
+                                UInt8(0), false, UInt64(0),
+                                Vector{UInt8}([0x0,0x0,0x0,0x0]),
+                                Vector{UInt8}()))
+        end
     end
-
-    return frame.data
+    # Start reading as a task. Will not return if there is nothing to read
+    rt = @schedule _readinterruptable(chnl)
+    bind(chnl, rt)
+    yield()
+    # Define a task for throwing interrupt exception to the (possibly blocked) read task.
+    # We don't start this task because it would never return
+    killta = @task try;Base.throwto(rt, InterruptException());catch;end
+    # We start the killing task. When it is scheduled the second time,
+    # we pass an InterruptException through the scheduler.
+    try;schedule(killta, InterruptException(), error = false);catch;end
+    # We now have content on chnl, and no additional tasks.
+    take!(chnl)
 end
 
 """

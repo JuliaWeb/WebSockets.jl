@@ -30,7 +30,7 @@ end
 server = Server(wsh)
 @async run(server,port_HttpServer)
 
-sleep(2)
+sleep(4)
 
 servers = [
     ("ws",          "ws://echo.websocket.org"),

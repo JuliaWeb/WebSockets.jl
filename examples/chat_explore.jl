@@ -238,6 +238,7 @@ end
 info("Start HTTP server on port $(HTTPPORT)")
 litas_newtype = @schedule HTTP.listen(server_def_newtype, "127.0.0.1", UInt16(HTTPPORT))
 
+# TODO replace with improvement from 'close websocket'.
 function closefromoutside()
     if isdefined(:litas_newtype)
         @schedule Base.throwto(litas_newtype, InterruptException())
