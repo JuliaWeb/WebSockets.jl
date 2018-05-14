@@ -32,7 +32,7 @@ end
 
 
 """
-Make and get a reference to the server side of HTS-JCE websocket connection.
+Make connection and get a reference to the HTS side of HTS-JCE connection.
 Assumes a server is already running.
 """
 function get_hts_jce()
@@ -65,7 +65,7 @@ function get_hts_bce()
     hts = Union{WebSocket, String}("")
     browser =""
     opened, browser = open_a_browser()
-    # Launch the next browser in line. 
+    # Launch the next browser in line.
     if opened
         zlog(id, "BCE in, ", browser, " will be connecting to HTS. Getting reference...")
         zflush()
@@ -82,17 +82,18 @@ function get_hts_bce()
     return hts, browser
 end
 """
-Collect n (samples) of serverlatency and clientlatency.
-Also calculate derived sizes 
-    serverbandwidth, clientbandwidth, serverspeeds, clientspeed
-Starts a new JSE-HTS connection for every evaluation (call). 
+Send n messages of length messagesize HTS-JCE and back.
+    -> id, serverlatencies, clientlatencies
+Starts and closes a new HTS-JCE connection every function call.
+In the terminology of BenchmarkTools, a call is a sample
+consisting of n evaluations.
 """
 function HTS_JCE(n, messagesize)
     id = "HTS_JCE"
     zlog(id, "Warming up, compiling")
     zflush()
     hts = get_hts_jce()
-    if !isa(hts, WebSocket) 
+    if !isa(hts, WebSocket)
         msg = " could not get websocket reference"
         clog(id, msg)
         error(id * msg)
@@ -130,7 +131,7 @@ function HTS_JCE(n, messagesize)
     end
     # We must read from the websocket in order for it to respond to
     # a closing message from JCE. It's also nice to yield to the async server
-    # so it can exit from it's handler.
+    # so it can exit from it's handler and release the websocket reference.
     isopen(hts) && read(hts)
     yield()
     serverlatencies = receivetimes - sendtimes
@@ -138,8 +139,8 @@ function HTS_JCE(n, messagesize)
     return id, serverlatencies, clientlatencies
 end
 """
-Use the next browser in line, starts a new HTS-BCE connection and collects n evaluations.
-This is one sample. 
+Use the next browser in line, start a new HTS-BCE connection and collect n evaluations.
+This is one sample.
 Returns browser name and vectors with n rows:
 # t1  Send 0, receive 0, measure time interval
 # t2  Send 0, receive 0 twice, measure time interval
@@ -152,9 +153,9 @@ function HTS_BCE(n, x)
     zflush()
     msg = ""
     (hts, browser) = get_hts_bce()
-    if browser == "" 
+    if browser == ""
         msg = "Could not find and open more browser types"
-    elseif !isa(hts, WebSocket) 
+    elseif !isa(hts, WebSocket)
         msg = " could not get ws reference from " * browser * " via HTS"
     end
     if msg != ""
@@ -213,16 +214,16 @@ function HTS_BCE(n, x)
 end
 
 "
-Measured time interval vectors [ns] -> client and server speeds, bandwidth [ns/b]
-x is message size [b].
+Constant message size [b], measured time interval vectors [ns]
+    -> server and client speeds, server and client bandwidth [ns/b]
 "
 
-function serverandclientspeeds(x, serverlatencies, clientlatencies)
-    serverspeeds =  serverlatencies / x 
-    clientspeeds =  clientlatencies / x
+function serverandclientspeeds(messagesize, serverlatencies, clientlatencies)
+    serverspeeds =  serverlatencies / messagesize
+    clientspeeds =  clientlatencies / messagesize
     n = length(serverspeeds)
-    serverbandwidth = sum(serverlatencies) / (n * x) 
-    clientbandwidth = sum(clientlatencies) / (n * x)
+    serverbandwidth = sum(serverlatencies) / (n * messagesize)
+    clientbandwidth = sum(clientlatencies) / (n * messagesize)
     serverspeeds, clientspeeds, serverbandwidth, clientbandwidth
 end
 
@@ -234,20 +235,20 @@ x is message size [b].
 function serverandclientspeeds_indirect(x, t1, t2, t3, t4)
     # assuming a measured time interval consists of
     # t(x) = t0s + t0c + a*x + b*x
-    # where 
+    # where
     # t(x)      measured time at the server
-    # t0s       initial serverlatency, for a "zero length" message 
+    # t0s       initial serverlatency, for a "zero length" message
     # t0c       initial clientlatency, for a "zero length" message
     # x         message length [b]
     # a         marginal server speed [ns/b]
     # b         marginal client speed [ns/b]
     #
-    # 
+    #
     # t1 = t0s +  t0c              Send 0, receive 0, measure t1
     # t2 = t0s + 2t0c              Send 0, receive 0 twice, measure t2
     # t3 = t0s +  t0c + a*x        Send x, receive 0, measure t3
     # t4 = t0s + 2t0c + a*x + b*x  Send x, receive 0, receive x, measure t4
-    # 
+    #
     # hence,
     t0s =  2t1 - t2
     t0c = -t1 + t2
@@ -259,20 +260,20 @@ function serverandclientspeeds_indirect(x, t1, t2, t3, t4)
     serverspeeds = t0s / x + a
     clientspeeds = t0c / x + b
     n = length(serverspeeds)
-    serverbandwidth = sum(serverspeeds) / n 
+    serverbandwidth = sum(serverspeeds) / n
     clientbandwidth = sum(clientspeeds) / n
     return serverspeeds, clientspeeds, serverbandwidth, clientbandwidth
 end
 
 
-## Note these shorthand function require input symbols defined at module-level
-## (not in a local scope)
+## Note that the shorthand plot functions below require input symbols
+## that are defined at module-level (not in a local scope)
 
-"Shorthand for generating a time series lineplot in REPL"
+"Generate a time series lineplot"
 lp(sy::Symbol) = lineplot(collect(1:length(eval(sy))), eval(sy), title = String(sy), width = displaysize(STDOUT)[2]-20, canvas = AsciiCanvas)
 
 
-"Return multiple time series lineplots with a common title prefix"
+"Generate a vector of time series lineplots with a common title prefix"
 function lp(symbs::Vector{Symbol}, titleprefix)
     map(symbs) do sy
         pl = lp(sy)
@@ -280,12 +281,13 @@ function lp(symbs::Vector{Symbol}, titleprefix)
     end
 end
 
-"Shorthand for generating an x-y lineplot in REPL"
-function lp(syx::Symbol, syy::Symbol) 
+"Generate an x-y lineplot in REPL"
+function lp(syx::Symbol, syy::Symbol)
     lpl = lineplot(eval(syx), eval(syy), title = String(syy), width = displaysize(STDOUT)[2]-20, canvas = AsciiCanvas)
     xlabel!(lpl, String(syx))
 end
-"Return multiple x-y lineplots with a common title prefix"
+
+"Generate a vector of x-y lineplots with a common title prefix"
 function lp(syxs::Vector{Symbol}, syys::Vector{Symbol}, titleprefix)
     map(zip(syxs, syys)) do pair
         pl = lp(pair[1], pair[2])
@@ -293,14 +295,8 @@ function lp(syxs::Vector{Symbol}, syys::Vector{Symbol}, titleprefix)
     end
 end
 
-"Shorthand for generating an x-y scatterplot in REPL"
-function sp(syx::Symbol, syy::Symbol) 
+"Generate an x-y scatterplot"
+function sp(syx::Symbol, syy::Symbol)
     spl = scatterplot(eval(syx), eval(syy), title = String(syy), width = displaysize(STDOUT)[2]-15, canvas = DotCanvas)
     xlabel!(spl, String(syx))
-end
-
-"Shorthand for generating a densityplot in REPL"
-function dp(syx::Symbol, syy::Symbol)
-    dpl = densityplot(eval(syx), eval(syy), title = String(syy), color = :red, width = displaysize(STDOUT)[2]-15)
-    xlabel!(dpl, String(syx))
 end

@@ -12,7 +12,7 @@ named functions may improve error message readability.
 
 =#
 
-
+# TODO fix errors and style
 
 # Globals, where used in functions will change the type
 global lastreq = 0
@@ -238,8 +238,14 @@ end
 info("Start HTTP server on port $(HTTPPORT)")
 litas_newtype = @schedule HTTP.listen(server_def_newtype, "127.0.0.1", UInt16(HTTPPORT))
 
-# TODO replace with improvement from 'close websocket'.
+"""
+This stops the servers using InterruptExceptions.
+""" 
 function closefromoutside()
+   # Throwing exceptions can be slow. This function also 
+   # starts a task which seems to not exit and free up 
+   # its memory properly. HTTP.listen offers an alternative
+   # method. See HTTP.listen > tcpref
     if isdefined(:litas_newtype)
         @schedule Base.throwto(litas_newtype, InterruptException())
     end
@@ -251,4 +257,6 @@ function closefromoutside()
         end
     end
 end
+
+
 nothing

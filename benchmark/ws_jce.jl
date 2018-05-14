@@ -20,14 +20,20 @@ const SERVER = "ws://127.0.0.1:$(PORT)"
 const CLOSEAFTER = Base.Dates.Second(30)
 
 """
-Opens a client, echoes with optional delay, an integer in milliseconds.
+Opens a client, echoes with an optional delay, an integer in milliseconds.
 Stores time records for received messages and before sending messages.
-Specify delay in milliseconds by sending a message on the websocket:
+Specify the delay in milliseconds by sending a message on the websocket:
     send(ws_jce, "delay|15")
-Echoes any message except "exit" and "delay"
+Echoes any message except "exit" and "delay".
 
-At exit or after CLOSEAFTER, sends one message containing two vectors of
-timestamps [ns].AbstractTrees
+Delays to reading, in the websocket use situation, would be caused by usefully spent
+calculation time between reads. However, they may be interpreted by the underlying protocol
+as transmission problems and cause large slowdowns. Hence the interest in testing
+with delays. A countermeasure for optimizing speed might be to run a websocket 
+reading function in a parallel, not asyncronous process, putting messages on an internal queue.
+
+At exit or after CLOSEAFTER, this function sends one message containing two vectors of
+timestamps [ns].
 """
 function echowithdelay_jce()
     # This will be run in a worker process. Even so, individual console log
@@ -56,7 +62,7 @@ function echowithdelay_jce()
     end
 end
 "
-Handler for client websocket, defined by echowithdelay
+Handler for client websocket, defined by echowithdelay_jce
 "
 function _jce(ws)
     id = "_jce"
@@ -109,8 +115,6 @@ function _jce(ws)
     clog(id, :green, " Exit, close websocket.")
     zflush()
     # Exiting this function starts a closing handshake
-    # from this side (HTTP.jl:39). The other side must read in
-    # in order for this to proceed smoothly.
     nothing
 end
 end # module

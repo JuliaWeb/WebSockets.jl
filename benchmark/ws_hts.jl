@@ -48,6 +48,16 @@ function acceptholdws(http)
     # If the ugrade is successful, just hold the reference and thread
     # of execution. Other tasks may do useful things with it.
     WebSockets.upgrade(http) do ws
+        if length(WEBSOCKET) > 0
+            # unexpected behaviour.
+            if isclosed(WEBSOCKET[1])
+                pop!(WEBSOCKET)
+            else
+                msg = " A websocket is already open. Not accepting the attempt at opening more."
+                clog(id, :red, msg);zflush()
+                return
+            end
+        end
         push!(WEBSOCKET, ws)
         zlog(id, ws);zflush()
         t1 = now() + WSMAXTIME
