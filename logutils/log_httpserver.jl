@@ -3,6 +3,8 @@ import HttpServer.HttpHandler
 import HttpServer.Server
 import HttpServer.ClientParser
 import HttpServer.HttpParser
+import HttpServer.Request  # Not sure if necessary, but otherwise dispatching on HttpCommon.Request can fail.
+import HttpServer.Response
 import HttpCommon.Cookie
 import HttpCommon.STATUS_CODES
 import URIParser.URI
@@ -45,7 +47,7 @@ end
 
 "Request already has a decent show method, we're not overwriting that.
 This metod is called only when logging to an Abstractdevice"
-function _show(d::AbstractDevice, request::HttpServer.Request)
+function _show(d::AbstractDevice, request::Request)
 	_log(d,  :normal, :light_yellow, "Request ", :normal)
 	_log(d, :bold, request.method, " ", :cyan, request.resource, "\n", :normal)
 	if !isempty(request.data)

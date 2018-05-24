@@ -145,8 +145,8 @@ function upgrade(f::Function, http::HTTP.Stream)
     io = HTTP.ConnectionPool.getrawstream(http)
     ws = WebSocket(io, true)
     try
-        if applicable(f, Dict(http.message.headers), ws)
-            f(Dict(http.message.headers), ws)
+        if applicable(f, http.message, ws)
+            f(http.message, ws)
         else
             f(ws)
         end
@@ -155,7 +155,7 @@ function upgrade(f::Function, http::HTTP.Stream)
         mt = typeof(f).name.mt
         fnam = splitdir(string(mt.defs.func.file))[2]
         print_with_color(:yellow, STDERR, "f = ", string(f) * " at " * fnam * ":" * string(mt.defs.func.line) * "\nERROR:\t")
-        showerror(STDERR, err, backtrace())
+        showerror(STDERR, err, catch_stacktrace())
     finally
         close(ws)
     end
@@ -168,7 +168,7 @@ function check_upgrade(http)
         throw(WebSocketError(0, "Check upgrade: Expected \"Upgrade => websocket\"!\n$(http.message)"))
     end
     if !(HTTP.hasheader(http, "Connection", "upgrade") || HTTP.hasheader(http, "Connection", "keep-alive, upgrade"))
-        throw(WebSocketError(0, "Check upgrade: Expected \"Connection => upgrade or Connection => keep alive, upgrad\"!\n$(http.message)"))
+        throw(WebSocketError(0, "Check upgrade: Expected \"Connection => upgrade or Connection => keep alive, upgrade\"!\n$(http.message)"))
     end
 end
 
@@ -189,4 +189,98 @@ function is_upgrade(r::HTTP.Message)
     end
     return false
 end
+# Inline docs in 'WebSockets.jl'
+target(req::HTTP.Messages.Request) = req.resource
+subprotocol(req::HTTP.Messages.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
+origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")
 
+"""
+WebsocketHandler(f::Function) <: HTTP.Handler
+
+A simple Function-wrapper for HTTP.
+The provided argument should be one of the forms 
+    `f(WebSocket) => nothing`
+    `f(HTTP.Request, WebSocket) => nothing`
+The latter form is intended for gatekeeping, ref. RFC 6455 section 10.1
+
+f accepts a `WebSocket` and does interesting things with it, like reading, writing and exiting when finished.
+
+Take note of the very similar WebSocketHandler (capital 'S'), which is a subtype of HttpServer, an alternative 
+to HTTP.
+"""
+struct WebsocketHandler{F <: Function} <: HTTP.Handler
+    func::F # func(ws) or func(request, ws)
+end
+
+
+"""
+A ServerWS is a variant of HTTP.Server
+which aims to hook into some of the higher-level functionality.
+It is also possible to hook into the lower-level functionality
+using `listen`.
+"""
+mutable struct ServerWS{T <: HTTP.Servers.Scheme, H <: HTTP.Handler, W <: WebsocketHandler}
+    handler::H
+    wshandler::W
+    logger::IO
+    in::Channel{Any}
+    out::Channel{Any}
+    options::HTTP.ServerOptions
+
+    ServerWS{T, H, W}(handler::H, wshandler::W, logger::IO = HTTP.compat_stdout(), ch=Channel(1), ch2=Channel(1),
+                 options=HTTP.ServerOptions()) where {T, H, W} =
+        new{T, H, W}(handler, wshandler, logger, ch, ch2, options)
+end
+
+
+
+ServerWS(h::Function, w::Function, l::IO=HTTP.compat_stdout(); 
+            cert::String="", key::String="", args...) = ServerWS(HTTP.HandlerFunction(h), WebsocketHandler(w), l;
+                                                         cert=cert, key=key, args...)
+function ServerWS(handler::H,
+                wshandler::W,
+                logger::IO = HTTP.compat_stdout();
+                cert::String = "",
+                key::String = "",
+                args...) where {H <: HTTP.Handler, W <: WebsocketHandler}
+    if cert != "" && key != ""
+        serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler, logger, Channel(1), Channel(1), HTTP.ServerOptions(; sslconfig=HTTP.MbedTLS.SSLConfig(cert, key), args...))
+    else
+        serverws = ServerWS{HTTP.Servers.http, H, W}(handler, wshandler, logger, Channel(1), Channel(1), HTTP.ServerOptions(; args...))
+    end
+    return serverws
+end
+
+
+function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
+
+    tcpserver = Ref{HTTP.Sockets.TCPServer}()
+
+    @async begin
+        while !isassigned(tcpserver)
+            sleep(1)
+        end
+        while true
+            val = take!(server.in)
+            val == HTTP.Servers.KILL && close(tcpserver[])
+        end
+    end
+
+    HTTP.listen(host, port;
+           tcpref=tcpserver,
+           ssl=(T == HTTP.Servers.https),
+           sslconfig = server.options.sslconfig,
+           verbose = verbose,
+           tcpisvalid = server.options.ratelimit > 0 ? HTTP.Servers.check_rate_limit :
+                                                     (tcp; kw...) -> true,
+           ratelimits = Dict{IPAddr, HTTP.Servers.RateLimit}(),
+           ratelimit = server.options.ratelimit) do stream::HTTP.Stream
+
+                    if is_upgrade(stream.message)
+                        upgrade(server.wshandler.func, stream)
+                    else
+                        HTTP.Servers.handle_request(server.handler.func, stream)
+                    end
+    end
+    return
+end

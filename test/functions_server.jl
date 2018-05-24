@@ -2,12 +2,10 @@ include("functions_log_test.jl")
 include("handler_functions_events.jl")
 include("handler_functions_websockets_general_test.jl")
 include("handler_functions_websockets_subprotocol_test.jl")
+
 """
-Although a websocket could be opened from a file on any server or just from the browser
-working on the file system, we open a test http server.
-The term 'handler' is relative to point of view. We make a hierachy of functions and then give
-the types defined in HttpServer references to the functions. More commonly, anonymous functions
-are used.
+This function returns responses to http requests.
+For serving the HTML javascript pages which then open WebSocket clients.
 """
 function httphandle(request::Request, response::Response)
     global n_responders
@@ -33,22 +31,20 @@ function httphandle(request::Request, response::Response)
 end
 
 """
-Inner function for WebsocketHandler. Called on opening a new websocket after
-the handshake procedure is finished.
-The request contains info which can be used for additional delegation or gatekeeping.
-Function never exits until the websocket is closed, but calls are made asyncronously.
+When a connection performs the handshake successfully, this function 
+is called as a separate task. Based on inspecting the request that was 
+accepted as an upgrade, it in turn calls one of three functions.
+The function call does not return until it is time to close the websocket. 
 """
-function websockethandle(wsrequest::Request, websocket::WebSocket)
-    id = "server_functions.websockethandle\t"
+function gatekeeper(wsrequest::Request, websocket::WebSocket)
+    id = "server_functions.gatekeeper\t"
     clog(id, :cyan, wsrequest, "\t", :yellow, websocket, "\n")
-    if haskey(wsrequest.headers,"Sec-WebSocket-Protocol")
-        if wsrequest.headers["Sec-WebSocket-Protocol"] == "websocket-testprotocol"
-            ws_test_protocol(websocket)
-        elseif wsrequest.headers["Sec-WebSocket-Protocol"] == "websocket-test-binary"
-            ws_test_binary(websocket)
-        else
-            clog(id, :red, "Unknown sub protocol let through, not responding further. \n")
-        end
+    if subprotocol(wsrequest) == "websocket-testprotocol"
+        ws_test_protocol(websocket)
+    elseif subprotocol(wsrequest) == "websocket-test-binary"
+        ws_test_binary(websocket)
+    elseif subprotocol(wsrequest) != ""
+        clog(id, :red, "Unknown sub protocol let through, not responding further. \n")
     else
         ws_general(websocket)
     end
@@ -59,7 +55,7 @@ end
 
 function start_ws_server_async()
     id = "server_functions.start_ws_server\t"
-    # Specify this subprotocol is to be let through to websockethandle:
+    # Specify this subprotocol is to be let through to gatekeeper:
     WebSockets.addsubproto("websocket-testprotocol")
     WebSockets.addsubproto("websocket-test-binary")
     # Tell HttpHandler which functions to spawn when something happens.
@@ -70,8 +66,8 @@ function start_ws_server_async()
     httpha.events["close"] = ev_close
     httpha.events["write"] = ev_write
     httpha.events["reset"] = ev_reset
-    # Pack the websockethandle function in an interface container
-    wsh = WebSocketHandler(websockethandle)
+    # Pack the gatekeeper function in a recognizable function wrapper
+    wsh = WebSocketHandler(gatekeeper)
     server = Server(httpha, wsh )
     clog(id, "Server to be started:\n", server )
     servertask = @async run( server, 8080)

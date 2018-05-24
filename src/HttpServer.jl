@@ -70,20 +70,32 @@ function websocket_handshake(request, client)
     response.headers["Connection"] = "Upgrade"
     response.headers["Sec-WebSocket-Accept"] = resp_key
     # TODO move this part further up, similar to in HTTP.jl
-    if haskey(request.headers, "Sec-WebSocket-Protocol") 
+    if haskey(request.headers, "Sec-WebSocket-Protocol")
         if hasprotocol(request.headers["Sec-WebSocket-Protocol"])
             response.headers["Sec-WebSocket-Protocol"] =  request.headers["Sec-WebSocket-Protocol"]
         else
             Base.write(client.sock, HttpServer.Response(400))
             return false
         end
-    end 
-    
+    end
+   
     Base.write(client.sock, response)
     return true
 end
 
-""" Implement the WebSocketInterface, for compatilibility with HttpServer."""
+"""
+WebSocketHandler(f::Function) <: HttpServer.WebSocketInterface
+
+A simple Function-wrapper for HttpServer.
+
+The provided argument should be of the form 
+    `f(Request, WebSocket) => nothing`
+
+Request is intended for gatekeeping, ref. RFC 6455 section 10.1.
+WebSocket is for reading, writing and exiting when finished.
+
+Take note of the very similar WebsocketHandler (no capital 'S'), which is a subtype of HTTP.
+"""
 struct WebSocketHandler <: HttpServer.WebSocketInterface
     handle::Function
 end
@@ -117,3 +129,7 @@ function HttpServer.is_websocket_handshake(handler::WebSocketHandler, req::HttpS
     end
     return false
 end
+# Inline docs in WebSockets.jl
+target(req::HttpServer.Request) = req.resource
+subprotocol(req::HttpServer.Request) = get(req.headers, "Sec-WebSocket-Protocol", "")
+origin(req::HttpServer.Request) = get(req.headers, "Origin", "")

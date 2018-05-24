@@ -111,7 +111,7 @@ function HTS_JCE(n, messagesize)
         sendtime = time_ns()
         write(hts, msg)
         # throw away replies
-        read(hts)
+        readguarded(hts)
         receivereplytime = time_ns()
         push!(receivereplytimes, Int64(receivereplytime < typemax(Int64) ? receivereplytime : 0 ))
         push!(sendtimes,  Int64(sendtime < typemax(Int64) ? sendtime : 0 ))
@@ -132,7 +132,7 @@ function HTS_JCE(n, messagesize)
     # We must read from the websocket in order for it to respond to
     # a closing message from JCE. It's also nice to yield to the async server
     # so it can exit from it's handler and release the websocket reference.
-    isopen(hts) && read(hts)
+    isopen(hts) && readguarded(hts)
     yield()
     serverlatencies = receivetimes - sendtimes
     clientlatencies = receivereplytimes - replytimes
