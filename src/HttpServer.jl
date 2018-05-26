@@ -47,17 +47,26 @@ Typical headers:
    "Accept-Language"          => "en-US,en;q=0.5"
  """
 function websocket_handshake(request, client)
-    if !haskey(request.headers, "Sec-WebSocket-Key")
-        Base.write(client.sock, HttpServer.Response(400))
-        return false
-    end
+
     if get(request.headers, "Sec-WebSocket-Version", "13") != "13"
         response = HttpServer.Response(400)
         response.headers["Sec-WebSocket-Version"] = "13"
         Base.write(client.sock, response)
         return false
     end
+    if haskey(request.headers, "Sec-WebSocket-Protocol")
+        if hasprotocol(request.headers["Sec-WebSocket-Protocol"])
+            response.headers["Sec-WebSocket-Protocol"] =  request.headers["Sec-WebSocket-Protocol"]
+        else
+            Base.write(client.sock, HttpServer.Response(400))
+            return false
+        end
+    end
 
+    if !haskey(request.headers, "Sec-WebSocket-Key")
+        Base.write(client.sock, HttpServer.Response(400))
+        return false
+    end
     key = request.headers["Sec-WebSocket-Key"]
     if length(base64decode(key)) != 16 # Key must be 16 bytes
         Base.write(client.sock, HttpServer.Response(400))
@@ -69,15 +78,6 @@ function websocket_handshake(request, client)
     response.headers["Upgrade"] = "websocket"
     response.headers["Connection"] = "Upgrade"
     response.headers["Sec-WebSocket-Accept"] = resp_key
-    # TODO move this part further up, similar to in HTTP.jl
-    if haskey(request.headers, "Sec-WebSocket-Protocol")
-        if hasprotocol(request.headers["Sec-WebSocket-Protocol"])
-            response.headers["Sec-WebSocket-Protocol"] =  request.headers["Sec-WebSocket-Protocol"]
-        else
-            Base.write(client.sock, HttpServer.Response(400))
-            return false
-        end
-    end
    
     Base.write(client.sock, response)
     return true

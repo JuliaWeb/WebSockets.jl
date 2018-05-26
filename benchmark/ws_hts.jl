@@ -50,7 +50,7 @@ function acceptholdws(http)
     WebSockets.upgrade(http) do ws
         if length(WEBSOCKET) > 0
             # unexpected behaviour.
-            if isclosed(WEBSOCKET[1])
+            if !isopen(WEBSOCKET[1])
                 pop!(WEBSOCKET)
             else
                 msg = " A websocket is already open. Not accepting the attempt at opening more."
@@ -161,6 +161,6 @@ SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
 LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
 import ws_hts.listen_hts
 tas = @schedule ws_hts.listen_hts()
-sleep(5)
+sleep(7)
 hts = ws_hts.getws_hts()
 """

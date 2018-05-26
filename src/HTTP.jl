@@ -111,7 +111,6 @@ end
 function upgrade(f::Function, http::HTTP.Stream)
     # Double check the request. is_upgrade should already have been called by user.
     check_upgrade(http)
-    browserclient = HTTP.hasheader(http, "Origin")
     if !HTTP.hasheader(http, "Sec-WebSocket-Version", "13")
         HTTP.setheader(http, "Sec-WebSocket-Version" => "13")
         HTTP.setstatus(http, 400)
