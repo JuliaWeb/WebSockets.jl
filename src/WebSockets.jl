@@ -122,7 +122,7 @@ const SUBProtocols= Array{String,1}()
 
 """
     write_fragment(io, islast, opcode, hasmask, data::Array{UInt8})
-Write the raw frame to a bufffer
+Write the raw frame to a bufffer. Websockets not servers must set 'hasmask'.
 """
 function write_fragment(io::IO, islast::Bool, opcode, hasmask::Bool, data::Vector{UInt8})
     l = length(data)
@@ -144,7 +144,9 @@ function write_fragment(io::IO, islast::Bool, opcode, hasmask::Bool, data::Vecto
     end
     if hasmask
         if opcode == OPCODE_TEXT
-            data = copy(data) # Avoid masking Strings bytes in place
+            # Avoid masking Strings bytes in place.
+            # This makes client websockets slower than server websockets.
+            data = copy(data)  
         end
         write(io,mask!(data))
     end
@@ -337,6 +339,12 @@ function read_frame(ws::WebSocket)
     mask = b & 0b1000_0000 >>> 7
     hasmask = mask != 0
 
+    if mask != ws.server
+        error("WebSocket reader cannot handle incoming messages without mask. " *
+            "See http://tools.ietf.org/html/rfc6455#section-5.3")
+    end
+    
+    
     payload_len::UInt64 = b & 0b0111_1111
     if payload_len == 126
         payload_len = ntoh(read(ws.socket,UInt16))  # 2 bytes
@@ -373,11 +381,8 @@ function Base.read(ws::WebSocket)
         if is_control_frame(frame)
             # Don't return control frames; they're not interesting to users.
             handle_control_frame(ws, frame)
-            # Recurse to return the next data frame.	
+            # Recurse to return the next data frame.
 -           return read(ws)
-            # The following line from commit 7d5fb4480e17320e0d62cfd60d650381e4fb4960 is a  typo?
-            # It would return control frame contents to the user.
-            # return frame.data
         end
 
         # Handle data message that uses multiple fragments.
