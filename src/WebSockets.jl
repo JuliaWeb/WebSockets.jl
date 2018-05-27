@@ -212,9 +212,9 @@ function Base.close(ws::WebSocket; statusnumber = 0)
     if isopen(ws)
         ws.state = CLOSING
         if statusnumber == 0
-            locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server)
+            locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, UInt8[])
         else
-            statuscode = reverse(reinterpret(UInt8, [UInt16(statusnumber)]))
+            statuscode = reinterpret(UInt8, [hton(UInt16(statusnumber))])
             locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, statuscode)
         end
 
@@ -501,7 +501,10 @@ function generate_websocket_key(key)
 end
 
 """
-Masks or unmasks data, returns the key for reverting mask. 
+    maskswitch!(data)      
+    maskswitch!(data, key:: 4-element Vector{UInt8}) 
+
+Masks or unmasks data in-place, returns the key used. 
 Calling twice with the same key restores data.
 Ref. RFC 6455 5-3.
 """
@@ -509,7 +512,7 @@ function maskswitch!(data, mask = rand(UInt8, 4))
     for i in 1:length(data)
         data[i] = data[i] ⊻ mask[((i-1) % 4)+1]
     end
-    return mask
+    return mask 
 end
 
 "Used in handshake. See SUBProtocols"

@@ -47,7 +47,7 @@ Typical headers:
    "Accept-Language"          => "en-US,en;q=0.5"
  """
 function websocket_handshake(request, client)
-
+    response = HttpServer.Response(101)
     if get(request.headers, "Sec-WebSocket-Version", "13") != "13"
         response = HttpServer.Response(400)
         response.headers["Sec-WebSocket-Version"] = "13"
@@ -74,7 +74,7 @@ function websocket_handshake(request, client)
     end
     resp_key = generate_websocket_key(key)
 
-    response = HttpServer.Response(101)
+
     response.headers["Upgrade"] = "websocket"
     response.headers["Connection"] = "Upgrade"
     response.headers["Sec-WebSocket-Accept"] = resp_key
