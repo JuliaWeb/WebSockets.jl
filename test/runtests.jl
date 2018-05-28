@@ -6,7 +6,9 @@ import WebSockets:  generate_websocket_key,
                     write_fragment,
                     read_frame,
                     websocket_handshake,
-                    maskswitch!
+                    maskswitch!,
+                    is_upgrade,
+                    upgrade
 import HttpServer:  is_websocket_handshake,
                     handle
 import HttpCommon: Request
@@ -24,6 +26,12 @@ The dummy websocket don't use TCP. Close won't work, but we can manipulate the c
 using otherwise the same functions as TCP sockets.
 """
 dummyws(server::Bool)  = WebSocket(BufferStream(), server)
+
+function dummywshandler(req, dws::WebSockets.WebSocket{BufferStream})
+    close(dws.socket)
+    close(dws)
+end
+
 
 const io = IOBuffer()
 
@@ -132,87 +140,139 @@ for len = 126:129, fin=[true, false], clientwriting = [false, true]
 end
 
 end # testset
+info("Test length typemax(UInt16) + 1")
+@testset "Test length typemax(UInt16) + 1" begin
+
+for clientwriting = [false, true]
+    len = typemax(UInt16) +1
+    op = 0b1111
+    fin = true
+
+    test_str = randstring(len)
+    write_fragment(io, fin, op, clientwriting, copy(Vector{UInt8}(test_str)))
+    frame = take!(io)
+
+    dws = dummyws(clientwriting)
+    write(dws.socket, frame)
+    frag_back = read_frame(dws)
+    close(dws.socket)
+
+    @test frag_back.is_last == fin
+    @test frag_back.rsv1 == false
+    @test frag_back.rsv2 == false
+    @test frag_back.rsv3 == false
+    @test frag_back.opcode == op
+    @test frag_back.is_masked == clientwriting
+    @test frag_back.payload_len == len
+    @test test_str == String(frag_back.data)
+end
+
+end # testset
 
 
-# TODO: test for length > typemax(Uint32)
-@testset "Unit test, HttpServer handshake" begin
+@testset "Unit test, HttpServer and HTTP handshake" begin
 
 info("Tests for is_websocket_handshake")
-chromeheaders = Dict{String, String}(
-        "Connection"=>"Upgrade",
-        "Upgrade"=>"websocket"
-    )
-chromerequest = HttpCommon.Request(
-    "GET",
-    "",
-    chromeheaders,
-    ""
-    )
+function templaterequests()
+    chromeheaders = Dict{String, String}( "Connection"=>"Upgrade",
+                                            "Upgrade"=>"websocket")
+    firefoxheaders = Dict{String, String}("Connection"=>"keep-alive, Upgrade",
+                                            "Upgrade"=>"websocket")
 
-firefoxheaders = Dict{String, String}(
-        "Connection"=>"keep-alive, Upgrade",
-        "Upgrade"=>"websocket"
-    )
+    chromerequest = HttpCommon.Request("GET", "", chromeheaders, "")
+    firefoxrequest= Request("GET", "", firefoxheaders, "")
 
-firefoxrequest= Request(
-    "GET",
-    "",
-    firefoxheaders,
-    ""
-    )
+    chromerequest_HTTP = HTTP.Messages.Request("GET", "/", collect(chromeheaders))
+    firefoxrequest_HTTP = HTTP.Messages.Request("GET", "/", collect(firefoxheaders))
+    
+    return [chromerequest, firefoxrequest, chromerequest_HTTP, firefoxrequest_HTTP]
+end
 
-wshandler = WebSocketHandler((x,y)->nothing);#Dummy wshandler
+chromerequest, firefoxrequest, chromerequest_HTTP, firefoxrequest_HTTP = Tuple(templaterequests())
+
+wshandler = WebSocketHandler((x,y)->nothing)
 
 for request in [chromerequest, firefoxrequest]
-    @test is_websocket_handshake(wshandler,request) == true
+    @test is_websocket_handshake(wshandler, request) == true
+end
+
+for request in [chromerequest_HTTP, firefoxrequest_HTTP]
+    @test is_upgrade(request) == true
 end
 
 info("Test of handshake response")
-takefirstline(buf) = split(buf |> take! |> String, "\r\n")[1]
-
+takefirstline(buf::IOBuffer) = strip(split(buf |> take! |> String, "\r\n")[1])
+takefirstline(buf::BufferStream) = strip(split(buf |> read |> String, "\r\n")[1])
 take!(io)
-Base.write(io, "test")
-@test takefirstline(io) == "test"
 
 info("Test reject / switch format")
-const SWITCH = "HTTP/1.1 101 Switching Protocols "
-const REJECT = "HTTP/1.1 400 Bad Request "
+const REJECT = "HTTP/1.1 400 Bad Request"
 Base.write(io, Response(400))
 @test takefirstline(io) == REJECT
+Base.write(io, HTTP.Messages.Response(400))
+@test takefirstline(io) == REJECT
+
+const SWITCH = "HTTP/1.1 101 Switching Protocols"
 Base.write(io, Response(101))
 @test takefirstline(io) == SWITCH
+Base.write(io, HTTP.Messages.Response(101))
+@test takefirstline(io) == SWITCH
 
-function handshakeresponse(request)
+
+function handshakeresponse(request::Request)
     cli = HttpServer.Client(2, IOBuffer())
     websocket_handshake(request, cli)
-    takefirstline(cli.sock) 
+    strip(takefirstline(cli.sock)) 
+end
+function handshakeresponse(request::HTTP.Messages.Request)
+    buf = BufferStream()
+    c = HTTP.ConnectionPool.Connection(buf)
+    t = HTTP.Transaction(c)
+    s = HTTP.Streams.Stream(request, t)
+    upgrade(dummywshandler, s)
+    close(buf)
+    takefirstline(buf)
 end
 
 info("Test simple handshakes that are unacceptable")
-for request in [chromerequest, firefoxrequest]
-    @test handshakeresponse(request) == REJECT
-    push!(request.headers, "Sec-WebSocket-Version"    => "13")
-    @test handshakeresponse(request) == REJECT
-    push!(request.headers,   "Sec-WebSocket-Key"        => "mumbojumbobo")
-    @test handshakeresponse(request) == REJECT
-    push!(request.headers, "Sec-WebSocket-Version"    => "11")
-    push!(request.headers,  "Sec-WebSocket-Key"        => "zkG1WqHM8BJdQMXytFqiUw==")
-    @test handshakeresponse(request) == REJECT
+
+sethd(r::Request, pa::Pair) = push!(r.headers, pa)
+sethd(r::HTTP.Messages.Request, pa::Pair) = HTTP.Messages.setheader(r, HTTP.Header(pa)) 
+
+for r in templaterequests()
+    @test handshakeresponse(r) == REJECT
+    sethd(r, "Sec-WebSocket-Version"    => "11")
+    @test handshakeresponse(r) == REJECT
+    sethd(r, "Sec-WebSocket-Version"    => "13")
+    @test handshakeresponse(r) == REJECT
+    sethd(r,   "Sec-WebSocket-Key"      => "mumbojumbobo")
+    @test handshakeresponse(r) == REJECT
+    sethd(r,  "Sec-WebSocket-Key"       => "17 bytes key is not accepted")
+    @test handshakeresponse(r) == REJECT
+    sethd(r,  "Sec-WebSocket-Key"       => "16 bytes key this is surely")
+    sethd(r,  "Sec-WebSocket-Protocol"  => "unsupported")
+    @test handshakeresponse(r) == REJECT
 end
+
+
+
+
 
 info("Test simple handshakes, acceptable")
-for request in [chromerequest, firefoxrequest]
-    push!(request.headers, "Sec-WebSocket-Version"    => "13")
-    push!(request.headers,  "Sec-WebSocket-Key"        => "zkG1WqHM8BJdQMXytFqiUw==")
-    @test handshakeresponse(request) == SWITCH
+for r in templaterequests()
+    sethd(r, "Sec-WebSocket-Version"    => "13")
+    sethd(r,  "Sec-WebSocket-Key"       => "16 bytes key this is surely")
+    @test handshakeresponse(r) == SWITCH
 end
 
+
+
 info("Test unacceptable subprotocol handshake subprotocol")
-for request in [chromerequest, firefoxrequest]
-    push!(request.headers, "Sec-WebSocket-Version"    => "13")
-    push!(request.headers,  "Sec-WebSocket-Key"        => "zkG1WqHM8BJdQMXytFqiUw==")
-    push!(request.headers, "Sec-WebSocket-Protocol"       => "my.server/json-zmq")
-    @test handshakeresponse(request) == REJECT
+for r in templaterequests()
+    sethd(r, "Sec-WebSocket-Version"    => "13")
+    sethd(r, "Sec-WebSocket-Key"        => "16 bytes key this is surely")
+    sethd(r, "Sec-WebSocket-Protocol"       => "my.server/json-zmq")
+    @test handshakeresponse(r) == REJECT
 end
 
 info("add simple subprotocol to acceptable list")
@@ -222,13 +282,13 @@ info("add subprotocol with difficult name")
 @test true == WebSockets.addsubproto("my.server/json-zmq")
 
 info("Test handshake subprotocol now acceptable")
-for request in [chromerequest, firefoxrequest]
-    push!(request.headers, "Sec-WebSocket-Version"    => "13")
-    push!(request.headers,  "Sec-WebSocket-Key"        => "zkG1WqHM8BJdQMXytFqiUw==")
-    push!(request.headers, "Sec-WebSocket-Protocol"       => "xml")
-    @test handshakeresponse(request) == SWITCH
-    push!(request.headers, "Sec-WebSocket-Protocol"       => "my.server/json-zmq")
-    @test handshakeresponse(request) == SWITCH
+for r in templaterequests()
+    sethd(r, "Sec-WebSocket-Version"    => "13")
+    sethd(r,  "Sec-WebSocket-Key"        => "16 bytes key this is surely")
+    sethd(r, "Sec-WebSocket-Protocol"       => "xml")
+    @test handshakeresponse(r) == SWITCH
+    sethd(r, "Sec-WebSocket-Protocol"       => "my.server/json-zmq")
+    @test handshakeresponse(r) == SWITCH
 end
 end # testset
 
@@ -237,9 +297,9 @@ close(io)
 @testset "Peer-to-peer tests, HTTP client" begin
 
 const port_HTTP = 8000
+const port_HTTP_ServeWS = 8001
 const port_HttpServer = 8081
 
-info("Start HTTP server on port $(port_HTTP)")
 
 function echows(ws)
     while true
@@ -249,24 +309,44 @@ function echows(ws)
     end
 end
 
-@async HTTP.listen("127.0.0.1", UInt16(port_HTTP)) do http
-    if WebSockets.is_upgrade(http.message)
-        WebSockets.upgrade(echows, http) 
+function echows(req, ws)
+    @test origin(req) == ""
+    @test target(req) == "/"
+    @test subprotocol(req) == ""
+    while true
+        data, success = readguarded(ws)
+        !success && break
+        !writeguarded(ws, data) && break
     end
 end
 
-info("Start HttpServer on port $(port_HttpServer)")
-wsh = WebSocketHandler() do req, ws
-    echows(ws) 
+info("Start HTTP listen server on port $port_HTTP")
+@async HTTP.listen("127.0.0.1", UInt16(port_HTTP)) do s
+    if WebSockets.is_upgrade(s.message)
+        WebSockets.upgrade(echows, s) 
+    end
 end
-server = Server(wsh)
-@async run(server,port_HttpServer)
+
+
+info("Start HttpServer on port $port_HttpServer")
+server = Server(WebSocketHandler(echows))
+@async run(server, port_HttpServer)
+
+
+info("Start HTTP ServerWS on port $port_HTTP_ServeWS") 
+server_WS = WebSockets.ServerWS(
+    HTTP.HandlerFunction(req-> HTTP.Response(200)), 
+    WebSockets.WebsocketHandler(echows))
+
+@async WebSockets.serve(server_WS, "127.0.0.1", port_HTTP_ServeWS, false)
+
 
 sleep(4)
 
 servers = [
     ("HTTP",        "ws://127.0.0.1:$(port_HTTP)"), 
     ("HttpServer",  "ws://127.0.0.1:$(port_HttpServer)"),
+    ("HTTTP ServerWS",  "ws://127.0.0.1:$(port_HTTP_ServeWS)"),
     ("ws",          "ws://echo.websocket.org"),
     ("wss",         "wss://echo.websocket.org")]
 
@@ -287,11 +367,39 @@ for (s, url) in servers, len in lengths, closestatus in [false, true]
         write(ws, test_str)
         @test String(read(ws)) == forcecopy_str
         closestatus && close(ws, statusnumber = 1000)
-        sleep(1)
+        sleep(0.2)
     end
-    sleep(1)
+    sleep(0.2)
 end
 
 end # testset
 
+# TODO missing tests before browsertests.
 
+# WebSockets.jl
+# provoke errors WebSocketClosedError
+# error("Attempted to send too much data for one websocket fragment\n")
+# direct closing of tcp socket, while reading.
+# closing with given reason (only from browsertests)
+# unknown opcode
+# Attempt to read from closed
+# Read multiple frames (use dummyws), may require change
+# InterruptException
+# Protocol error (not masked from client)
+# writeguarded, error
+
+
+# HTTP
+# open with optionalprotocol (change to subprotocol)
+# open with rejected Protocol
+# open bad reply to key during handshake (writeframe, dummyws)
+# improve error handling in HTTP.open (may require change)
+# HTTP messages that are not upgrades
+# ugrade with single argument function
+# ServeWS with https
+# stop ServeWS with InterruptException
+# listen with http request
+
+# HttpServer
+# exit without closing websocket 
+# is_websocket_handshake with normal request

@@ -189,7 +189,7 @@ function is_upgrade(r::HTTP.Message)
     return false
 end
 # Inline docs in 'WebSockets.jl'
-target(req::HTTP.Messages.Request) = req.resource
+target(req::HTTP.Messages.Request) = req.target
 subprotocol(req::HTTP.Messages.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
 origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")
 
