@@ -20,6 +20,7 @@ server_WS = WebSockets.ServerWS(
     HTTP.HandlerFunction(req-> HTTP.Response(200)), 
     WebSockets.WebsocketHandler(ws-> sleep(16)))
 @schedule WebSockets.serve(server_WS, "127.0.0.1", THISPORT, false)
+sleep(3)
 URL = "ws://127.0.0.1:$THISPORT"
 res = WebSockets.open((_)->nothing, URL);
 @test res.status == 101

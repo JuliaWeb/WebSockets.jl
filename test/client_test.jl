@@ -19,7 +19,7 @@ addsubproto("xml")
         WebSockets.upgrade((_)->nothing, s) 
     end
 end
-
+sleep(3)
 # open client with approved subprotocol
 const URL = "ws://127.0.0.1:$NEWPORT"
 res = WebSockets.open((_)->nothing, URL, subprotocol = "xml");
