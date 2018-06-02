@@ -379,7 +379,7 @@ function read_frame(ws::WebSocket)
         end
         throw(WebSocketError(1002, msg))
     end
-    *
+
     payload_len::UInt64 = b & 0b0111_1111
     if payload_len == 126
         payload_len = ntoh(read(ws.socket,UInt16))  # 2 bytes
