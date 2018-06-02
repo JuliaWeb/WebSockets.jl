@@ -19,7 +19,7 @@ On exit, a closing handshake is started. If the server is not currently reading
 (which is a blocking function), this side will reset the underlying connection (ECONNRESET) 
 after a reasonable amount of time and continue execution.
 """
-function open(f::Function, url; verbose=false, optionalProtocol = "", kw...)
+function open(f::Function, url; verbose=false, subprotocol = "", kw...)
 
     key = base64encode(rand(UInt8, 16))
     headers = [
@@ -28,44 +28,54 @@ function open(f::Function, url; verbose=false, optionalProtocol = "", kw...)
         "Sec-WebSocket-Key" => key,
         "Sec-WebSocket-Version" => "13"
     ]
-    if optionalProtocol != ""
-        push!(headers, "Sec-WebSocket-Protocol" => optionalProtocol )
+    if subprotocol != ""
+        push!(headers, "Sec-WebSocket-Protocol" => subprotocol )
     end
 
     try
         HTTP.open("GET", url, headers;
                 reuse_limit=0, verbose=verbose ? 2 : 0, kw...) do http
-
-            HTTP.startread(http)
-
-            status = http.message.status
-            if status != 101
-                return
-            end
-
-            check_upgrade(http)
-
-            if HTTP.header(http, "Sec-WebSocket-Accept") != generate_websocket_key(key)
-                throw(WebSocketError(0, "Invalid Sec-WebSocket-Accept\n" *
-                                        "$(http.message)"))
-            end
-
-            io = HTTP.ConnectionPool.getrawstream(http)
-            ws = WebSocket(io,false)
-            try
-                f(ws)
-            finally
-                close(ws)
-            end
-        end
+                    _openstream(f, http, key)
+                end
     catch err
-        if typeof(err) == Base.UVError
-            warn(STDERR, err)
+        # TODO don't pass on WebSocketClosedError and other known ones.
+        if typeof(err) <: Base.UVError
+            throw(WebSocketClosedError(" while open ws|client: $(string(err))"))
+        elseif typeof(err) <: HTTP.ExceptionRequest.StatusError
+            return err.response
         else 
-            rethrow(err)
+           rethrow(err) 
         end
     end
 end
+"Called by open with a stream connected to a server, after handshake is initiated"
+function _openstream(f::Function, http::HTTP.Streams.Stream, key::String)
+
+    HTTP.startread(http)
+
+    status = http.message.status
+    if status != 101
+        return
+    end
+    
+    check_upgrade(http)
+
+    if HTTP.header(http, "Sec-WebSocket-Accept") != generate_websocket_key(key)
+        throw(WebSocketError(0, "Invalid Sec-WebSocket-Accept\n" *
+                                "$(http.message)"))
+    end
+
+    io = HTTP.ConnectionPool.getrawstream(http)
+    ws = WebSocket(io,false)
+    try
+        f(ws)
+    finally
+        close(ws)
+    end
+    
+end
+
+
 """
 Used as part of a server definition. Call this if
 is_upgrade(http.message) returns true.
@@ -150,6 +160,7 @@ function upgrade(f::Function, http::HTTP.Stream)
             f(ws)
         end
     catch err
+        # TODO improve
         warn("WebSockets.HTTP.upgrade: Caught unhandled error while calling argument function f, the handler / gatekeeper:\n\t")
         mt = typeof(f).name.mt
         fnam = splitdir(string(mt.defs.func.file))[2]
@@ -213,10 +224,13 @@ end
 
 
 """
-A ServerWS is a variant of HTTP.Server
-which aims to hook into some of the higher-level functionality.
-It is also possible to hook into the lower-level functionality
-using `listen`.
+WebSockets.ServerWS is a variant of HTTP.Server which
+also includes a WebSockets.WebSocketHandler.
+Most or all of the functionality can alternaively be accessed with 
+'listen'
+ ``` julia
+    se = WebSockets.ServerWS(::HTTP.HandlerFunction, WebSockets.WebsocketHandler(gatekeeper))
+ ```
 """
 mutable struct ServerWS{T <: HTTP.Servers.Scheme, H <: HTTP.Handler, W <: WebsocketHandler}
     handler::H
@@ -230,8 +244,6 @@ mutable struct ServerWS{T <: HTTP.Servers.Scheme, H <: HTTP.Handler, W <: Websoc
                  options=HTTP.ServerOptions()) where {T, H, W} =
         new{T, H, W}(handler, wshandler, logger, ch, ch2, options)
 end
-
-
 
 ServerWS(h::Function, w::Function, l::IO=HTTP.compat_stdout(); 
             cert::String="", key::String="", args...) = ServerWS(HTTP.HandlerFunction(h), WebsocketHandler(w), l;
@@ -250,7 +262,12 @@ function ServerWS(handler::H,
     return serverws
 end
 
-
+"""
+A variant of HTTP.serve with the WebSockets.ServerWS type.
+```julia
+    @shedule WebSockets.serve(myServerWS, "127.0.0.1", 8080, false)
+```
+"""
 function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
 
     tcpserver = Ref{HTTP.Sockets.TCPServer}()

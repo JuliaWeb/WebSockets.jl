@@ -16,6 +16,10 @@ includes another Julia session, parallel process or task.
     Future improvements:
 1. Logging of refused requests and closures due to bad behavior of client.
 2. Allow users to receive control messages if they want to.
+3. Check rsv1 to rsv3 values. This will reduce bandwidth.
+4. Optimize maskswitch!, possibly threaded above a certain limit.
+5. Split messages over several frames.
+6. Allow customizable output (e.g. 'ping'). See HttpServer listen.
 """
 module WebSockets
 import MbedTLS: digest, MD_SHA1
@@ -362,7 +366,6 @@ function read_frame(ws::WebSocket)
     rsv2   = a & 0b0010_0000  # If not 0, fail.
     rsv3   = a & 0b0001_0000  # If not 0, fail.
     opcode = a & 0b0000_1111  # If not known code, fail.
-    # TODO: add validation somewhere to ensure rsv, opcode, mask, etc are valid.
 
     b = ab[2]
     mask = b & 0b1000_0000 >>> 7
@@ -376,7 +379,7 @@ function read_frame(ws::WebSocket)
         end
         throw(WebSocketError(1002, msg))
     end
-    
+    *
     payload_len::UInt64 = b & 0b0111_1111
     if payload_len == 126
         payload_len = ntoh(read(ws.socket,UInt16))  # 2 bytes
