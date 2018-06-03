@@ -13,7 +13,8 @@ sethd(r::HTTP.Messages.Response, pa::Pair) = HTTP.Messages.setheader(r, HTTP.Hea
 const NEWPORT = 8091
 const TCPREF2 = Ref{Base.TCPServer}()
 
-# start HTTP server 
+info("start HTTP server\n")
+sleep(1)
 addsubproto("xml")
 tas = @schedule HTTP.listen("127.0.0.1", NEWPORT, tcpref = TCPREF2) do s
     if WebSockets.is_upgrade(s.message)
@@ -22,16 +23,19 @@ tas = @schedule HTTP.listen("127.0.0.1", NEWPORT, tcpref = TCPREF2) do s
 end
 while !istaskstarted(tas);yield();end
 
-# open client with approved subprotocol
+info("open client with approved subprotocol\n")
+sleep(1)
 URL = "ws://127.0.0.1:$NEWPORT"
 res = WebSockets.open((_)->nothing, URL, subprotocol = "xml");
 @test res.status == 101
 
-# open with unknown subprotocol
+info("open with unknown subprotocol\n")
+sleep(1)
 res = WebSockets.open((_)->nothing, URL, subprotocol = "unapproved");
 @test res.status == 400
 
-# try open with uknown port
+info("try open with uknown port\n")
+sleep(1)
 caughterr = WebSockets.WebSocketClosedError("")
 try 
 WebSockets.open((_)->nothing, "ws://127.0.0.1:8099");
@@ -41,24 +45,29 @@ end
 @test typeof(caughterr) <: WebSockets.WebSocketClosedError
 @test caughterr.message == " while open ws|client: connect: connection refused (ECONNREFUSED)"
 
-# start a client websocket that irritates by closing the TCP stream
-# connection without a websocket closing handshake. This 
-# throws an error in the server task
+info("start a client websocket that irritates by closing the TCP stream
+ connection without a websocket closing handshake. This 
+ throws an error in the server task\n")
+sleep(1)
 WebSockets.open("ws://127.0.0.1:$(NEWPORT)") do ws
     close(ws.socket)
 end
 
-# check that the server is still running regardless
+info("check that the server is still running regardless\n")
+sleep(1)
 res = WebSockets.open((_)->nothing, URL);
 @test res.status == 101
 
-# Open with a ws client handler that throws a domain error
+info("Open with a ws client handler that throws a domain error\n")
+sleep(1)
 @test_throws DomainError WebSockets.open((_)->sqrt(-2), URL);
 
-# Stop the TCP server
+info("Stop the TCP server\n")
+sleep(1)
 close(TCPREF2[])
-
-# emulate a correct first accept response from server
+sleep(1)
+info("Emulate a correct first accept response from server, with BufferStream socket\n")
+sleep(1)
 req = HTTP.Messages.Request()
 req.method = "GET"
 key = base64encode(rand(UInt8, 16))
@@ -77,7 +86,8 @@ function dummywsh(dws::WebSockets.WebSocket{BufferStream})
 end
 @test _openstream(dummywsh, s, key) == WebSockets.CLOSED
 
-# emulate an incorrect first accept response from server
+info("emulate an incorrect first accept response from server\n")
+sleep(1)
 sethd(resp, "Sec-WebSocket-Accept" => generate_websocket_key(base64encode(rand(UInt8, 16))))
 write(servsock, resp)
 @test_throws WebSockets.WebSocketError _openstream(dummywsh, s, key)

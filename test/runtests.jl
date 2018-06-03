@@ -29,9 +29,6 @@ info("\nAbrupt close & error handling test\n")
     include("error_test.jl");sleep(1)
 end
 
-@testset "Bad frames, multiframes, loaded ping" begin
-    include("error_test.jl");sleep(1)
-end
 end
 # TODO
 # restructure browsertests
