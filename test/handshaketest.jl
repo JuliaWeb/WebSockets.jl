@@ -114,13 +114,13 @@ for r in templaterequests()
     @test handshakeresponse(r) == REJECT
 end
 
-info("add simple subprotocol to acceptable list")
+#  add simple subprotocol to acceptable list
 @test true == WebSockets.addsubproto("xml") 
 
-info("add subprotocol with difficult name")
+# add subprotocol with difficult name
 @test true == WebSockets.addsubproto("my.server/json-zmq")
 
-info("Test handshake subprotocol now acceptable")
+# "Test handshake subprotocol now acceptable"
 for r in templaterequests()
     sethd(r, "Sec-WebSocket-Version"    => "13")
     sethd(r,  "Sec-WebSocket-Key"        => "16 bytes key this is surely")

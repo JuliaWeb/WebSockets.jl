@@ -21,16 +21,18 @@ const port_HttpServer = 8081
 const TCPREF = Ref{Base.TCPServer}()
 
 # Start HTTP listen server on port $port_HTTP"
-@schedule HTTP.listen("127.0.0.1", port_HTTP, tcpref = TCPREF) do s
+tas = @schedule HTTP.listen("127.0.0.1", port_HTTP, tcpref = TCPREF) do s
     if WebSockets.is_upgrade(s.message)
         WebSockets.upgrade(echows, s) 
     end
 end
+while !istaskstarted(tas);yield();end
 
 # Start HttpServer on port $port_HttpServer
 const server = Server(HttpHandler((req, res)->Response(200)), 
                       WebSocketHandler(echows));
-@schedule run(server, port_HttpServer)
+tas = @schedule run(server, port_HttpServer)
+while !istaskstarted(tas);yield();end
 
 
 # Start HTTP ServerWS on port $port_HTTP_ServeWS
@@ -38,10 +40,9 @@ server_WS = WebSockets.ServerWS(
     HTTP.HandlerFunction(req-> HTTP.Response(200)), 
     WebSockets.WebsocketHandler(echows))
 
-@schedule WebSockets.serve(server_WS, "127.0.0.1", port_HTTP_ServeWS, false)
+tas = @schedule WebSockets.serve(server_WS, "127.0.0.1", port_HTTP_ServeWS, false)
+while !istaskstarted(tas);yield();end
 
-
-sleep(4)
 const servers = [
     ("HTTP",        "ws://127.0.0.1:$(port_HTTP)"), 
     ("HttpServer",  "ws://127.0.0.1:$(port_HttpServer)"),
@@ -66,7 +67,6 @@ for (s, url) in servers, len in lengths, closestatus in [false, true]
         write(ws, test_str)
         @test String(read(ws)) == forcecopy_str
         closestatus && close(ws, statusnumber = 1000)
-        sleep(0.2)
     end
     sleep(0.2)
 end

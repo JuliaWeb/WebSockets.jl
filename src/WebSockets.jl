@@ -34,7 +34,8 @@ export WebSocket,
        target,
        origin,
        send_ping,
-       send_pong
+       send_pong,
+       WebSocketClosedError
 
 const TCPSock = Base.TCPSocket
 "A reasonable amount of time"
@@ -206,20 +207,25 @@ send_pong(ws, data...) = write_pong(ws.socket, !ws.server, data...)
 
 """
     close(ws::WebSocket)
-    close(ws::WebSocket, statusnumber)
+    close(ws::WebSocket, statusnumber = n)
+    close(ws::WebSocket, statusnumber = n, freereason = "my reason")
 Send an OPCODE_CLOSE frame, and wait for the same response or until
 a reasonable amount of time, $(round(TIMEOUT_CLOSEHANDSHAKE, 1)) s, has passed. 
 Data received while closing is dropped.
-Status codes according to RFC 6455 7.4.1 can be included, see WebSockets.codeDesc
+Status number n according to RFC 6455 7.4.1 can be included, see WebSockets.codeDesc
 """
-function Base.close(ws::WebSocket; statusnumber = 0)
+function Base.close(ws::WebSocket; statusnumber = 0, freereason = "")
     if isopen(ws)
         ws.state = CLOSING
         if statusnumber == 0
             locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, UInt8[])
-        else
+        elseif freereason == ""
             statuscode = reinterpret(UInt8, [hton(UInt16(statusnumber))])
-            locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, statuscode)
+            locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, copy(statuscode))
+        else 
+            statuscode = vcat(reinterpret(UInt8, [hton(UInt16(statusnumber))]), 
+                                Vector{UInt8}(freereason))
+            locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, copy(statuscode))
         end
 
         # Wait till the peer responds with an OPCODE_CLOSE while discarding any
@@ -320,7 +326,6 @@ is_control_frame(msg::WebSocketFragment) = (msg.opcode & 0b0000_1000) > 0
 """ Respond to pings, ignore pongs, respond to close."""
 function handle_control_frame(ws::WebSocket, wsf::WebSocketFragment)
     if wsf.opcode == OPCODE_CLOSE
-        #info("ws|$(ws.server ? "server" : "client") received OPCODE_CLOSE")
         ws.state = CLOSED
         try
             locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, UInt8[])
@@ -336,9 +341,7 @@ function handle_control_frame(ws::WebSocket, wsf::WebSocketFragment)
             scode = Int(reinterpret(UInt16, reverse(wsf.data[1:2]))[1])
             reason = string(scode) * ":" * String(wsf.data[3:end])
         end
-        #info(reason)
-        throw("ws|$(ws.server ? "server" : "client") received OPCODE_CLOSE, replied with same. " *
-               "Received reason: " * reason)
+        throw(WebSocketClosedError("ws|$(ws.server ? "server" : "client") respond to OPCODE_CLOSE " * reason))
     elseif wsf.opcode == OPCODE_PING
         info("ws|$(ws.server ? "server" : "client") received OPCODE_PING")
         send_pong(ws, wsf.data)
@@ -357,8 +360,7 @@ function read_frame(ws::WebSocket)
     #=
     Browsers will seldom close in the middle of writing to a socket,
     but other clients often do, and the stacktraces can be very long.
-    ab can be assigned, but of length 1. An enclosing try..catch in the calling function
-    seems to
+    ab can be assigned, but of length 1. Use an enclosing try..catch in the calling function
     =#
     a = ab[1]
     fin    = a & 0b1000_0000 >>> 7  # If fin, then is final fragment
@@ -371,7 +373,7 @@ function read_frame(ws::WebSocket)
     mask = b & 0b1000_0000 >>> 7
     hasmask = mask != 0
 
-    if mask != ws.server
+    if hasmask != ws.server
         if ws.server
             msg = "WebSocket|server cannot handle incoming messages without mask. Ref. rcf6455 5.3"
         else
@@ -429,13 +431,14 @@ function Base.read(ws::WebSocket)
         try
             errtyp = typeof(err)
             if errtyp <: InterruptException 
+                msg = " while read(ws|$(ws.server ? "server" : "client") received InterruptException."
                 # This exception originates from this side. Follow close protocol so as not to irritate the other side.
-                close(ws)
-                throw(WebSocketClosedError(" while read(ws|$(ws.server ? "server" : "client") received local interrupt exception. Performed closing handshake."))
+                close(ws, statusnumber = 1006, freereason = msg)
+                throw(WebSocketClosedError(msg * " Performed closing handshake."))
             elseif errtyp <: WebSocketError 
                 # This exception originates on the other side. Follow close protocol with reason.
                 close(ws, statusnumber = err.status)
-                throw(WebSocketClosedError(" while read(ws|$(ws.server ? "server" : "client") $(err.message) - Performed closing handshake."))
+                throw(WebSocketClosedError(" while read(ws|$(ws.server ? "server" : "client")) $(err.message) - Performed closing handshake."))
             elseif  errtyp <: Base.UVError ||
                     errtyp <: Base.BoundsError ||
                     errtyp <: Base.EOFError ||

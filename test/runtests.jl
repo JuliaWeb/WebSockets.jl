@@ -1,36 +1,37 @@
 using Base.Test
 cd(Pkg.dir("WebSockets", "test"))
-# WebSockets.jl
-@testset "Fragment and frame unit tests" begin
-    include("frametest.jl")
-end
 
 @sync yield() # avoid mixing of  output with possible deprecation warnings from .juliarc 
-info("Starting test WebSockets...")
 
-@testset "Unit test, HttpServer and HTTP handshake" begin
-    include("handshaketest.jl")
+@testset "WebSockets" begin
+info("\nFragment and unit tests\n")
+@testset "Fragment and frame unit tests" begin
+    include("frametest.jl");sleep(1)
 end
 
+info("\nHttpServer and HTTP handshake\n")
+@testset "HttpServer and HTTP handshake" begin
+    include("handshaketest.jl");sleep(1)
+end
+
+info("\nClient-server test, HTTP client\n")
 @testset "Client-server test, HTTP client" begin
-    include("client_server_test.jl")
+    include("client_server_test.jl");sleep(1)
 end
+
+info("\nClient test, HTTP client\n")
 @testset "Client test, HTTP client" begin
-    include("client_test.jl")
+    include("client_test.jl");sleep(1)
 end
 
-
-@testset "WebSockets abrupt close & bad timing test" begin
-    include("error_test.jl")
+info("\nAbrupt close & error handling test\n")
+@testset "Abrupt close & error handling test" begin
+    include("error_test.jl");sleep(1)
 end
 
+@testset "Bad frames, multiframes, loaded ping" begin
+    include("error_test.jl");sleep(1)
+end
+end
 # TODO
-# WebSockets.jl
-# direct closing of tcp socket, while reading.
-# closing with given reason (only from browsertests)
-# unknown opcode
-# Read multiple frames (use dummyws), may require change
-# InterruptException
-# Protocol error (not masked from client)
-# writeguarded, error
 # restructure browsertests

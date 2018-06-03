@@ -10,7 +10,7 @@ import HTTP.Header
 using ..WebSockets
 # We want to log to a separate file, so
 # we use our own instance of logutils_ws here.
-import logutils_ws: logto, clog, zlog, zflush
+import logutils_ws: logto, clog, zlog, zflush, clog_notime
 const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
 const SERVEFILE = "bce.html"
 const PORT = 8000

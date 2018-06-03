@@ -1,8 +1,8 @@
 info("Loading HTTP methods...")
 
 """
-Initiate a websocket connection to server defined by url. If the server accepts
-the connection and the upgrade to websocket, f is called with an open client type websocket.
+Initiate a websocket|client connection to server defined by url. If the server accepts
+the connection and the upgrade to websocket, f is called with an open websocket|client
 
 e.g. say hello, close and leave 
 ```julia
@@ -113,7 +113,7 @@ try
         end
     end
 catch err
-    showerror(err)
+    showerror(STDERR, err)
     println.(catch_stacktrace()[1:4])
 end
 ```
@@ -153,19 +153,20 @@ function upgrade(f::Function, http::HTTP.Stream)
     # Pass the connection on as a WebSocket.
     io = HTTP.ConnectionPool.getrawstream(http)
     ws = WebSocket(io, true)
+    # If the callback function f has two methods,
+    # prefer the more secure one which takes (request, websocket)
     try
         if applicable(f, http.message, ws)
             f(http.message, ws)
         else
             f(ws)
         end
-    catch err
-        # TODO improve
-        warn("WebSockets.HTTP.upgrade: Caught unhandled error while calling argument function f, the handler / gatekeeper:\n\t")
-        mt = typeof(f).name.mt
-        fnam = splitdir(string(mt.defs.func.file))[2]
-        print_with_color(:yellow, STDERR, "f = ", string(f) * " at " * fnam * ":" * string(mt.defs.func.line) * "\nERROR:\t")
-        showerror(STDERR, err, catch_stacktrace())
+#    catch err
+#        warn("WebSockets.HTTP.upgrade: Caught unhandled error while calling argument function f, the handler / gatekeeper:\n\t")
+#        mt = typeof(f).name.mt
+#        fnam = splitdir(string(mt.defs.func.file))[2]
+#        print_with_color(:yellow, STDERR, "f = ", string(f) * " at " * fnam * ":" * string(mt.defs.func.line) * "\nERROR:\t")
+#        showerror(STDERR, err, catch_stacktrace())
     finally
         close(ws)
     end
@@ -240,7 +241,7 @@ mutable struct ServerWS{T <: HTTP.Servers.Scheme, H <: HTTP.Handler, W <: Websoc
     out::Channel{Any}
     options::HTTP.ServerOptions
 
-    ServerWS{T, H, W}(handler::H, wshandler::W, logger::IO = HTTP.compat_stdout(), ch=Channel(1), ch2=Channel(1),
+    ServerWS{T, H, W}(handler::H, wshandler::W, logger::IO = HTTP.compat_stdout(), ch=Channel(1), ch2=Channel(2),
                  options=HTTP.ServerOptions()) where {T, H, W} =
         new{T, H, W}(handler, wshandler, logger, ch, ch2, options)
 end
@@ -255,18 +256,30 @@ function ServerWS(handler::H,
                 key::String = "",
                 args...) where {H <: HTTP.Handler, W <: WebsocketHandler}
     if cert != "" && key != ""
-        serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler, logger, Channel(1), Channel(1), HTTP.ServerOptions(; sslconfig=HTTP.MbedTLS.SSLConfig(cert, key), args...))
+        serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler, logger, Channel(1), Channel(2), HTTP.ServerOptions(; sslconfig=HTTP.MbedTLS.SSLConfig(cert, key), args...))
     else
-        serverws = ServerWS{HTTP.Servers.http, H, W}(handler, wshandler, logger, Channel(1), Channel(1), HTTP.ServerOptions(; args...))
+        serverws = ServerWS{HTTP.Servers.http, H, W}(handler, wshandler, logger, Channel(1), Channel(2), HTTP.ServerOptions(; args...))
     end
     return serverws
 end
 
 """
 A variant of HTTP.serve with the WebSockets.ServerWS type.
+Puts any caught error and stacktrace on the serve.out channel.
 ```julia
     @shedule WebSockets.serve(myServerWS, "127.0.0.1", 8080, false)
 ```
+After a suspected 'connection task' failure:
+```julia
+    if isready(myserver_WS.out)
+        err = take!(myserver_WS.out)
+        @test typeof(err) <: WebSocketClosedError
+    end
+    if isready(myserver_WS.out)
+        stack_trace = take!(server_WS.out)
+    end
+```
+
 """
 function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
 
@@ -291,12 +304,16 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
                                                      (tcp; kw...) -> true,
            ratelimits = Dict{IPAddr, HTTP.Servers.RateLimit}(),
            ratelimit = server.options.ratelimit) do stream::HTTP.Stream
-
-                    if is_upgrade(stream.message)
-                        upgrade(server.wshandler.func, stream)
-                    else
-                        HTTP.Servers.handle_request(server.handler.func, stream)
-                    end
-    end
+                            try
+                                if is_upgrade(stream.message)
+                                    upgrade(server.wshandler.func, stream)
+                                else
+                                    HTTP.Servers.handle_request(server.handler.func, stream)
+                                end
+                            catch err
+                                put!(server.out, err)
+                                put!(server.out, catch_stacktrace())
+                            end
+            end
     return
 end
