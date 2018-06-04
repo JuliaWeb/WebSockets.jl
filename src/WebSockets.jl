@@ -611,7 +611,8 @@ E.g.
 function gatekeeper(req, ws)
     orig = WebSockets.origin(req)
         if startswith(orig, "http://localhost") || startswith(orig, "http://127.0.0.1")
-        handlewebsocket(ws)
+            handlewebsocket(ws)
+        end
     end
 end
 ```

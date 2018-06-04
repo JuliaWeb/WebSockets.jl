@@ -3,21 +3,46 @@ WebSockets.jl
 
 [![Build Status](https://travis-ci.org/JuliaWeb/WebSockets.jl.png)](https://travis-ci.org/JuliaWeb/WebSockets.jl)
 [![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg)](https://coveralls.io/r/JuliaWeb/WebSockets.jl)
-
 [![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6)
 
-Temporary badges:
-[![Build status](https://ci.appveyor.com/api/projects/status/sx6i51rjc9ajjdh8?svg=true)](https://ci.appveyor.com/project/hustf/websockets-jl-nfuiv)
 
-[![Build status](https://ci.appveyor.com/api/projects/status/sx6i51rjc9ajjdh8/branch/master?svg=true)](https://ci.appveyor.com/project/hustf/websockets-jl-nfuiv/branch/master)
+# (still temporary version)
+[Websockets](https://tools.ietf.org/html/rfc6455) is a message protocol on top of TCP with less overhead and restrictions than HTTP(S). Originally, scripts hosted on a web page initiated the connection via HTTP/S. This implementation can now act as either client (`open`) or server (`listen` or `serve`).
 
-[![Build status](https://ci.appveyor.com/api/projects/status/sx6i51rjc9ajjdh8/branch/master?svg=true)](https://ci.appveyor.com/project/hustf/websockets-jl-nfuiv/branch/change_dependencies)
 
-This is an implementation of the WebSockets protocol in Julia for both server-side and client-side applications.
+Client websockets are created by calling `open`. Just import [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl) before
+WebSockets.
 
-This package works with either [HttpServer.jl](https://github.com/JuliaWeb/HttpServer.jl) or [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl), which is what you use to set up a server that accepts HTTP(S) connections.
+Server websockets are always asyncronous [tasks](https://docs.julialang.org/en/stable/stdlib/parallel/#Tasks-1), spawned by 
+[HttpServer.jl](https://github.com/JuliaWeb/HttpServer.jl) or HTTP.jl.
 
-## Using with HttpServer.jl
+
+## What does `WebSockets.jl` enable?
+- read
+- write
+- build a network
+- heartbeating
+- define your own protocols, or implement existing ones
+- low latency and overhead
+
+Some other [protocols](https://github.com/JuliaInterop) struggle including browsers and Javascript in the network, although for example ZMQ / IJulia / Jupyter says otherwise. WebSockets are well suited for user interactions via a browser. When respecting Javascript as a compiled language with powerful parallel capabilities, user interaction and graphics workload, even development can be moved off Julia resources.
+
+You may also prefer Julia packages [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) or the implementation directly in HTTP.jl itself.
+
+## What are the main downsides to WebSockets (in Julia)?
+
+- Logging. We need customizable and very fast logging for building networked applications.
+- Security. Http(s) servers are currently not working. Take care.
+- Non-compliant proxies on the internet, company firewalls. Commercial applications often use competing technologies for this reason. HTTP.jl lets you access the network without the restriction of structured messages.
+- 'Warm-up', i.e. compilation when a method is first used. These are excluded from current benchmarks.
+- Garbage collection, which increases message latency at semi-random intervals. See benchmark plots.
+- TCP. If a connection is broken, the underlying protocol will throw ECONNRESET messages.
+- TCP quirks, including 'warm-up' time with low transmission speed after a pause. Heartbeats can alleviate.
+- Neither HTTP.jl or HttpServer.jl are made just for connecting WebSockets. You may need strong points from both. 
+- The optional dependencies increases load time compared to fixed dependencies.
+
+
+## Server side
 
 As a first example, we can create a WebSockets echo server:
 
@@ -25,47 +50,92 @@ As a first example, we can create a WebSockets echo server:
 using HttpServer
 using WebSockets
 
-wsh = WebSocketHandler() do req,client
-    while true
-        msg = read(client)
-        println(msg) # Write the received message to the REPL
-        write(client, msg)
+function coroutine(ws)
+    while isopen(ws)
+        data, = readguarded(ws)
+        s = String(data)
+        if s == ""
+            break
+        end
+        println(s)
+        if s[1] == "P"
+            writeguarded(ws, "No, I'm not!")
+        else
+            writeguarded(ws, "Why?")
+        end
     end
-  end
+end
 
-server = Server(wsh)
-run(server,8080)
+function gatekeeper(req, ws)
+    if origin(req) == "http://127.0.0.1:8080" || origin(req) == "http://localhost:8080"
+        coroutine(ws)
+    else
+        println(origin(req))
+    end
+end
+
+handle(req, res) = Response(200)
+
+server = Server(HttpHandler(handle), 
+                WebSocketHandler(gatekeeper))
+
+run(server, 8080)
 ```
 
-This sets up a server running on localhost, port 8080.
-It will accept WebSockets connections.
-The function in `wsh` will be called once per connection; it takes over that connection.
-In this case, it reads each `msg` from the `client` and then writes the same message back: a basic echo server.
+Now open a browser on http://127.0.0.1:8080/ and press F12. In the console, type the lines following ≫:
+```javascript
+≫ws = new WebSocket("ws://127.0.0.1:8080")
+ ← WebSocket { url: "ws://127.0.0.1:8080/", readyState: 0, bufferedAmount: 0, onopen: null, onerror: null, onclose: null, extensions: "", protocol: "", onmessage: null, binaryType: "blob" }
+≫ws.send("Peer, you're lying!")
+ ← undefined
+≫ws.onmessage = function(e){console.log(e.data)}
+ ← function onmessage()
+≫ws.send("Well, then.")
+ ← undefined
+Why?                                        debugger eval code:1:28
+```
 
-The function that you pass to the `WebSocketHandler` constructor takes two arguments:
-a `Request` from [HttpCommon.jl](https://github.com/JuliaWeb/HttpCommon.jl/blob/master/src/HttpCommon.jl#L142),
-and a `WebSocket` from [here](https://github.com/JuliaWeb/WebSockets.jl/blob/master/src/WebSockets.jl#L17).
+If you now navigate or close the browser, this happens:
+1. the client side of the websocket connection will quickly send a close request and go away. 
+2. Server side `readguarded(ws)` has been waiting for messages, but instead closes 'ws' and returns ("", false)
+3. `coroutine(ws)` is finished and the task's control flow returns to HttpServer 
+4. HttpServer does nothing other than exit this task. In fact, it often crashes because
+    somebody else (the browser) has closed the underlying TCP stream. If you had replaced the last Julia line with '@async run(server, 8080', you would see some long error messages.
+5. The server, which spawned the task, continues to listen for incoming connections, and you're stuck. Ctrl + C!
 
-## Using with HTTP.jl
+You could replace 'using HttpServer' with 'using HTTP'. Also:
+    Serve -> ServeWS
+    HttpHandler -> HTTP.Handler
+    WebSocketHandler -> WebSockets.WebsocketHandler
 
-The following example demonstrates how to use WebSockets.jl as bother a server and client.
+
+## Client side
+
+You need to use [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl). 
+
+What you can't do is use a browser as the server side. The server side can be the example above, running in an asyncronous task. The server can also be running in a separate REPL, or in a a parallel task. The benchmarks puts the `client` side on a parallel task. 
+
+The following example 
+- runs server in an asyncronous task, client in the REPL control flow
+- uses [Do-Block-Syntax](https://docs.julialang.org/en/v0.6.3/manual/functions/#Do-Block-Syntax-for-Function-Arguments-1), which is a style choice
+- the server `ugrade` skips checking origin(req)`
+- the server is invoked with `listen(..)` instead of `serve()`
+- read(ws) and write(ws, msg) instead of readguarded(ws), writeguarded(ws) 
 
 ```julia
 
 using HTTP
 using WebSockets
-using Base.Test
 
-port = 8000
+const PORT = 8080
 
-# Start the echo server
-@async HTTP.listen("127.0.0.1",UInt16(port)) do http
+# Server side
+@async HTTP.listen("127.0.0.1", PORT) do http
     if WebSockets.is_upgrade(http.message)
-        WebSockets.upgrade(http) do ws
-            while ws.state == WebSockets.CONNECTED
+        WebSockets.upgrade(http) do req, ws
+            while isopen(ws)
                 msg = String(read(ws))
-                println(msg) # Write the received message to the REPL
-                write(ws,msg)
+                write(ws, msg)
             end
         end
     end
@@ -73,86 +143,30 @@ end
 
 sleep(2)
 
-# Connect a client to the server above
-WebSockets.open("ws://127.0.0.1:$(port)") do ws
-    write(ws, "Foo")
-    @test String(read(ws)) == "Foo"
 
-    write(ws, "Bar")
-    @test String(read(ws)) == "Bar"
-
-    close(ws)
+WebSockets.open("ws://127.0.0.1:$PORT") do ws
+    write(ws, "Peer, about your hunting")
+    println("echo received:" * String(read(ws)))
 end
 ```
 
-## What can you do with a `WebSocket`?
-You can:
+The output in a console session is barely readable, which is irritating. To build real-time applications, we need more code.
 
-* `write` data to it
-* `read` data from it
-* send `ping` or `pong` messages
-* `close` the connection
+Some logging utilties for a running relay server are available in /logutils.
+
+
 
 ## Installation/Setup
 
-WebSockets.jl must be used with either HttpServer.jl or HTTP.jl, but neither is a dependency of this package, so you will need to first add one of the two, i.e.
+WebSockets.jl must be used with either HttpServer.jl or HTTP.jl, but neither is a dependency of this package. You will need to first add one or both, i.e.:
 
 ~~~julia
 julia> Pkg.add("HttpServer")
-~~~
-
-or
-
-~~~julia
 julia> Pkg.add("HTTP")
-~~~
-
-Once you have one of the two, you can add WebSockets.jl via
-
-~~~julia
 julia> Pkg.add("WebSockets")
 ~~~
 
-At this point, you can use the examples below to test that it all works.
 
-## [Chat client/server example](https://github.com/JuliaWeb/WebSockets.jl/blob/master/examples/chat.jl):
-
-1. From the REPL, run
-
-```julia
-include(joinpath(Pkg.dir("WebSockets"),"examples","chat.jl"));
-```
-
-2. In a web browser, open `localhost:8000`
-3. You should see a basic IRC-like chat application
-
-
-## Echo server example:
-
-~~~julia
-using HttpServer
-using WebSockets
-
-wsh = WebSocketHandler() do req,client
-    while true
-        msg = read(client)
-        write(client, msg)
-    end
-  end
-
-server = Server(wsh)
-run(server,8080)
-~~~
-
-To play with a WebSockets echo server, you can:
-
-1. Paste the above code in to the Julia REPL
-2. Open `localhost:8080` in Chrome
-3. Open the Chrome developers tools console
-4. Type `ws = new WebSocket("ws://localhost:8080");` into the console
-5. Type `ws.send("hi")` into the console and you should see "hi" printed to the REPL
-6. Switch to the 'Network' tab; click on the request; click on the 'frames' tab.
-7. You will see the two frames containing "hi": one sent and one received.
 
 ~~~~
 ::::::::::::::::
