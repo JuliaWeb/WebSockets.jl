@@ -1,13 +1,12 @@
 environment:
   matrix:
   - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x64/0.6/julia-0.6-latest-win64.exe"
-  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x64/0.5/julia-0.5-latest-win64.exe"
   - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x86/0.6/julia-0.6-latest-win32.exe"
-  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x86/0.5/julia-0.5-latest-win32.exe"
 # HttpCommon not building yet  - JULIA_URL: "https://julialangnightlies-s3.julialang.org/bin/winnt/x64/julia-latest-win64.exe"
 # HttpCommon not building yet  - JULIA_URL: "https://julialangnightlies-s3.julialang.org/bin/winnt/x86/julia-latest-win32.exe"
 branches:
   only:
+    - change_dependencies
     - master
     - /release-.*/
 
@@ -35,7 +34,7 @@ build_script:
   - IF EXIST .git\shallow (git fetch --unshallow)
   - ps: |
       Write-Host "This is PowerShell - STDERR output will be red. Redirect! "
-      $env:PATH+=";C:\projects\julia\bin\"    
+      $env:PATH+=";C:\projects\julia\bin\"
       julia -e 'versioninfo();redirect_stderr(STDOUT);println(STDOUT, \"stdout\"); println(STDERR, \"stderr\")'
       julia -e 'redirect_stderr(STDOUT);Pkg.init()'
       julia --depwarn=no -e 'redirect_stderr(STDOUT);Pkg.add(\"HttpServer\");using HttpServer;'

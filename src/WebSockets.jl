@@ -1,64 +1,88 @@
 __precompile__()
 """
     WebSockets
-This module implements the server side of the WebSockets protocol. Some
-things would need to be added to implement a WebSockets client, such as
-masking of sent frames.
+This module implements the WebSockets protocol.
 
-WebSockets expects to be used with HttpServer to provide the HttpServer
-for accepting the HTTP request that begins the opening handshake. WebSockets
-implements a subtype of the WebSocketInterface from HttpServer; this means
-that you can create a WebSocketsHandler and pass it into the constructor for
-an http server.
+WebSockets relies on either packages HttpServer, HTTP or both.
+
+Websocket|server relies on a client initiating the connection.
+Websocket|client initiate the connection, but requires HTTP.
+
+The other side of the connection, the peer, is typically a browser with
+scripts enabled. Browsers are always the initiating, client side. But the 
+peer can be any program, in any language, that follows the protocol. That 
+includes another Julia session, parallel process or task.
 
     Future improvements:
 1. Logging of refused requests and closures due to bad behavior of client.
-2. Better error handling (should we always be using "error"?)
-3. Unit tests with an actual client -- to automatically test the examples.
-4. Send close messages with status codes.
-5. Allow users to receive control messages if they want to.
+2. Allow users to receive control messages or metadata if they want to. 
+    For example RSV1 (compressed message) would be interesting. 
+3. Check rsv1 to rsv3 values. This will reduce bandwidth.
+4. Optimize maskswitch!, possibly threaded above a certain limit.
+5. Split messages over several frames.
+6. Allow customizable console output (e.g. 'ping'). See HttpServer listen.
 """
 module WebSockets
-
-using HttpCommon
-using HttpServer
-using Codecs
-using MbedTLS
-using Compat; import Compat.String
-
+import MbedTLS: digest, MD_SHA1
+using Requires
 export WebSocket,
-       WebSocketHandler,
+       readguarded,
+       writeguarded,
        write,
        read,
        close,
+       subprotocol,
+       target,
+       origin,
        send_ping,
-       send_pong
+       send_pong,
+       WebSocketClosedError
 
 const TCPSock = Base.TCPSocket
+"A reasonable amount of time"
+const TIMEOUT_CLOSEHANDSHAKE = 10.0
 
 @enum ReadyState CONNECTED=0x1 CLOSING=0x2 CLOSED=0x3
 
 """ Buffer writes to socket till flush (sock)"""
-init_socket(sock) = Base.buffer_writes(sock) 
+init_socket(sock) = Base.buffer_writes(sock)
 
 
-type WebSocketClosedError <: Exception end
-Base.showerror(io::IO, e::WebSocketClosedError) = print(io, "Error: client disconnected")
+struct WebSocketClosedError <: Exception
+    message::String
+end
+
+struct WebSocketError <: Exception
+    status::Int16
+    message::String
+end
+
+"Status codes according to RFC 6455 7.4.1"
+const codeDesc = Dict{Int, String}(1000=>"Normal", 1001=>"Going Away",
+    1002=>"Protocol Error", 1003=>"Unsupported Data",
+    1004=>"Reserved", 1005=>"No Status Recvd- reserved",
+    1006=>"Abnormal Closure- reserved", 1007=>"Invalid frame payload data",
+    1008=>"Policy Violation", 1009=>"Message too big",
+    1010=>"Missing Extension", 1011=>"Internal Error",
+    1012=>"Service Restart", 1013=>"Try Again Later",
+    1014=>"Bad Gateway", 1015=>"TLS Handshake")
+
 
 """
 A WebSocket is a wrapper over a TcpSocket. It takes care of wrapping outgoing
 data in a frame and unwrapping (and concatenating) incoming data.
 """
-type WebSocket
-    id::Int
-    socket::TCPSock
+mutable struct WebSocket{T <: IO} <: IO
+    socket::T
+    server::Bool
     state::ReadyState
 
-    function WebSocket(id::Int,socket::TCPSock)
+    function WebSocket{T}(socket::T,server::Bool) where T
         init_socket(socket)
-        new(id, socket, CONNECTED)
+        new(socket, server, CONNECTED)
     end
 end
+WebSocket(socket,server) = WebSocket{typeof(socket)}(socket,server)
 
 # WebSocket Frames
 #
@@ -103,78 +127,53 @@ const OPCODE_PONG = 0xA
 
 """
 Handshakes with subprotocols are rejected by default.
-Add to supported SUBProtocols through e.g.
-# Examples
-```
-   WebSockets.addsubproto("special-protocol")
+Add to acceptable SUBProtocols through e.g.
+```julia
    WebSockets.addsubproto("json")
-```   
-In the general websocket handler function, specialize 
-further by checking 
-# Example
 ```
-if get(wsrequest.headers, "Sec-WebSocket-Protocol", "") = "special-protocol"
-    specialhandler(websocket)
-else
-    generalhandler(websocket)
-end
-```
+Also see function subprotocol 
 """
-const SUBProtocols= Array{String,1}() 
+const SUBProtocols= Array{String,1}()
 
-"Used in handshake. See SUBProtocols"
-hasprotocol(s::String) = in(s,SUBProtocols)
-
-"Used to specify handshake response. See SUBProtocols"
-function addsubproto(name)
-    push!(SUBProtocols, string(name))
-    return true
-end
-""" 
-    write_fragment(io, islast, data::Array{UInt8}, opcode)
-Write the raw frame to a bufffer
 """
-function write_fragment(io::IO, islast::Bool, data::Array{UInt8}, opcode)
+    write_fragment(io, islast, opcode, hasmask, data::Array{UInt8})
+Write the raw frame to a bufffer. Websocket|client must set 'hasmask'.
+"""
+function write_fragment(io::IO, islast::Bool, opcode, hasmask::Bool, data::Vector{UInt8})
     l = length(data)
     b1::UInt8 = (islast ? 0b1000_0000 : 0b0000_0000) | opcode
 
-    # TODO: Do the mask xor thing??
-    # 1. set bit 8 to 1,
-    # 2. set a mask
-    # 3. xor data with mask
+    mask::UInt8 = hasmask ? 0b1000_0000 : 0b0000_0000
 
+    write(io, b1)
     if l <= 125
-        write(io, b1)
-        write(io, @compat UInt8(l))
-        write(io, data)
+        write(io, mask | UInt8(l))
     elseif l <= typemax(UInt16)
-        write(io, b1)
-        write(io, @compat UInt8(126))
-        write(io, hton(@compat UInt16(l)))
-        write(io, data)
+        write(io, mask | UInt8(126))
+        write(io, hton(UInt16(l)))
     elseif l <= typemax(UInt64)
-        write(io, b1)
-        write(io, @compat UInt8(127))
-        write(io, hton(@compat UInt64(l)))
-        write(io, data)
+        write(io, mask | UInt8(127))
+        write(io, hton(UInt64(l)))
     else
         error("Attempted to send too much data for one websocket fragment\n")
     end
-end
-
-""" 
-    write_fragment(io, islast, data::String, opcode)
-A version of send_fragment for text data.
-"""
-function write_fragment(io::IO, islast::Bool, data::String, opcode)
-    write_fragment(io, islast, data.data, opcode)
+    if hasmask
+        if opcode == OPCODE_TEXT
+            # Avoid masking Strings bytes in place.
+            # This makes client websockets slower than server websockets.
+            data = copy(data)  
+        end
+        # Write the random masking key to io, also mask the data in-place  
+        write(io, maskswitch!(data))
+    end
+    write(io, data)
 end
 
 """ Write without interruptions"""
-function locked_write(io::IO, islast::Bool, data, opcode)
+function locked_write(io::IO, islast::Bool, opcode, hasmask::Bool, data::Vector{UInt8})
     isa(io, TCPSock) && lock(io.lock)
     try
-        write_fragment(io, islast, Vector{UInt8}(data), opcode)
+        write_fragment(io, islast, opcode, hasmask, data)
     finally
         if isa(io, TCPSock)
             flush(io)
@@ -185,86 +184,110 @@ end
 
 """ Write text data; will be sent as one frame."""
 function Base.write(ws::WebSocket,data::String)
-    if !isopen(ws)
-        @show ws
-        error("Attempted write to closed WebSocket\n")
-    end
-    locked_write(ws.socket, true, data, OPCODE_TEXT)
+    locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, Vector{UInt8}(data)) # Vector{UInt8}(String) will give a warning in v0.7.
 end
 
 """ Write binary data; will be sent as one frame."""
 function Base.write(ws::WebSocket, data::Array{UInt8})
-    if !isopen(ws)
-        @show ws
-        error("attempt to write to closed WebSocket\n")
-    end
-    locked_write(ws.socket, true, data, OPCODE_BINARY)
+    locked_write(ws.socket, true, OPCODE_BINARY, !ws.server, data)
 end
 
 
-function write_ping(io::IO, data = "")
-    locked_write(io, true, data, OPCODE_PING)
+function write_ping(io::IO, hasmask, data = UInt8[])
+    locked_write(io, true, OPCODE_PING, hasmask, data)
 end
 """ Send a ping message, optionally with data."""
-send_ping(ws, data...) = write_ping(ws.socket, data...)
+send_ping(ws, data...) = write_ping(ws.socket, !ws.server, data...)
 
 
-function write_pong(io::IO, data = "")
-    locked_write(io, true, data, OPCODE_PONG)
+function write_pong(io::IO, hasmask, data = UInt8[])
+    locked_write(io, true, OPCODE_PONG, hasmask, data)
 end
 """ Send a pong message, optionally with data."""
-send_pong(ws, data...) = write_pong(ws.socket, data...)
+send_pong(ws, data...) = write_pong(ws.socket, !ws.server, data...)
 
-""" 
-    close(ws::WebSocket)
-Send a close message.
 """
-function Base.close(ws::WebSocket)
-    if !isopen(ws)
-        error("Attempt to close closed WebSocket")
-    end
-
-    # Ask client to acknowledge closing the connection
-    locked_write(ws.socket, true, "", OPCODE_CLOSE)
-    ws.state = CLOSING
-
-    # Wait till the client responds with an OPCODE_CLOSE. This process is
-    # complicated by potential blocking reads on the WebSocket in other Tasks
-    # which may receive the response control frame. Synchronization of who is
-    # responsible for closing the underlying socket is done using the
-    # WebSocket's state. When this side initiates closing the connection it is
-    # responsible for cleaning up, when the other side initiates the close the
-    # read method is
-    #
-    # The exception handling is necessary as read_frame will error when the
-    # OPCODE_CLOSE control frame is received by a potentially blocking read in
-    # another Task
-    try
-        while ws.state === CLOSING
-            wsf = read_frame(ws.socket)
-            # ALERT: stuff might get lost in ether here
-            if is_control_frame(wsf) && (wsf.opcode == OPCODE_CLOSE)
-              ws.state = CLOSED
-            end
+    close(ws::WebSocket)
+    close(ws::WebSocket, statusnumber = n)
+    close(ws::WebSocket, statusnumber = n, freereason = "my reason")
+Send an OPCODE_CLOSE frame, and wait for the same response or until
+a reasonable amount of time, $(round(TIMEOUT_CLOSEHANDSHAKE, 1)) s, has passed. 
+Data received while closing is dropped.
+Status number n according to RFC 6455 7.4.1 can be included, see WebSockets.codeDesc
+"""
+function Base.close(ws::WebSocket; statusnumber = 0, freereason = "")
+    if isopen(ws)
+        ws.state = CLOSING
+        if statusnumber == 0
+            locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, UInt8[])
+        elseif freereason == ""
+            statuscode = reinterpret(UInt8, [hton(UInt16(statusnumber))])
+            locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, copy(statuscode))
+        else 
+            statuscode = vcat(reinterpret(UInt8, [hton(UInt16(statusnumber))]), 
+                                Vector{UInt8}(freereason))
+            locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, copy(statuscode))
         end
 
-        close(ws.socket)
-    catch exception
-        !isa(exception, EOFError) && rethrow(exception)
+        # Wait till the peer responds with an OPCODE_CLOSE while discarding any
+        # trailing bytes received.
+        #
+        # We have no guarantee that the peer is actually reading our OPCODE_CLOSE
+        # frame. If not, the peer's state will not change, and we will not receive
+        # an aknowledgment of closing. We use a nonblocking read and give up
+        # after TIMEOUT_CLOSEHANDSHAKE
+        #
+        # This process is
+        # complicated by potential blocking reads on the WebSocket in other Tasks
+        # which may receive the response control frame. Synchronization of who is
+        # responsible for closing the underlying socket is done using the
+        # WebSocket's state. When this side initiates closing the connection it is
+        # responsible for cleaning up, when the other side initiates the close the
+        # read method is.
+        #
+        # The exception handling is necessary as read_frame will error when the
+        # OPCODE_CLOSE control frame is received by a potentially blocking read in
+        # another Task
+        #
+        try
+            t1 = time() + TIMEOUT_CLOSEHANDSHAKE
+            while isopen(ws) && time() < t1
+                wsf = readframe_nonblocking(ws)
+                if is_control_frame(wsf) && (wsf.opcode == OPCODE_CLOSE)
+                    ws.state = CLOSED
+                end
+            end
+            if isopen(ws.socket)
+                close(ws.socket)
+            end
+        catch err
+            # Typical 'errors' received while closing down are neglected.
+            errtyp = typeof(err)
+            errtyp != InterruptException &&
+                errtyp != Base.UVError &&
+                errtyp != Base.BoundsError &&
+                errtyp != Base.EOFError &&
+                errtyp != Base.ArgumentError &&
+                rethrow(err)
+        end
+    else
+        ws.state = CLOSED
     end
 end
+
 """
-    isopen(WebSocket)-> Bool
+    isopen(::WebSocket)-> Bool
 A WebSocket is closed if the underlying TCP socket closes, or if we send or
 receive a close message.
 """
-Base.isopen(ws::WebSocket) = (ws.state === CONNECTED) && isopen(ws.socket)
+Base.isopen(ws::WebSocket) = (ws.state != CLOSED) && isopen(ws.socket)
 
+Base.eof(ws::WebSocket) = (ws.state == CLOSED) || eof(ws.socket)
 
 """ Represents one (received) message frame."""
-type WebSocketFragment
+mutable struct WebSocketFragment
     is_last::Bool
-    rsv1::Bool
+    rsv1::Bool     # Set for compressed messages.
     rsv2::Bool
     rsv3::Bool
     opcode::UInt8  # This is actually a UInt4 value.
@@ -302,114 +325,172 @@ end
 is_control_frame(msg::WebSocketFragment) = (msg.opcode & 0b0000_1000) > 0
 
 """ Respond to pings, ignore pongs, respond to close."""
-function handle_control_frame(ws::WebSocket,wsf::WebSocketFragment)
+function handle_control_frame(ws::WebSocket, wsf::WebSocketFragment)
     if wsf.opcode == OPCODE_CLOSE
-        # A close OPCODE can be received for two reasons. Either the other side
-        # is initiating a disconnection, or the this side is (through a call to
-        # close on the WebSocket) and the client has replied that it is okay
-        # with closing the connection. This can be derived from the current
-        # state of the WebSocket
-        if ws.state !== CLOSING
-            # The other side initiated the disconnect, so the action must be
-            # acknowledged by replying with an empty CLOSE frame and cleaning
-            # up
-            try
-                locked_write(ws.socket, true, "", OPCODE_CLOSE)
-            catch exception
-              # On sudden disconnects, the other side may be gone before the
-              # close acknowledgement can be sent. This will cause an
-              # ArgumentError to be thrown due to the underlying stream being
-              # closed. These are swallowed here and will be replaced by a
-              # WebSocketClosedError below
-              !isa(exception, ArgumentError) && rethrow(exception)
-            end
-
-            close(ws.socket)
-        end
-
-        # In the other case the close method is expected to clean-up, which can
-        # be triggered by changing the state of the WebSocket
         ws.state = CLOSED
-
-        throw(WebSocketClosedError())
+        try
+            locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, UInt8[])
+        end
+        # Find out why the other side wanted to close.
+        # RFC 6455 5.5.1. If there is a status code, it's a two-byte number in network order.
+        if wsf.payload_len == 0
+            reason = " No reason "
+        elseif wsf.payload_len == 2
+            scode = Int(reinterpret(UInt16, reverse(wsf.data))[1])
+            reason = string(scode) * ":" * get(codeDesc, scode, "")
+        else
+            scode = Int(reinterpret(UInt16, reverse(wsf.data[1:2]))[1])
+            reason = string(scode) * ":" * String(wsf.data[3:end])
+        end
+        throw(WebSocketClosedError("ws|$(ws.server ? "server" : "client") respond to OPCODE_CLOSE " * reason))
     elseif wsf.opcode == OPCODE_PING
-        write_pong(ws.socket,wsf.data)
+        info("ws|$(ws.server ? "server" : "client") received OPCODE_PING")
+        send_pong(ws, wsf.data)
     elseif wsf.opcode == OPCODE_PONG
+        info("ws|$(ws.server ? "server" : "client") received OPCODE_PONG")
         # Nothing to do here; no reply is needed for a pong message.
     else  # %xB-F are reserved for further control frames
-        error("Unknown opcode $(wsf.opcode)")
+        error(" while handle_control_frame(ws|$(ws.server ? "server" : "client"), wsf): Unknown opcode $(wsf.opcode)")
     end
 end
 
 """ Read a frame: turn bytes from the websocket into a WebSocketFragment."""
-function read_frame(io::IO)
-    a = read(io,UInt8)
+function read_frame(ws::WebSocket)
+    # Try to read two bytes. There is no guarantee that two bytes are actually allocated.
+    ab = read(ws.socket, 2)
+    #=
+    Browsers will seldom close in the middle of writing to a socket,
+    but other clients often do, and the stacktraces can be very long.
+    ab can be assigned, but of length 1. Use an enclosing try..catch in the calling function
+    =#
+    a = ab[1]
     fin    = a & 0b1000_0000 >>> 7  # If fin, then is final fragment
     rsv1   = a & 0b0100_0000  # If not 0, fail.
     rsv2   = a & 0b0010_0000  # If not 0, fail.
     rsv3   = a & 0b0001_0000  # If not 0, fail.
     opcode = a & 0b0000_1111  # If not known code, fail.
-    # TODO: add validation somewhere to ensure rsv, opcode, mask, etc are valid.
 
-    b = read(io,UInt8)
-    mask = b & 0b1000_0000 >>> 7  # If not 1, fail.
+    b = ab[2]
+    mask = b & 0b1000_0000 >>> 7
+    hasmask = mask != 0
 
-    if mask != 1
-    error("WebSocket reader cannot handle incoming messages without mask. " *
-        "See http://tools.ietf.org/html/rfc6455#section-5.3")
+    if hasmask != ws.server
+        if ws.server
+            msg = "WebSocket|server cannot handle incoming messages without mask. Ref. rcf6455 5.3"
+        else
+            msg = "WebSocket|client cannot handle incoming messages with mask. Ref. rcf6455 5.3"
+        end
+        throw(WebSocketError(1002, msg))
     end
 
     payload_len::UInt64 = b & 0b0111_1111
     if payload_len == 126
-        payload_len = ntoh(read(io,UInt16))  # 2 bytes
+        payload_len = ntoh(read(ws.socket,UInt16))  # 2 bytes
     elseif payload_len == 127
-        payload_len = ntoh(read(io,UInt64))  # 8 bytes
+        payload_len = ntoh(read(ws.socket,UInt64))  # 8 bytes
     end
 
-    maskkey = Array{UInt8,1}(4)
-    for i in 1:4
-        maskkey[i] = read(io,UInt8)
-    end
+    maskkey = hasmask ? read(ws.socket,4) : UInt8[]
 
-    data = Array{UInt8,1}(payload_len)
-    for i in 1:payload_len
-        d = read(io, UInt8)
-        d = xor(d , maskkey[mod(i - 1, 4) + 1])
-        data[i] = d
-    end
+    data = read(ws.socket,Int(payload_len))
+    hasmask && maskswitch!(data,maskkey)
 
     return WebSocketFragment(fin,rsv1,rsv2,rsv3,opcode,mask,payload_len,maskkey,data)
 end
+
 """
     read(ws::WebSocket)
+Typical use:
+    msg = String(read(ws))
 Read one non-control message from a WebSocket. Any control messages that are
-read will be handled by the handle_control_frame function. This function will
-not return until a full non-control message has been read. If the other side
-doesn't ever complete its message, this function will never return. Only the
-data (contents/body/payload) of the message will be returned from this
-function.
+read will be handled by the handle_control_frame function.
+Only the data (contents/body/payload) of the message will be returned as a
+Vector{UInt8}.
+
+This function will not return until a full non-control message has been read.
 """
 function Base.read(ws::WebSocket)
     if !isopen(ws)
-        error("Attempt to read from closed WebSocket")
+        error("Attempt to read from closed WebSocket|$(ws.server ? "server" : "client"). First isopen(ws), or use readguarded(ws)!")
     end
-    frame = read_frame(ws.socket)
+    try
+        frame = read_frame(ws)
+        # Handle control (non-data) messages.
+        if is_control_frame(frame)
+            # Don't return control frames; they're not interesting to users.
+            handle_control_frame(ws, frame)
+            # Recurse to return the next data frame.
+-           return read(ws)
+        end
 
-    # Handle control (non-data) messages.
-    if is_control_frame(frame)
-        # Don't return control frames; they're not interesting to users.
-        handle_control_frame(ws,frame)
-
-        # Recurse to return the next data frame.
-        return read(ws)
+        # Handle data message that uses multiple fragments.
+        if !frame.is_last
+            return vcat(frame.data, read(ws))
+        end
+        return frame.data
+    catch err
+        try
+            errtyp = typeof(err)
+            if errtyp <: InterruptException 
+                msg = " while read(ws|$(ws.server ? "server" : "client") received InterruptException."
+                # This exception originates from this side. Follow close protocol so as not to irritate the other side.
+                close(ws, statusnumber = 1006, freereason = msg)
+                throw(WebSocketClosedError(msg * " Performed closing handshake."))
+            elseif errtyp <: WebSocketError 
+                # This exception originates on the other side. Follow close protocol with reason.
+                close(ws, statusnumber = err.status)
+                throw(WebSocketClosedError(" while read(ws|$(ws.server ? "server" : "client")) $(err.message) - Performed closing handshake."))
+            elseif  errtyp <: Base.UVError ||
+                    errtyp <: Base.BoundsError ||
+                    errtyp <: Base.EOFError ||
+                    errtyp <: Base.ArgumentError
+                throw(WebSocketClosedError(" while read(ws|$(ws.server ? "server" : "client")) $(string(err))"))
+            else
+                # Unknown cause, give up continued execution.
+                # If this happens in a multiple fragment message, the accumulated
+                # stacktrace could be very long since read(ws) is iterative.
+                rethrow(err)
+            end
+        finally
+            if isopen(ws.socket)
+                close(ws.socket)
+            end
+            ws.state = CLOSED
+        end
     end
+    return Vector{UInt8}()
+end
 
-    # Handle data message that uses multiple fragments.
-    if !frame.is_last
-        return vcat(frame.data, read(ws))
+"""
+For the closing handshake, we won't wait indefinitely for non-responsive clients.
+Returns a throwaway frame if the socket happens to be empty
+"""
+function readframe_nonblocking(ws)
+    chnl= Channel{WebSocketFragment}(1)
+    # Read, output put to Channel for type stability
+    function _readinterruptable(c::Channel{WebSocketFragment})
+        try
+            put!(chnl, read_frame(ws))
+        catch
+            # Output a dummy frame that is not a control frame.
+            put!(chnl, WebSocketFragment(false, false, false, false,
+                                UInt8(0), false, UInt64(0),
+                                Vector{UInt8}([0x0,0x0,0x0,0x0]),
+                                Vector{UInt8}()))
+        end
     end
-
-    return frame.data
+    # Start reading as a task. Will not return if there is nothing to read
+    rt = @schedule _readinterruptable(chnl)
+    bind(chnl, rt)
+    yield()
+    # Define a task for throwing interrupt exception to the (possibly blocked) read task.
+    # We don't start this task because it would never return
+    killta = @task try;Base.throwto(rt, InterruptException());end
+    # We start the killing task. When it is scheduled the second time,
+    # we pass an InterruptException through the scheduler.
+    try;schedule(killta, InterruptException(), error = false);end
+    # We now have content on chnl, and no additional tasks.
+    take!(chnl)
 end
 
 """
@@ -422,78 +503,177 @@ value. This is done in three steps:
 This function then returns the string of the base64-encoded value.
 """
 function generate_websocket_key(key)
-    hashed_key = digest(MD_SHA1, key*"258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
-    String(encode(Base64, hashed_key))
+    hashkey = "$(key)258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+    return base64encode(digest(MD_SHA1, hashkey))
 end
 
 """
-Responds to a WebSocket handshake request.
-Checks for required headers and subprotocols; sends Response(400) if they're missing or bad. Otherwise, transforms client key into accept value, and sends Reponse(101).
-Function returns true for accepted handshakes.
+    maskswitch!(data)      
+    maskswitch!(data, key:: 4-element Vector{UInt8}) 
+
+Masks or unmasks data in-place, returns the key used. 
+Calling twice with the same key restores data.
+Ref. RFC 6455 5-3.
 """
-function websocket_handshake(request,client)
-    if !haskey(request.headers, "Sec-WebSocket-Key")
-        Base.write(client.sock, Response(400))
-        return false
+function maskswitch!(data, mask = rand(UInt8, 4))
+    for i in 1:length(data)
+        data[i] = data[i] ⊻ mask[((i-1) % 4)+1]
     end
-    if get(request.headers, "Sec-WebSocket-Version", "13") != "13"
-        response = Response(400)
-        response.headers["Sec-WebSocket-Version"] = "13"
-        Base.write(client.sock, response)
-        return false
-    end
-
-    key = request.headers["Sec-WebSocket-Key"]
-    if length(decode(Base64,key)) != 16 # Key must be 16 bytes
-        Base.write(client.sock, Response(400))
-        return false
-    end
-  resp_key = generate_websocket_key(key)
-
-  response = Response(101)
-  response.headers["Upgrade"] = "websocket"
-  response.headers["Connection"] = "Upgrade"
-  response.headers["Sec-WebSocket-Accept"] = resp_key
- 
-  if haskey(request.headers, "Sec-WebSocket-Protocol") 
-      if hasprotocol(request.headers["Sec-WebSocket-Protocol"])
-          response.headers["Sec-WebSocket-Protocol"] =  request.headers["Sec-WebSocket-Protocol"]
-      else
-          Base.write(client.sock, Response(400))
-          return false
-      end
-  end 
-  
-  Base.write(client.sock, response)
-  return true
+    return mask 
 end
 
-""" Implement the WebSocketInterface, for compatilibility with HttpServer."""
-immutable WebSocketHandler <: HttpServer.WebSocketInterface
-    handle::Function
+"Used in handshake. See SUBProtocols"
+hasprotocol(s::AbstractString) = in(s, SUBProtocols)
+
+"Used to specify acceptable subprotocols. See SUBProtocols"
+function addsubproto(name)
+    push!(SUBProtocols, string(name))
+    return true
 end
 
-import HttpServer: handle, is_websocket_handshake
+
+
+
+
+
 """
-Performs handshake. If successfull, establishes WebSocket type and calls
-handler with the WebSocket and the original request. On exit from handler, closes websocket. No return value.
+`target(request) => String`
+
+Convenience function for reading upgrade request target.
+    E.g.
+```julia
+    function gatekeeper(req, ws)
+        if target(req) == "/gamepad"
+            @spawnat 2 gamepad(ws)
+        elseif target(req) == "/console"
+            @spawnat 3 console(ws)
+            ...
+        end
+    end
+```
+Then, in browser javascript (or equivalent with Julia WebSockets.open( , ))
+```javascript
+function load(){
+    var wsuri = document.URL.replace("http:", "ws:");
+    ws1 = new WebSocket(wsuri + "/gamepad");
+    ws2 = new WebSocket(wsuri + "/console");
+    ws3 = new WebSocket(wsuri + "/graphics");
+    ws4 = new WebSocket(wsuri + "/audiochat");
+    ws1.onmessage = function(e){vibrate(e.data)}
+    } // load
+
+```
 """
-function handle(handler::WebSocketHandler, req::Request, client::HttpServer.Client)
-    websocket_handshake(req, client) || return
-    sock = WebSocket(client.id, client.sock)
-    handler.handle(req, sock)
-    if isopen(sock) 
-        try
-        close(sock)
+function target   # Methods added in include files
+end
+
+"""
+`subprotocol(request) => String`
+
+Convenience function for reading upgrade request subprotocol.
+Acceptable subprotocols need to be predefined using
+addsubproto(myprotocol). No other subprotocols will pass the handshake.
+E.g.
+```julia
+WebSockets.addsubproto("instructions")
+WebSockets.addsubproto("relay_backend")
+function gatekeeper(req, ws)
+    subpr = WebSockets.subprotocol(req)
+    if subpr == "instructions"
+        instructions(ws)
+    elseif subpr == "relay_backend"
+        relay_backend(ws)
+    end
+end
+```
+
+Then, in browser javascript (or equivalent with Julia WebSockets.open( , ))
+```javascript
+function load(){
+    var wsuri = document.URL.replace("http:", "ws:");
+    ws1 = new WebSocket(wsuri, "instructions");
+    ws2 = new WebSocket(wsuri, "relay_backend");
+    ws1.onmessage = function(e){doinstructions(e.data)};
+    ...
+    } // load
+```
+"""
+function subprotocol # Methods added in include files
+end
+
+
+"""
+`origin(request) => String`
+Convenience function for checking which server / port address
+the client claims its code was downloaded from.
+The resource path can be found with target(req).
+E.g.
+```julia
+function gatekeeper(req, ws)
+    orig = WebSockets.origin(req)
+        if startswith(orig, "http://localhost") || startswith(orig, "http://127.0.0.1")
+            handlewebsocket(ws)
         end
     end
 end
-function is_websocket_handshake(handler::WebSocketHandler, req::Request)
-    is_get = req.method == "GET"
-    # "upgrade" for Chrome and "keep-alive, upgrade" for Firefox.
-    is_upgrade = contains(lowercase(get(req.headers, "Connection", "")),"upgrade")
-    is_websockets = lowercase(get(req.headers, "Upgrade", "")) == "websocket"
-    return is_get && is_upgrade && is_websockets
+```
+"""
+function origin # Methods added in include files
 end
 
+
+"""
+`writeguarded(websocket, message) => Bool`
+
+Return true if write is successful, false if not.
+The peer can potentially disconnect at any time, but no matter the 
+cause you will usually just want to exit your websocket handling function
+when you can't write to it.
+    
+"""
+function writeguarded(ws, msg)
+    try
+        write(ws, msg)
+    catch 
+        return false
+    end
+    true
+end
+
+"""
+`readguarded(websocket) => (Vector, Bool)`
+
+Return (data::Vector, true)
+        or
+        (Vector{UInt8}(), false)
+
+The peer can potentially disconnect at any time, but no matter the 
+cause you will usually just want to exit your websocket handling function
+when you can't write to it.
+
+E.g.
+```julia
+while true
+    data, success = readguarded(websocket)
+    !success && break
+    println(String(data))
+end
+```
+"""
+function readguarded(ws)
+    data = Vector{UInt8}()
+    success = true
+    try
+        data = read(ws)
+    catch err
+        data = Vector{UInt8}()
+        success = false
+    finally
+        return data, success
+    end
+end
+
+
+@require HTTP include("HTTP.jl")
+@require HttpServer include("HttpServer.jl")
 end # module WebSockets

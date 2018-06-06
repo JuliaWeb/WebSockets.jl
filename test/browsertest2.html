@@ -1,8 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
   <head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="x-ua-compatible" content="ie=edge">
 	<title>WS binary</title>  
-	<meta charset="utf-8">
   </head>
 <body>
 <p>This second test page </p>
@@ -30,6 +32,13 @@
 <div id = "ws10" style="border:thick solid black;"><p>ws10 Websocket</p></div>
 
 <script>
+
+function uuid4() {
+    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    )
+}
+var id = uuid4();
 var recvwidth = 0;
 var recvheight = 0;
 var recvbyteperpixel = 0;
@@ -150,7 +159,9 @@ function send_increasing_size_image(){
 		dv.setInt16(0, width)
 		dv.setInt16(2, height)
 		dv.setInt16(4, byteperpixel)
+		ws10.send(id)
 		ws10.send(buffer)
+		ws10.send(id)
 		ws10.send(context.getImageData(0,0, width, height).data.buffer)
 		plog("ws10", "<p>&nbsp;&nbsp;..sending arraybuffer, " + buffer.byteLength/1024 + " kB</p>");
 	} else {

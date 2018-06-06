@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>Websockets client</title>
+    <style>
+        .sent {color: blue;}
+        .received {color: green;}
+    </style>
+</head>
+<body>
+    <span id="username"></span>
+    <div id="welcome">
+      <h1>Select a username</h1>
+      <form id="pick_username">
+        <input id="userinput" value="" />
+        <input type="submit" value="Enter Chat" />
+      </form>
+    </div>
+    <div id="content"></div>
+    <form id="say_message">
+      <input name="say" type="text" value=""/>
+      <input type="submit" value="say" />
+    </form>
+<script>
+var username = "";
+var appliedusername = "";
+var ws;
+document.getElementById("say_message").style.display ="none";
+window.onload = load;
+
+
+function load(){  
+    ws = addwebsocket("ws");
+    ws.onmessage	= function(e){receiveMessage(e.data)}
+} // load
+
+
+function receiveMessage(msgdata){
+    if(username == ""){
+      if(msgdata == appliedusername){
+            username = msgdata;
+            document.getElementById("username").innerHTML = "<h1>" + username + "</h1>";
+            document.getElementById("welcome").style.display = "none";
+            document.getElementById("content").style.display = "";
+            document.getElementById("say_message").style.display =""
+      } else {
+            if(msgdata=="Username taken!"){
+                addContent(msgdata)
+            }
+      } // if
+    } else {
+        addContent("<p class='received'>" + msgdata + "</p>")
+    } // if
+  } // receiveMessage
+
+function addwebsocket(instancename, subprotocol){
+      var wsuri = document.URL.replace("http:","ws:");
+      if (typeof subprotocol === "undefined") {
+        ws = new WebSocket(wsuri)
+      } else {
+        ws = new WebSocket(wsuri, subprotocol)
+      } //if
+      ws.mynam = instancename;
+      ws.onerror = function(e){
+          addContent("WebSocket " + instancename +  ".onerror: " +
+            "<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
+            " " + readystateDesc[e.target.readyState])
+        }
+      ws.onopen = function(e){
+          addContent("WebSocket " + instancename + ".onopen: " +
+            "<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
+            " " + readystateDesc[e.target.readyState])	
+        }
+      ws.onclose = function(e){
+          addContent("WebSocket " + instancename + ".onclose: Reload page to chat again.");
+          document.getElementById("say_message").style.display = "hidden"
+          document.getElementById("welcome").style.display = "hidden"
+        }
+      return ws
+  } // addwebsocket
+
+function addContent(html) {
+              var div = document.createElement("div");
+              div.innerHTML = html;
+              document.getElementById("content").appendChild(div);
+  } // addContent
+
+function applyUserName(applyfor) {
+            if( !applyfor.replace(/\s/gi,'').length ) {
+                    alert("Please select a valid user name")
+            } else {
+                    if(sendonws(ws, "userName:" + applyfor)){
+                      appliedusername = applyfor
+                    }
+            }
+  } // applyUserName
+
+function sendonws(websocket, msg){
+  if(websocket.readyState == 1){
+                      websocket.send(msg);
+                      return true;
+                    } else {
+                      alert("WebSocket not ready. Reload page or check server!");
+                      return false
+                    } // if
+} // sendonws
+
+
+document.getElementById("pick_username").addEventListener("submit", function(e){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        applyUserName(e.target.firstElementChild.value);
+        return false;
+    })
+
+document.getElementById("say_message").addEventListener("submit", (e) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      var content = e.target.firstElementChild.value;
+      if(sendonws(ws, content)){ 
+          addContent("<p class='sent'>" + username + " : " + content + "</p>")
+      }
+      e.target.firstElementChild.value = "";
+      return false;
+    })
+
+ 
+var codeDesc ={1000:"Normal",
+                   1001:"Going Away",
+                   1002:"Protocol Error",
+                   1003:"Unsupported Data",
+                   1004:"Reserved",
+                   1005:"No Status Recvd- reserved",
+                   1006:"Abnormal Closure- reserved",
+                   1007:"Invalid frame payload data",
+                   1008:"Policy Violation",
+                   1009:"Message too big",
+                   1010:"Missing Extension",
+                   1011:"Internal Error",
+                   1012:"Service Restart",
+                   1013:"Try Again Later",
+                   1014:"Bad Gateway",
+                   1015:"TLS Handshake"};
+
+var readystateDesc = {0:"CONNECTING",
+                   1:"OPEN",
+                   2:"CLOSING",
+                   3:"CLOSED"};
+
+</script>
+</body>
+</html>

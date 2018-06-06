@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+  <head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="x-ua-compatible" content="ie=edge">
+	<title>WS text</title>
+</head>
+<body>
+<p>BCE echoing websocket.
+</p>
+<ul>
+<li> ws1 </li>
+</ul>
+<p>|
+Initiates a websocket connection.
+For every received websocket message, sends one empty message and then the received message. The websocket is closed  by
+the server, or when user navigates away.<br>
+<p>
+<p id = "init"></p>
+<p>&nbsp;&nbsp;This is <b id = "browserid"> ... </b></p>
+<div id = "ws1" style="border:thick solid black;"><p>ws1 Websocket</p></div>
+<script>
+
+window.onload= function(){
+	plog("init", "<p>:window.onload</p>");
+	ws1 = addwebsocket("ws1");
+	} 
+
+// log to DOM element ws 
+function plog(ws, shtm){
+	document.getElementById(ws).innerHTML += shtm
+	} 
+
+function addwebsocket(instancename, subprotocol){
+	var wsuri = document.URL.replace("http:","ws:");
+	if (typeof subprotocol === "undefined") {
+		var ws = new WebSocket(wsuri)
+	} else {
+		var ws = new WebSocket(wsuri, subprotocol)
+	}	
+	ws.mynam = instancename;
+	ws.onclose = function(e){
+		plog(e.target.mynam, "<p>: " + e.target.mynam + ".onclose:" +
+			"wasClean: " + e.wasClean + ";  " +
+			"code: " + e.code + ";  " + codeDesc[e.code] + ";  " +
+			"reason: " + e.reason + ";  " +
+			"<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
+			" " + readystateDesc[e.target.readyState] + ".</p>");
+		}
+	ws.onerror = function(e){
+		plog(e.target.mynam, "<p>: " + e.target.mynam + ".onerror: " +
+			"<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
+			" " + readystateDesc[e.target.readyState] + ".</p>");
+		}
+	ws.onopen = function(e){
+		ws.binaryType = "arraybuffer";
+		plog(e.target.mynam, "<p>: " + e.target.mynam + ".onopen: " +
+			"<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
+			" " + readystateDesc[e.target.readyState] +
+			" reading messages as binary arraybuffers"
+			)
+		}
+	ws.onmessage = function (e){
+		var msg = e.data;
+		ws.send("")
+		ws.send(msg)
+	}
+	plog(instancename, "<p>" + instancename + " created with event handlers.</p>");
+	return ws
+} // addwebsocket
+
+
+var codeDesc ={1000:"Normal",
+1001:"Going Away",
+1002:"Protocol Error",
+1003:"Unsupported Data",
+1004:"Reserved",
+1005:"No Status Recvd- reserved",
+1006:"Abnormal Closure- reserved",
+1007:"Invalid frame payload data",
+1008:"Policy Violation",
+1009:"Message too big",
+1010:"Missing Extension",
+1011:"Internal Error",
+1012:"Service Restart",
+1013:"Try Again Later",
+1014:"Bad Gateway",
+1015:"TLS Handshake"};
+
+var readystateDesc ={0:"CONNECTING",
+1:"OPEN",
+2:"CLOSING",
+3:"CLOSED"};
+</script>
+</body>
+</html>

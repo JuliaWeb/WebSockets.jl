@@ -5,7 +5,6 @@ function ev_error(client::Client, args...)
 end
 function ev_listen(port, args...)
     id = "events.ev_listen\t"
-    #clog(id, :yellow, " from port ", :bold, port , :normal, " ", args..., " that was all I think. \n")
     nothing
 end
 function ev_connect(client::Client, args...)
