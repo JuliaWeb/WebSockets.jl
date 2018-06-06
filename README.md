@@ -1,50 +1,70 @@
-WebSockets.jl
-=============
+# WebSockets.jl
+
 
 [![Build Status](https://travis-ci.org/JuliaWeb/WebSockets.jl.png)](https://travis-ci.org/JuliaWeb/WebSockets.jl)
 [![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg)](https://coveralls.io/r/JuliaWeb/WebSockets.jl)
 [![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6)
 
 
-# (still temporary version)
-[Websockets](https://tools.ietf.org/html/rfc6455) is a message protocol on top of TCP with less overhead and restrictions than HTTP(S). Originally, scripts hosted on a web page initiated the connection via HTTP/S. This implementation can now act as either client (`open`) or server (`listen` or `serve`).
+Server and client side [Websockets](https://tools.ietf.org/html/rfc6455) protocol in Julia. WebSockets is a small overhead message protocol layered over [TCP](https://tools.ietf.org/html/rfc793). It uses HTTP(S) for establishing the connections. 
 
+## Getting started
+WebSockets.jl must be used with either HttpServer.jl or HTTP.jl, but neither is a dependency of this package. You will need to first add one or both, i.e.:
 
-Client websockets are created by calling `open`. Just import [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl) before
-WebSockets.
+```julia
+julia> Pkg.add("HttpServer") 
+julia> Pkg.add("HTTP")
+julia> Pkg.add("WebSockets")
+```
+### Open a client side connection
+Client side websockets are created by calling `WebSockets.open` (with a server running). Client side websockets require [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl). 
 
-Server websockets are always asyncronous [tasks](https://docs.julialang.org/en/stable/stdlib/parallel/#Tasks-1), spawned by 
-[HttpServer.jl](https://github.com/JuliaWeb/HttpServer.jl) or HTTP.jl.
+### Accept server side connections
 
+Server side websockets are asyncronous [tasks](https://docs.julialang.org/en/stable/stdlib/parallel/#Tasks-1), spawned by either
+[HttpServer.jl](https://github.com/JuliaWeb/HttpServer.jl) or HTTP.jl. 
+
+##### Using HttpServer
+Call `run`, which is a wrapper for calling `listen`. See inline docs.
+
+##### Using HTTP
+Call `WebSockets.serve`, which is a wrapper for `HTTP.listen`. See inline docs.
 
 ## What does `WebSockets.jl` enable?
-- read
-- write
-- build a network
-- heartbeating
-- define your own protocols, or implement existing ones
-- low latency and overhead
 
-Some other [protocols](https://github.com/JuliaInterop) struggle including browsers and Javascript in the network, although for example ZMQ / IJulia / Jupyter says otherwise. WebSockets are well suited for user interactions via a browser. When respecting Javascript as a compiled language with powerful parallel capabilities, user interaction and graphics workload, even development can be moved off Julia resources.
+- reading and writing between entities you can program or know about
+- low latency messaging
+- implement your own 'if X send this, Y do that' subprotocols
+- implement registered [websocket subprotocols](https://www.iana.org/assignments/websocket/websocket.xml#version-number)
+- heartbeating, relaying
+- build a network including browser clients
+- convenience functions for gatekeeping with a common interface for HttpServer and HTTP
+- writing http handlers and websockets 'handlers' in the same process can be an advantage. Exchanging unique tokens via http(s)
+  before accepting websockets is recommended for improved security.
 
-You may also prefer Julia packages [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) or the implementation directly in HTTP.jl itself.
+WebSockets are well suited for user interactions via a browser. By calling compiled Javascript functions in browsers and using parallel workers,
+user interaction and graphics workload, even development time can be moved off Julia resources.
+
+The /logutils folder contains some logging functionality that is quite fast and can make working with multiple asyncronous tasks easier. This functionality may be moved out of WebSockets in the future, depending on how other logging capabilities develop.
+
+You should also have a look at Julia packages [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) or the implementation currently part of HTTP.jl.
 
 ## What are the main downsides to WebSockets (in Julia)?
 
 - Logging. We need customizable and very fast logging for building networked applications.
-- Security. Http(s) servers are currently not working. Take care.
-- Non-compliant proxies on the internet, company firewalls. Commercial applications often use competing technologies for this reason. HTTP.jl lets you access the network without the restriction of structured messages.
+- Security. Julia's Http(s) servers are currently not working to our knowledge.
+- Non-compliant proxies on the internet, company firewalls. Commercial applications often use competing technologies for this reason, according to some old articles at least. HTTP.jl lets you use such techniques.
 - 'Warm-up', i.e. compilation when a method is first used. These are excluded from current benchmarks.
 - Garbage collection, which increases message latency at semi-random intervals. See benchmark plots.
-- TCP. If a connection is broken, the underlying protocol will throw ECONNRESET messages.
+- If a connection is closed improperly, the connection task will throw uncaught ECONNRESET and similar messages.
 - TCP quirks, including 'warm-up' time with low transmission speed after a pause. Heartbeats can alleviate.
 - Neither HTTP.jl or HttpServer.jl are made just for connecting WebSockets. You may need strong points from both. 
 - The optional dependencies increases load time compared to fixed dependencies.
+- Since 'read' is a blocking function, you can easily end up reading indefinetely from both sides.
 
+## Server side example
 
-## Server side
-
-As a first example, we can create a WebSockets echo server:
+As a first example, we can create a WebSockets echo server. We use named function arguments for more readable stacktraces while debugging.
 
 ```julia
 using HttpServer
@@ -156,15 +176,7 @@ Some logging utilties for a running relay server are available in /logutils.
 
 
 
-## Installation/Setup
 
-WebSockets.jl must be used with either HttpServer.jl or HTTP.jl, but neither is a dependency of this package. You will need to first add one or both, i.e.:
-
-~~~julia
-julia> Pkg.add("HttpServer")
-julia> Pkg.add("HTTP")
-julia> Pkg.add("WebSockets")
-~~~
 
 
 

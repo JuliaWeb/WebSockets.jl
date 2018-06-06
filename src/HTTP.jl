@@ -225,13 +225,10 @@ end
 
 
 """
-WebSockets.ServerWS is a variant of HTTP.Server which
-also includes a WebSockets.WebSocketHandler.
-Most or all of the functionality can alternaively be accessed with 
-'listen'
- ``` julia
-    se = WebSockets.ServerWS(::HTTP.HandlerFunction, WebSockets.WebsocketHandler(gatekeeper))
- ```
+    WebSockets.ServerWS(::HTTP.HandlerFunction, ::WebSockets.WebsocketHandler(gatekeeper))
+
+WebSockets.ServerWS is an argument type for WebSockets.serve. Instances
+include .in  and .out channels, see WebSockets.serve.
 """
 mutable struct ServerWS{T <: HTTP.Servers.Scheme, H <: HTTP.Handler, W <: WebsocketHandler}
     handler::H
@@ -264,22 +261,23 @@ function ServerWS(handler::H,
 end
 
 """
-A variant of HTTP.serve with the WebSockets.ServerWS type.
-Puts any caught error and stacktrace on the serve.out channel.
+    WebSockets.serve(server::ServerWS{T, H, W}, host, port, verbose)
+
+A wrapper for HTTP.listen.
+Puts any caught error and stacktrace on the server.out channel.
+To stop a running server, put HTTP.Servers.KILL on the .in channel.
 ```julia
-    @shedule WebSockets.serve(myServerWS, "127.0.0.1", 8080, false)
+    @shedule WebSockets.serve(server, "127.0.0.1", 8080, false)
 ```
-After a suspected 'connection task' failure:
+After a suspected connection task failure:
 ```julia
-    if isready(myserver_WS.out)
+    if isready(server.out)
         err = take!(myserver_WS.out)
-        @test typeof(err) <: WebSocketClosedError
     end
     if isready(myserver_WS.out)
         stack_trace = take!(server_WS.out)
     end
 ```
-
 """
 function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
 

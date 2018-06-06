@@ -15,11 +15,12 @@ includes another Julia session, parallel process or task.
 
     Future improvements:
 1. Logging of refused requests and closures due to bad behavior of client.
-2. Allow users to receive control messages if they want to.
+2. Allow users to receive control messages or metadata if they want to. 
+    For example RSV1 (compressed message) would be interesting. 
 3. Check rsv1 to rsv3 values. This will reduce bandwidth.
 4. Optimize maskswitch!, possibly threaded above a certain limit.
 5. Split messages over several frames.
-6. Allow customizable output (e.g. 'ping'). See HttpServer listen.
+6. Allow customizable console output (e.g. 'ping'). See HttpServer listen.
 """
 module WebSockets
 import MbedTLS: digest, MD_SHA1
@@ -286,7 +287,7 @@ Base.eof(ws::WebSocket) = (ws.state == CLOSED) || eof(ws.socket)
 """ Represents one (received) message frame."""
 mutable struct WebSocketFragment
     is_last::Bool
-    rsv1::Bool
+    rsv1::Bool     # Set for compressed messages.
     rsv2::Bool
     rsv3::Bool
     opcode::UInt8  # This is actually a UInt4 value.
