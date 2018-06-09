@@ -30,7 +30,7 @@ Call `run`, which is a wrapper for calling `listen`. See inline docs.
 ##### Using HTTP
 Call `WebSockets.serve`, which is a wrapper for `HTTP.listen`. See inline docs.
 
-## What does `WebSockets.jl` enable?
+## What does WebSockets.jl enable?
 
 - reading and writing between entities you can program or know about
 - low latency messaging
@@ -39,28 +39,28 @@ Call `WebSockets.serve`, which is a wrapper for `HTTP.listen`. See inline docs.
 - heartbeating, relaying
 - build a network including browser clients
 - convenience functions for gatekeeping with a common interface for HttpServer and HTTP
-- writing http handlers and websockets 'handlers' in the same process can be an advantage. Exchanging unique tokens via http(s)
-  before accepting websockets is recommended for improved security.
+- writing http handlers and websocket coroutines ('handlers') in the same process can be an advantage. Exchanging unique tokens via http(s)
+  before accepting websockets is recommended for improved security
 
-WebSockets are well suited for user interactions via a browser. By calling compiled Javascript functions in browsers and using parallel workers,
-user interaction and graphics workload, even development time can be moved off Julia resources.
+WebSockets are well suited for user interactions via a browser or [cross-platform applications](https://electronjs.org/). User interaction and graphics workload, even development time can be moved off Julia resources. Use websockets to pass arguments between compiled functions on both sides; don't evaluate received code!
 
-The /logutils folder contains some logging functionality that is quite fast and can make working with multiple asyncronous tasks easier. This functionality may be moved out of WebSockets in the future, depending on how other logging capabilities develop.
+The /logutils folder contains some specialized logging functionality that is quite fast and can make working with multiple asyncronous tasks easier. See /benchmark code for how to use. Logging  may be moved out of WebSockets in the future, depending on how other logging capabilities develop.
 
-You should also have a look at Julia packages [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) or the implementation currently part of HTTP.jl.
+You should also have a look at alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) or the implementation currently part of HTTP.jl.
 
 ## What are the main downsides to WebSockets (in Julia)?
 
 - Logging. We need customizable and very fast logging for building networked applications.
-- Security. Julia's Http(s) servers are currently not working to our knowledge.
-- Non-compliant proxies on the internet, company firewalls. Commercial applications often use competing technologies for this reason, according to some old articles at least. HTTP.jl lets you use such techniques.
-- 'Warm-up', i.e. compilation when a method is first used. These are excluded from current benchmarks.
+- Security. Julia's Http(s) servers are currently not fully working to our knowledge.
+- Compression is not implemented.
+- Possibly non-compliant proxies on the internet, company firewalls. 
+- 'Warm-up', i.e. compilation when a method is first used. Warm-up is excluded from current benchmarks.
 - Garbage collection, which increases message latency at semi-random intervals. See benchmark plots.
 - If a connection is closed improperly, the connection task will throw uncaught ECONNRESET and similar messages.
 - TCP quirks, including 'warm-up' time with low transmission speed after a pause. Heartbeats can alleviate.
-- Neither HTTP.jl or HttpServer.jl are made just for connecting WebSockets. You may need strong points from both. 
-- The optional dependencies increases load time compared to fixed dependencies.
-- Since 'read' is a blocking function, you can easily end up reading indefinetely from both sides.
+- Neither HTTP.jl or HttpServer.jl are made just for connecting WebSockets. You may need strong points from both.
+- The optional dependencies may increase load time compared to fixed dependencies.
+- Since 'read' is a blocking function, you can easily end up reading indefinitely from both sides.
 
 ## Server side example
 
@@ -129,7 +129,7 @@ You could replace 'using HttpServer' with 'using HTTP'. Also:
     WebSocketHandler -> WebSockets.WebsocketHandler
 
 
-## Client side
+## Client side example
 
 You need to use [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl). 
 
@@ -170,14 +170,29 @@ WebSockets.open("ws://127.0.0.1:$PORT") do ws
 end
 ```
 
-The output in a console session is barely readable, which is irritating. To build real-time applications, we need more code.
+The output from the example in a console session is barely readable. Output from asyncronous tasks are intermixed. To build real-time applications, we need more code. See other examples in /test, /benchmark/ and /examples.
 
 Some logging utilties for a running relay server are available in /logutils.
 
+## Errors after updating?
 
+The introduction of client side websockets to this package may require changes in your code:
+- `using HttpServer` (or import) prior to `using WebSockets` (or import).
+- The `WebSocket.id` field is no longer supported. You can generate unique counters by code similar to 'bencmark/functions_open_browsers.jl' COUNTBROWSER.
+- You may want to modify error handling code. Examine WebSocketsClosedError.message.
+- You may want to use `readguarded` and `writeguarded` to save on error handling code.
 
+## Switching from HttpServer to HTTP?
+Some types and methods are not exported. See inline docs:
+- `Server` -> `WebSockets.ServerWS` 
+- `WebSocketHandler` -> `WebSockets.WebsocketHandler`
+- `run` -> `WebSockets.serve()`
+- `Response` -> `HTTP.Response`
+- `Request` -> `HTTP.Response`
+- `HttpHandler`-> `HTTP.HandlerFunction`
 
-
+ You may also want to consider using `target`, `orgin`and `subprotocol`, which 
+ are compatible with both of the types above.
 
 
 ~~~~

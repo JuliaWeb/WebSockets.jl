@@ -81,3 +81,13 @@ Outlined benchmarks for developing an application using WebSockets (postponed):
     choice of message size and buffers for long-running calculations which
     connects to a server for distribution of results
 =#
+if !isdefined(:SRCPATH)
+    const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
+    const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
+    SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
+    LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
+    include(joinpath(SRCPATH, "functions_open_browsers.jl"))
+end
+# Don't run this if the output files are recent?
+include("benchmark_prepare.jl")
+# include detailed benchmarks using the results from the above as nominal.

@@ -1,4 +1,12 @@
-# Included in benchmark_2.jl
+# Included in benchmark_prepare.jl and in browsertests.jl
+# Refers logutils
+if !isdefined(:SRCPATH)
+    const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
+    const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
+    SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
+    LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
+end
+using logutils_ws
 
 "A list of potentially available browsers, to be tried in succession if present"
 const BROWSERS = ["chrome", "firefox", "iexplore", "safari", "phantomjs"]
@@ -7,8 +15,11 @@ mutable struct Countbrowser;value::Int;end
 (c::Countbrowser)() =COUNTBROWSER.value += 1
 "For next value: COUNTBROWSER(). For current value: COUNTBROWSER.value"
 const COUNTBROWSER = Countbrowser(0)
-const PORT = 8000
-const URL = "http://127.0.0.1:$PORT/bce.html"
+const PORT = [8000]
+const PAGE = ["bce.html"]
+const URL = ["http://127.0.0.1:$(PORT[1])/$(PAGE[1])"]
+
+
 
 "Get application path for developer applications"
 function fwhich(s)
@@ -151,11 +162,11 @@ end
 
 "Try to open one browser from BROWSERS.
 In some cases we expect an immediate indication
-of failure, for example when the corresponding file
+of failure, for example when the corresponding browser
 is not found on the system. In other cases, we will
-just wait in vain for a request. In those cases,
-call this function again. It remembers which browsers
-were tried before.
+just wait in vain. In those cases,
+call this function again after a reasonable timeout. 
+The function remembers which browsers were tried before.
 "
 function open_a_browser()
     id = "open_next_browser"

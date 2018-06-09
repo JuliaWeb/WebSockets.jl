@@ -40,7 +40,7 @@ server_WS = WebSockets.ServerWS(
     HTTP.HandlerFunction(req-> HTTP.Response(200)), 
     WebSockets.WebsocketHandler(echows))
 
-tas = @schedule WebSockets.serve(server_WS, "127.0.0.1", port_HTTP_ServeWS, false)
+tas = @schedule WebSockets.serve(server_WS, "127.0.0.1", port_HTTP_ServeWS)
 while !istaskstarted(tas);yield();end
 
 const servers = [

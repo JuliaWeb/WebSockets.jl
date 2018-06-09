@@ -2,18 +2,25 @@
 
 # This file collects data and tests functions.
 # The intention is preparing input for a benchmark suite,
-# but the output actually is sufficient for most purposes.
+# but the output from this file actually is sufficient for some purposes.
 #
 # Both log file, results plots and tables are printed to the same file.
 # Viewing the plots in a text editor is probably possible, see UnicodePlots.jl.
-# Running this file on a Windows laptop with all browsers takes 5-10 minutes
+# Pull request welcome if someone can figure out how to do it.
+# Running this file on a Windows laptop with all browsers takes 5-10 minutes.
+
+
+if !isdefined(:SRCPATH)
+    const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
+    const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
+    SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
+    LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
+    include(joinpath(SRCPATH, "functions_open_browsers.jl"))
+end
+
 
 "A vector of message sizes"
 const VSIZE = reverse([i^3 * 1020 for i = 1:12])
-const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
-const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
-SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
-LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
 include(joinpath(SRCPATH, "functions_open_browsers.jl"))
 include(joinpath(SRCPATH, "functions_benchmark.jl"))
 #

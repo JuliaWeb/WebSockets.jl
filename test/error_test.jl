@@ -23,7 +23,7 @@ info("Start a HTTP server with a ws handler that is unresponsive. Close from cli
 sleep(1)
 server_WS = ServerWS(   HTTP.HandlerFunction(req-> HTTP.Response(200)), 
                         WebSockets.WebsocketHandler(ws-> sleep(16)))
-tas = @schedule WebSockets.serve(server_WS, "127.0.0.1", THISPORT, false)
+tas = @schedule WebSockets.serve(server_WS, THISPORT)
 while !istaskstarted(tas); yield(); end
 sleep(1)
 res = WebSockets.open((_)->nothing, URL);
@@ -39,7 +39,7 @@ server_WS = ServerWS(   HTTP.HandlerFunction(req-> HTTP.Response(200)),
                                                     readguarded(ws_serv)
                                                 end
                                             end);
-tas = @schedule WebSockets.serve(server_WS, "127.0.0.1", THISPORT, false)
+tas = @schedule WebSockets.serve(server_WS, "127.0.0.1", THISPORT)
 while !istaskstarted(tas); yield(); end
 sleep(1)
 
@@ -131,7 +131,7 @@ server_WS = ServerWS(   HTTP.HandlerFunction(req-> HTTP.Response(200)),
                                                     end
                                                 end
                                             end);
-tas = @schedule WebSockets.serve(server_WS, "127.0.0.1", THISPORT, false)
+tas = @schedule WebSockets.serve(server_WS, "127.0.0.1", THISPORT)
 while !istaskstarted(tas); yield(); end
 sleep(3)
 
