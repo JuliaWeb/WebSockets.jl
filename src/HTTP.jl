@@ -225,7 +225,7 @@ end
 
 
 """
-    WebSockets.ServerWS(::HTTP.HandlerFunction, ::WebSockets.WebsocketHandler(gatekeeper))
+    WebSockets.ServerWS(::HTTP.HandlerFunction, ::WebSockets.WebsocketHandler)
 
 WebSockets.ServerWS is an argument type for WebSockets.serve. Instances
 include .in  and .out channels, see WebSockets.serve.
@@ -261,13 +261,15 @@ function ServerWS(handler::H,
 end
 
 """
-    WebSockets.serve(server::ServerWS{T, H, W}, host, port, verbose)
+    WebSockets.serve(server::ServerWS, port)
+    WebSockets.serve(server::ServerWS, host, port)
+    WebSockets.serve(server::ServerWS, host, port, verbose)
 
 A wrapper for HTTP.listen.
 Puts any caught error and stacktrace on the server.out channel.
 To stop a running server, put HTTP.Servers.KILL on the .in channel.
 ```julia
-    @shedule WebSockets.serve(server, "127.0.0.1", 8080, false)
+    @shedule WebSockets.serve(server, "127.0.0.1", 8080)
 ```
 After a suspected connection task failure:
 ```julia
@@ -315,3 +317,5 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
             end
     return
 end
+serve(server::WebSockets.ServerWS, host, port) =  serve(server, host, port, false)
+serve(server::WebSockets.ServerWS, port) =  serve(server, "127.0.0.1", port, false)
