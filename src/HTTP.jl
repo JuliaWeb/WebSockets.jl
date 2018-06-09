@@ -32,13 +32,22 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
         push!(headers, "Sec-WebSocket-Protocol" => subprotocol )
     end
 
+    if in('#', url)
+        throw(ArgumentError(" replace '#' with %23 in url: $url"))
+    end
+
+    uri = HTTP.URIs.URI(url)
+    if uri.scheme != "ws" && uri.scheme != "wss"
+        throw(ArgumentError(" bad argument url: Scheme not ws or wss. Input scheme: $(uri.scheme)"))
+    end
+
+    
     try
-        HTTP.open("GET", url, headers;
+        HTTP.open("GET", uri, headers;
                 reuse_limit=0, verbose=verbose ? 2 : 0, kw...) do http
                     _openstream(f, http, key)
                 end
     catch err
-        # TODO don't pass on WebSocketClosedError and other known ones.
         if typeof(err) <: Base.UVError
             throw(WebSocketClosedError(" while open ws|client: $(string(err))"))
         elseif typeof(err) <: HTTP.ExceptionRequest.StatusError

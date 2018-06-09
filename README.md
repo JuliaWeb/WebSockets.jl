@@ -64,7 +64,7 @@ You should also have a look at alternative Julia packages: [DandelionWebSockets]
 
 ## Server side example
 
-As a first example, we can create a WebSockets echo server. We use named function arguments for more readable stacktraces while debugging.
+As a first example, we can create a WebSockets echo server. We use named function arguments for more readable stacktraces while debugging. 
 
 ```julia
 using HttpServer
@@ -74,10 +74,8 @@ function coroutine(ws)
     while isopen(ws)
         data, = readguarded(ws)
         s = String(data)
-        if s == ""
-            break
-        end
-        println(s)
+        s == "" && break
+        println("Received: ", s)
         if s[1] == "P"
             writeguarded(ws, "No, I'm not!")
         else
@@ -87,10 +85,12 @@ function coroutine(ws)
 end
 
 function gatekeeper(req, ws)
-    if origin(req) == "http://127.0.0.1:8080" || origin(req) == "http://localhost:8080"
+    println("\nOrigin:", origin(req), "    Target:", target(req), "    subprotocol:", subprotocol(req))
+    # Non-browser clients don't send Origin. We liberally accept in this case.
+    if origin(req) == "" || origin(req) == "http://127.0.0.1:8080" || origin(req) == "http://localhost:8080"
         coroutine(ws)
     else
-        println(origin(req))
+        println("Inacceptable request")
     end
 end
 
@@ -99,7 +99,7 @@ handle(req, res) = Response(200)
 server = Server(HttpHandler(handle), 
                 WebSocketHandler(gatekeeper))
 
-run(server, 8080)
+@async run(server, 8080)
 ```
 
 Now open a browser on http://127.0.0.1:8080/ and press F12. In the console, type the lines following ≫:
@@ -131,55 +131,54 @@ You could replace 'using HttpServer' with 'using HTTP'. Also:
 
 ## Client side example
 
-You need to use [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl). 
+Clients need to use [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl).  
 
-What you can't do is use a browser as the server side. The server side can be the example above, running in an asyncronous task. The server can also be running in a separate REPL, or in a a parallel task. The benchmarks puts the `client` side on a parallel task. 
-
-The following example 
-- runs server in an asyncronous task, client in the REPL control flow
-- uses [Do-Block-Syntax](https://docs.julialang.org/en/v0.6.3/manual/functions/#Do-Block-Syntax-for-Function-Arguments-1), which is a style choice
-- the server `ugrade` skips checking origin(req)`
-- the server is invoked with `listen(..)` instead of `serve()`
-- read(ws) and write(ws, msg) instead of readguarded(ws), writeguarded(ws) 
 
 ```julia
-
 using HTTP
 using WebSockets
-
-const PORT = 8080
-
-# Server side
-@async HTTP.listen("127.0.0.1", PORT) do http
-    if WebSockets.is_upgrade(http.message)
-        WebSockets.upgrade(http) do req, ws
-            while isopen(ws)
-                msg = String(read(ws))
-                write(ws, msg)
-            end
+function client_one_message(ws)
+    print_with_color(:green, STDOUT, "\nws|client input >  ")
+    msg = readline(STDIN)
+    if writeguarded(ws, msg)
+        msg, stillopen = readguarded(ws)
+        println("Received:", String(msg))
+        if stillopen 
+            println("The connection is active, but we leave. WebSockets.jl will close properly.")
+        else
+            println("Disconnect during reading.")
         end
+    else
+        println("Disconnect during writing.")
     end
 end
-
-sleep(2)
-
-
-WebSockets.open("ws://127.0.0.1:$PORT") do ws
-    write(ws, "Peer, about your hunting")
-    println("echo received:" * String(read(ws)))
+function main()
+    while true
+        println("\nWebSocket client side. WebSocket URI format:")
+        println("ws:// host [ \":\" port ] path [ \"?\" query ]")
+        println("Example:\nws://127.0.0.1:8080")
+        println("Where do you want to connect? Empty line to exit")
+        print_with_color(:green, STDOUT, "\nclient_repl_input >  ")
+        wsuri = readline(STDIN)
+        wsuri == "" && break
+        res = WebSockets.open(client_one_message, wsuri)
+        !isa(res, HTTP.Response) && println(res)
+    end
+    println("Have a nice day")
 end
+
+main()
 ```
 
-The output from the example in a console session is barely readable. Output from asyncronous tasks are intermixed. To build real-time applications, we need more code. See other examples in /test, /benchmark/ and /examples.
+See other examples in /test, /benchmark/ and /examples. Some logging utilties for a running relay server are available in /logutils.
 
-Some logging utilties for a running relay server are available in /logutils.
 
 ## Errors after updating?
 
 The introduction of client side websockets to this package may require changes in your code:
 - `using HttpServer` (or import) prior to `using WebSockets` (or import).
 - The `WebSocket.id` field is no longer supported. You can generate unique counters by code similar to 'bencmark/functions_open_browsers.jl' COUNTBROWSER.
-- You may want to modify error handling code. Examine WebSocketsClosedError.message.
+- You may want to modify you error handling code. Examine WebSocketsClosedError.message.
 - You may want to use `readguarded` and `writeguarded` to save on error handling code.
 
 ## Switching from HttpServer to HTTP?

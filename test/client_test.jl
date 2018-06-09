@@ -45,6 +45,27 @@ end
 @test typeof(caughterr) <: WebSockets.WebSocketClosedError
 @test caughterr.message == " while open ws|client: connect: connection refused (ECONNREFUSED)"
 
+info("try open with uknown scheme\n")
+sleep(1)
+caughterr = ArgumentError("")
+try 
+WebSockets.open((_)->nothing, "ww://127.0.0.1:8099");
+catch err
+    caughterr = err
+end
+@test typeof(caughterr) <: ArgumentError
+@test caughterr.msg == " bad argument url: Scheme not ws or wss. Input scheme: ww"
+
+
+caughterr = ArgumentError("")
+try 
+WebSockets.open((_)->nothing, "ws://127.0.0.1:8099/svg/#");
+catch err
+    caughterr = err
+end
+@test typeof(caughterr) <: ArgumentError
+@test caughterr.msg == " replace '#' with %23 in url: ws://127.0.0.1:8099/svg/#"
+
 info("start a client websocket that irritates by closing the TCP stream
  connection without a websocket closing handshake. This 
  throws an error in the server task\n")

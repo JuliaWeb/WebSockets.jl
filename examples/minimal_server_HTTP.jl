@@ -8,7 +8,7 @@ function coroutine(ws)
         if s == ""
             break
         end
-        println(s)
+        println("Received: ", s)
         if s[1] == "P"
             writeguarded(ws, "No, I'm not!")
         else
@@ -18,10 +18,12 @@ function coroutine(ws)
 end
 
 function gatekeeper(req, ws)
-    if origin(req) == "http://127.0.0.1:8080" || origin(req) == "http://localhost:8080"
+    println("\nOrigin:", origin(req), "    Target:", target(req), "    subprotocol:", subprotocol(req))
+    # Non-browser clients don't send Origin. We liberally accept in this case.
+    if origin(req) == "" || origin(req) == "http://127.0.0.1:8080" || origin(req) == "http://localhost:8080"
         coroutine(ws)
     else
-        println(origin(req))
+        println("Inacceptable request")
     end
 end
 
