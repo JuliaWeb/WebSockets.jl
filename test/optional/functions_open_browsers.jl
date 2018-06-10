@@ -134,6 +134,7 @@ end
 function open_all_browsers()
     info("Try to open browsers")
     brs = ["chrome", "firefox", "iexplore", "safari", "phantomjs"]
+
     openbrowsers = 0
     for b in brs
         openbrowsers += open_testpage(b)

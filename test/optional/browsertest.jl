@@ -1,5 +1,20 @@
-# Included in runtests at the end.
-# Can also be run directly.
+# These tests are not currently run from runtests.jl
+
+# Tests may currently fail 'randomly' because of the limitations
+# of running everything in a single thread, using libuv.
+# For example, trying to connect while the websocket is 
+# busy in a blocking operation can cause timeouts somewhere.
+#
+# The test set outside of this is now complete, and /benchmark
+# is a more effective context for testing the efficiency.
+#
+# TODO
+# 'functions_open_browsers.jl' is an older version 
+#     of the same file name from /benchmark. Using that requires
+#     some restructuring of this file.
+# 'functions_log_test.jl' is an older version of 
+#     /logutils/...  Use the new methods.
+
 # Launches available browsers on browsertest.html.
 # Websockets are intiated by the browser / web page. 
 # Handler_functions_websockets respond and store allocations & etc.
@@ -7,7 +22,7 @@
 # for binary performance tests. In the end, all websockets are closed
 # and a summary is output.
 
-cd(Pkg.dir("WebSockets","test"))
+cd(Pkg.dir("WebSockets", "test", "optional"))
 using Compat
 using HttpServer
 using WebSockets

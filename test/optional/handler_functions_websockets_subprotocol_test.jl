@@ -56,7 +56,7 @@ function ws_test_binary(ws::WebSockets.WebSocket)
             fill!(view(data, intersect(itpquarter, ired)), 0x88)
             rand!(view(data, ired), [0x00, 0x88, 0xff])
             hedata = UInt16.([height, width, 4])
-            clog(id, "Manipulated image and made ready in $(toq()*1000) ms. \n\t\tSending header, then image.\n")    
+            clog(id, "Manipulated image and made ready in $(toq()*1000) ms. \n\t\tSending header, then image.\n")
             writeto(id,  reinterpret(UInt8, hedata))
             writeto(id,  data)
         else

@@ -2,8 +2,8 @@
 <html>
   <head>
 	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="ie=edge">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<meta http-equiv="x-ua-compatible" content="ie=edge">
 	<title>WS text</title>
 </head>
 <body>
@@ -27,12 +27,21 @@ Websocket initiates with sending "Ping me!" with signature.<br>
 
 <script>
 
-function uuid4() {
-    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
-        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-    )
+var hex = [];
+
+for (var i = 0; i < 256; i++) {
+    hex[i] = (i < 16 ? '0' : '') + (i).toString(16);
 }
-var id = uuid4();
+
+// note this is not formally valid. It is difficult to find a valid function working on all browsers.
+function makeUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+var id = makeUUID();
 
 var exitmsg = "Close, wait, and navigate to: browsertest2.html"
 
