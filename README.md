@@ -1,9 +1,19 @@
 # WebSockets.jl
 
+*Release version*:
 
-[![Build Status](https://travis-ci.org/JuliaWeb/WebSockets.jl.png)](https://travis-ci.org/JuliaWeb/WebSockets.jl)
+[![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6) [![Build Status](https://travis-ci.org/JuliaWeb/WebSockets.jl.svg)](https://travis-ci.org/JuliaWeb/WebSockets.jl)
 [![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg)](https://coveralls.io/r/JuliaWeb/WebSockets.jl)
-[![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6)
+[![Appveyor](https://ci.appveyor.com/api/projects/status/github/JuliaWeb/WebSockets.jl?svg=true)](https://ci.appveyor.com/project/JuliaWeb/WebSockets-jl)
+
+
+*Development version*:
+
+[![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg?branch?master)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6)
+[![Build Status](https://travis-ci.org/JuliaWeb/WebSockets.jl.svg?branch=master)](https://travis-ci.org/JuliaWeb/WebSockets.jl)
+[![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg?branch=master)](https://coveralls.io/r/JuliaWeb/WebSockets.jl?branch=master)
+[![Appveyor](https://ci.appveyor.com/api/projects/status/github/JuliaWeb/WebSockets.jl?svg=true&branch=master)](https://ci.appveyor.com/project/JuliaWeb/WebSockets-jl)
+
 
 
 Server and client side [Websockets](https://tools.ietf.org/html/rfc6455) protocol in Julia. WebSockets is a small overhead message protocol layered over [TCP](https://tools.ietf.org/html/rfc793). It uses HTTP(S) for establishing the connections. 
@@ -33,16 +43,15 @@ Call `WebSockets.serve`, which is a wrapper for `HTTP.listen`. See inline docs.
 ## What does WebSockets.jl enable?
 
 - reading and writing between entities you can program or know about
-- low latency messaging
+- low latency, high speed messaging
 - implement your own 'if X send this, Y do that' subprotocols
 - implement registered [websocket subprotocols](https://www.iana.org/assignments/websocket/websocket.xml#version-number)
 - heartbeating, relaying
 - build a network including browser clients
 - convenience functions for gatekeeping with a common interface for HttpServer and HTTP
-- writing http handlers and websocket coroutines ('handlers') in the same process can be an advantage. Exchanging unique tokens via http(s)
-  before accepting websockets is recommended for improved security
+- writing http handlers and websocket coroutines ('handlers') in the same process can be a security advantage. Modify web page responses to include time-limited tokens in the wsuri.
 
-WebSockets are well suited for user interactions via a browser or [cross-platform applications](https://electronjs.org/). User interaction and graphics workload, even development time can be moved off Julia resources. Use websockets to pass arguments between compiled functions on both sides; don't evaluate received code!
+WebSockets are well suited for user interactions via a browser or [cross-platform applications](https://electronjs.org/). Workload and development time can be moved off Julia resources. Use websockets to pass arguments between compiled functions on both sides; it has both speed and security advantages over passing code for evaluation.
 
 The /logutils folder contains some specialized logging functionality that is quite fast and can make working with multiple asyncronous tasks easier. See /benchmark code for how to use. Logging  may be moved out of WebSockets in the future, depending on how other logging capabilities develop.
 
@@ -59,7 +68,6 @@ You should also have a look at alternative Julia packages: [DandelionWebSockets]
 - If a connection is closed improperly, the connection task will throw uncaught ECONNRESET and similar messages.
 - TCP quirks, including 'warm-up' time with low transmission speed after a pause. Heartbeats can alleviate.
 - Neither HTTP.jl or HttpServer.jl are made just for connecting WebSockets. You may need strong points from both.
-- The optional dependencies may increase load time compared to fixed dependencies.
 - Since 'read' is a blocking function, you can easily end up reading indefinitely from both sides.
 
 ## Server side example
@@ -120,7 +128,7 @@ If you now navigate or close the browser, this happens:
 2. Server side `readguarded(ws)` has been waiting for messages, but instead closes 'ws' and returns ("", false)
 3. `coroutine(ws)` is finished and the task's control flow returns to HttpServer 
 4. HttpServer does nothing other than exit this task. In fact, it often crashes because
-    somebody else (the browser) has closed the underlying TCP stream. If you had replaced the last Julia line with '@async run(server, 8080', you would see some long error messages.
+    somebody else (the browser) has closed the underlying TCP stream.
 5. The server, which spawned the task, continues to listen for incoming connections, and you're stuck. Ctrl + C!
 
 You could replace 'using HttpServer' with 'using HTTP'. Also:
@@ -179,7 +187,7 @@ The introduction of client side websockets to this package may require changes i
 - `using HttpServer` (or import) prior to `using WebSockets` (or import).
 - The `WebSocket.id` field is no longer supported. You can generate unique counters by code similar to 'bencmark/functions_open_browsers.jl' COUNTBROWSER.
 - You may want to modify you error handling code. Examine WebSocketsClosedError.message.
-- You may want to use `readguarded` and `writeguarded` to save on error handling code.
+- You may want to use `readguarded` and `writeguarded` to save on error handling code.?svg=true&branch=master
 
 ## Switching from HttpServer to HTTP?
 Some types and methods are not exported. See inline docs:
