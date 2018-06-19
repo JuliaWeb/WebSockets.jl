@@ -1,6 +1,6 @@
 # included in runtests.jl
 
-using Base.Test
+using Test
 import HTTP
 import HttpServer: HttpHandler,
         Server

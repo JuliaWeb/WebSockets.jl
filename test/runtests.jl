@@ -1,4 +1,4 @@
-using Base.Test
+using Test
 cd(Pkg.dir("WebSockets", "test"))
 
 @sync yield() # avoid mixing of  output with possible deprecation warnings from .juliarc 

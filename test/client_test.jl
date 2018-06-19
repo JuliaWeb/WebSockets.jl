@@ -1,6 +1,6 @@
 # included in runtests.jl
 # focus on HTTP.jl
-using Base.Test
+using Test
 using HTTP
 import WebSockets:  is_upgrade,
                     upgrade,

@@ -4,7 +4,7 @@ function fwhich(s)
     fi = ""
     if Sys.is_windows()
         try
-            fi = split(readstring(`where.exe $s`), "\r\n")[1]
+            fi = split(read(`where.exe $s`, String), "\r\n")[1]
             if !isfile(fi)
                 fi = ""
             end

@@ -11,7 +11,7 @@ using ..WebSockets
 # We want to log to a separate file, so
 # we use our own instance of logutils_ws here.
 import logutils_ws: logto, clog, zlog, zflush, clog_notime
-const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
+const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") : Base.source_dir()
 const SERVEFILE = "bce.html"
 const PORT = 8000
 const SERVER = "127.0.0.1"
@@ -109,6 +109,7 @@ function handlerequest(request::HTTP.Request)
         else
             response = HTTP.Response(501, "Not implemented method: $(request.method), fix $id")
         end
+    catch
     end
     zlog(id, response)
     response

@@ -29,7 +29,7 @@ const HTTPPORT = 8080
 const HTTPSERVERPORT = 8000
 const URL = "127.0.0.1"
 const USERNAMES = Dict{String, WebSocket}()
-const HTMLSTRING = readstring(Pkg.dir("WebSockets","examples","chat_explore.html"));
+const HTMLSTRING = read(Pkg.dir("WebSockets","examples","chat_explore.html"), String);
 
 # If we are to access a websocket from outside
 # it's websocket handler function, we need some kind of 

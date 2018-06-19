@@ -26,7 +26,7 @@ cd(Pkg.dir("WebSockets", "test", "optional"))
 using Compat
 using HttpServer
 using WebSockets
-using Base.Test
+using Test
 using JSON
 const WEBSOCKETS = Dict{String, WebSockets.WebSocket}()
 const RECEIVED_WS_MSGS_TIME = Dict{String, Vector{Float64}}()
@@ -104,7 +104,7 @@ n_binary = n_msgs - n_text
 
 # print summary
 info("Spawned $n_browsers browsers. $n_browsers made requests. Opened $n_ws sockets, $n_opensockets did not close as intended.")
-info("Received $n_msgs messages, $n_text text and $n_binary binary, $(round(sum(lengths)/ 1000 / 1000,3)) Mb, sent a similar amount.")
+info("Received $n_msgs messages, $n_text text and $n_binary binary, $(round(sum(lengths)/ 1000 / 1000, digits=3)) Mb, sent a similar amount.")
 
 
 
@@ -112,40 +112,40 @@ info("Received $n_msgs messages, $n_text text and $n_binary binary, $(round(sum(
 
 if n_msgs > 0
     maxlength = maximum( lengths )
-    minlength = minimum( va -> va > 0.0 ? va:typemax(va), lengths )
+    minlength = minimum( va -> va > 0.0 ? va : typemax(va), lengths )
     avglength = sum(lengths) / n_msgs
 
-    maxaloc = maximum(  va -> va < Inf ? va:0.0, allocs ./ lengths )
-    minaloc = minimum( va -> va > 0.0 ? va:typemax(va), allocs ./ lengths )
+    maxaloc = maximum(  va -> va < Inf ? va : 0.0, allocs ./ lengths )
+    minaloc = minimum( va -> va > 0.0 ? va : typemax(va), allocs ./ lengths )
     avgaloc = sum(allocs) / sum(lengths)
 
-    maxtime = maximum(va -> va < Inf ? va:0.0, times)
-    mintime = minimum(va -> va > 0.0 ? va:typemax(va), times)
+    maxtime = maximum(va -> va < Inf ? va : 0.0, times)
+    mintime = minimum(va -> va > 0.0 ? va : typemax(va), times)
     avgtime = sum(times) / n_msgs
 
-    maxspeed = maximum(va -> va < Inf ? va:0.0, lengths ./ times)
-    minspeed = minimum(va -> va > 0.0 ? va:typemax(va), lengths ./ times)
+    maxspeed = maximum(va -> va < Inf ? va : 0.0, lengths ./ times)
+    minspeed = minimum(va -> va > 0.0 ? va : typemax(va), lengths ./ times)
     avgspeed = sum(lengths) / sum(times)
 
     info("Length of messages received\n",
-        "\t\tAverage length:\t\t", round(avglength / 1000, 3), " kB\n",
+        "\t\tAverage length:\t\t", round(avglength / 1000, digits=3), " kB\n",
         "\t\t\Minimum :\t\t", minlength , " b\n",
-        "\t\t\Maximum :\t\t", round(maxlength / 1000 / 1000 , 3), " Mb\n")
+        "\t\t\Maximum :\t\t", round(maxlength / 1000 / 1000 , digits=3), " Mb\n")
 
     info("Time spent reading and waiting for received messages\n",
-        "\t\tAverage time:\t\t", round(avgtime, 4), " s\n",
+        "\t\tAverage time:\t\t", round(avgtime, digits=4), " s\n",
         "\t\t\Minimum :\t\t", mintime , " s\n",
         "\t\t\Maximum :\t\t", maxtime, " s\n")
 
     info("Reading speed (strongly affected by the active browsers)\n",
-        "\t\tAverage speed:\t", round(avgspeed / 1000 / 1000, 3), " Mb/s\n",
-        "\t\t\Minimum :\t", round(minspeed / 1000 / 1000 , 10), " Mb/s\n",
-        "\t\t\Maximum :\t", round(maxspeed / 1000 / 1000, 3), " Mb/s\n")
+        "\t\tAverage speed:\t", round(avgspeed / 1000 / 1000, digits=3), " Mb/s\n",
+        "\t\t\Minimum :\t", round(minspeed / 1000 / 1000 , digits=10), " Mb/s\n",
+        "\t\t\Maximum :\t", round(maxspeed / 1000 / 1000, digits=3), " Mb/s\n")
 
     info("Allocations for reading, bytes allocated per byte received\n",
-        "\t\tAverage allocation:\t", round(avgaloc, 3), "\n",
-        "\t\t\Minimum :\t\t", round(minaloc, 3), "\n",
-        "\t\t\Maximum :\t\t", round(maxaloc, 3), "\n",)
+        "\t\tAverage allocation:\t", round(avgaloc, digits=3), "\n",
+        "\t\t\Minimum :\t\t", round(minaloc, digits=3), "\n",
+        "\t\t\Maximum :\t\t", round(maxaloc, digits=3), "\n",)
 
     info("Text messages received per websocket:")
     for m in RECEIVED_WS_MSGS

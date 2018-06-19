@@ -1,5 +1,5 @@
 # included in runtests.jl
-using Base.Test
+using Test
 using HTTP
 using HttpServer
 import WebSockets:  is_upgrade,

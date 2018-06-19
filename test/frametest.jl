@@ -1,5 +1,5 @@
 # included in runtests.jl
-using Base.Test
+using Test
 import WebSockets: maskswitch!,
     write_fragment,
     read_frame,

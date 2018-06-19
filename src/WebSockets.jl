@@ -211,7 +211,7 @@ send_pong(ws, data...) = write_pong(ws.socket, !ws.server, data...)
     close(ws::WebSocket, statusnumber = n)
     close(ws::WebSocket, statusnumber = n, freereason = "my reason")
 Send an OPCODE_CLOSE frame, and wait for the same response or until
-a reasonable amount of time, $(round(TIMEOUT_CLOSEHANDSHAKE, 1)) s, has passed. 
+a reasonable amount of time, $(round(TIMEOUT_CLOSEHANDSHAKE, digits=1)) s, has passed. 
 Data received while closing is dropped.
 Status number n according to RFC 6455 7.4.1 can be included, see WebSockets.codeDesc
 """
@@ -330,6 +330,7 @@ function handle_control_frame(ws::WebSocket, wsf::WebSocketFragment)
         ws.state = CLOSED
         try
             locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, UInt8[])
+        catch
         end
         # Find out why the other side wanted to close.
         # RFC 6455 5.5.1. If there is a status code, it's a two-byte number in network order.
@@ -485,10 +486,10 @@ function readframe_nonblocking(ws)
     yield()
     # Define a task for throwing interrupt exception to the (possibly blocked) read task.
     # We don't start this task because it would never return
-    killta = @task try;Base.throwto(rt, InterruptException());end
+    killta = @task try;Base.throwto(rt, InterruptException());catch; end
     # We start the killing task. When it is scheduled the second time,
     # we pass an InterruptException through the scheduler.
-    try;schedule(killta, InterruptException(), error = false);end
+    try;schedule(killta, InterruptException(), error = false);catch; end
     # We now have content on chnl, and no additional tasks.
     take!(chnl)
 end

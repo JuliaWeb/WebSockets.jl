@@ -111,6 +111,7 @@ function HttpServer.handle(handler::WebSocketHandler, req::HttpServer.Request, c
     if isopen(sock)
         try
             close(sock)
+        catch
         end
     end
 end
@@ -121,7 +122,7 @@ Similar to is_upgrade(r::HTTP.Message)
 """
 function HttpServer.is_websocket_handshake(handler::WebSocketHandler, req::HttpServer.Request)
     if req.method == "GET"
-        if ismatch(r"upgrade"i, get(req.headers, "Connection", ""))
+        if occursin(get(req.headers, "Connection", ""), r"upgrade"i)
             if lowercase(get(req.headers, "Upgrade", "")) == "websocket"
                 return true
             end
