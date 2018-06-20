@@ -23,6 +23,7 @@ includes another Julia session, parallel process or task.
 6. Allow customizable console output (e.g. 'ping'). See HttpServer listen.
 """
 module WebSockets
+import Sockets: TCPSocket
 import MbedTLS: digest, MD_SHA1
 using Requires
 export WebSocket,
@@ -38,7 +39,10 @@ export WebSocket,
        send_pong,
        WebSocketClosedError
 
-const TCPSock = Base.TCPSocket
+# revisit the need for defining this union type for method definitions. The functions would
+# probably work just as fine with duck typing.
+const Dt = Union{Base.ReinterpretArray{UInt8,1,UInt16,Array{UInt16,1}},
+            Vector{UInt8}}
 "A reasonable amount of time"
 const TIMEOUT_CLOSEHANDSHAKE = 10.0
 
@@ -139,7 +143,7 @@ const SUBProtocols= Array{String,1}()
     write_fragment(io, islast, opcode, hasmask, data::Array{UInt8})
 Write the raw frame to a bufffer. Websocket|client must set 'hasmask'.
 """
-function write_fragment(io::IO, islast::Bool, opcode, hasmask::Bool, data::Vector{UInt8})
+function write_fragment(io::IO, islast::Bool, opcode, hasmask::Bool, data::Dt)
     l = length(data)
     b1::UInt8 = (islast ? 0b1000_0000 : 0b0000_0000) | opcode
 
@@ -170,12 +174,12 @@ function write_fragment(io::IO, islast::Bool, opcode, hasmask::Bool, data::Vecto
 end
 
 """ Write without interruptions"""
-function locked_write(io::IO, islast::Bool, opcode, hasmask::Bool, data::Vector{UInt8})
-    isa(io, TCPSock) && lock(io.lock)
+function locked_write(io::IO, islast::Bool, opcode, hasmask::Bool, data::Dt)
+    isa(io, TCPSocket) && lock(io.lock)
     try
         write_fragment(io, islast, opcode, hasmask, data)
     finally
-        if isa(io, TCPSock)
+        if isa(io, TCPSocket)
             flush(io)
             unlock(io.lock)
         end
@@ -184,6 +188,7 @@ end
 
 """ Write text data; will be sent as one frame."""
 function Base.write(ws::WebSocket,data::String)
+    # add a method for reinterpreted strings as well? See const Dt.
     locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, Vector{UInt8}(data)) # Vector{UInt8}(String) will give a warning in v0.7.
 end
 
@@ -481,7 +486,7 @@ function readframe_nonblocking(ws)
         end
     end
     # Start reading as a task. Will not return if there is nothing to read
-    rt = @schedule _readinterruptable(chnl)
+    rt = @async _readinterruptable(chnl)
     bind(chnl, rt)
     yield()
     # Define a task for throwing interrupt exception to the (possibly blocked) read task.
@@ -675,6 +680,6 @@ function readguarded(ws)
 end
 
 
-@require HTTP include("HTTP.jl")
-@require HttpServer include("HttpServer.jl")
+@require HTTP="cd3eb016-35fb-5094-929b-558a96fad6f3" include("HTTP.jl")
+@require HttpServer="58cfbd8c-6b7d-5447-85c1-563540e28d27" include("HttpServer.jl")
 end # module WebSockets

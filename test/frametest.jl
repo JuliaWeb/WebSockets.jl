@@ -1,5 +1,7 @@
 # included in runtests.jl
 using Test
+import Sockets: TCPSocket
+import Random: randstring
 import WebSockets: maskswitch!,
     write_fragment,
     read_frame,
@@ -8,14 +10,16 @@ import WebSockets: maskswitch!,
     WebSocket,
     WebSocketClosedError,
     locked_write,
-    WebSockets.codeDesc
+    WebSockets.codeDesc,
+    WebSockets
 
 """
 The dummy websocket don't use TCP. Close won't work, but we can manipulate the contents
 using otherwise the same functions as TCP sockets.
 """
-dummyws(server::Bool)  = WebSocket(BufferStream(), server)
+dummyws(server::Bool)  = WebSocket(Base.BufferStream(), server)
 io = IOBuffer()
+
 
 # maskswitch 
 empty1 = UInt8[]
@@ -29,21 +33,21 @@ for len = [8, 125], fin=[true, false], clientwriting = [false, true]
     op = (rand(UInt8) & 0b1111)
     test_str = randstring(len)
     # maskswitch two times with same key == unmasked
-    maskunmask = copy(Vector{UInt8}(test_str))
+    maskunmask = copy(codeunits(test_str))
     mskkey = maskswitch!(maskunmask)
     maskswitch!(maskunmask, mskkey)
-    @test maskunmask == Vector{UInt8}(test_str)
+    @test maskunmask == codeunits(test_str)
 
-    # websocket fragment as Vector{UInt8}
+    # websocket fragment as Base.CodeUnits{UInt8,String}
     # for client writing, the data is masked and the mask is contained in the frame.
     # for server writing, the data is not masked, and the header is four bytes shorter.
-    write_fragment(io, fin, op, clientwriting, copy(Vector{UInt8}(test_str)))
+    write_fragment(io, fin, op, clientwriting, copy(codeunits(test_str)))
     # test that the original input string was not masked.
-    @test maskunmask == Vector{UInt8}(test_str)
+    @test maskunmask == codeunits(test_str)
     frame = take!(io)
     # Check the frame header 
     # Last frame bit
-    @test bits(frame[1]) == (fin ? "1" : "0") * "000" * bits(op)[end-3:end]
+    @test bitstring(frame[1]) == (fin ? "1" : "0") * "000" * bitstring(op)[end-3:end]
     # payload length bit
     @test frame[2] & 0b0111_1111 == len
     # ismasked bit
@@ -57,7 +61,7 @@ for len = [8, 125], fin=[true, false], clientwriting = [false, true]
         framedata = frame[3:end]
     end
 
-    @test framedata == Vector{UInt8}(test_str)
+    @test framedata == codeunits(test_str)
 
     # Test for WebSocketError when reading
     #  masked frame-> websocket|server
@@ -91,7 +95,7 @@ for len = [8, 125], fin=[true, false], clientwriting = [false, true]
     end
     @test frag_back.maskkey == maskkey
     # the WebSocketFragment stores the data after unmasking
-    @test Vector{UInt8}(test_str) == frag_back.data
+    @test codeunits(test_str) == frag_back.data
 end
 
 # Test length 126 or more
@@ -99,12 +103,12 @@ end
 for len = 126:129, fin=[true, false], clientwriting = [false, true]
     op = 0b1111
     test_str = randstring(len)
-    write_fragment(io, fin, op, clientwriting, copy(Vector{UInt8}(test_str)))
+    write_fragment(io, fin, op, clientwriting, copy(codeunits(test_str)))
     frame = take!(io)
 
-    @test bits(frame[1]) == (fin ? "1" : "0") * "000" * bits(op)[end-3:end]
+    @test bitstring(frame[1]) == (fin ? "1" : "0") * "000" * bitstring(op)[end-3:end]
     @test frame[2] & 0b0111_1111 == 126
-    @test bits(frame[4])*bits(frame[3]) == bits(hton(UInt16(len)))
+    @test bitstring(frame[4])*bitstring(frame[3]) == bitstring(hton(UInt16(len)))
 
     dws = dummyws(clientwriting)
     write(dws.socket, frame)
@@ -129,7 +133,7 @@ for clientwriting = [false, true]
     fin = true
 
     test_str = randstring(len)
-    write_fragment(io, fin, op, clientwriting, copy(Vector{UInt8}(test_str)))
+    write_fragment(io, fin, op, clientwriting, copy(codeunits(test_str)))
     frame = take!(io)
 
     dws = dummyws(clientwriting)
@@ -155,7 +159,7 @@ for op in 0xB:0xF
     fin = true
 
     test_str = randstring(len)
-    write_fragment(io, fin, op, clientwriting, copy(Vector{UInt8}(test_str)))
+    write_fragment(io, fin, op, clientwriting, copy(codeunits(test_str)))
     frame = take!(io)
 
     dws = dummyws(clientwriting)
@@ -186,11 +190,11 @@ for clientwriting = [false, true]
     second_str = "456"
     fin = false
     dws = dummyws(clientwriting)
-    write_fragment(dws.socket, fin, op, clientwriting, copy(Vector{UInt8}(first_str)))
+    write_fragment(dws.socket, fin, op, clientwriting, copy(codeunits(first_str)))
     fin = true
-    write_fragment(dws.socket, fin, op, clientwriting, copy(Vector{UInt8}(second_str)))
+    write_fragment(dws.socket, fin, op, clientwriting, copy(codeunits(second_str)))
 
-    @test read(dws) == Vector{UInt8}(full_str)
+    @test read(dws) == codeunits(full_str)
 end
 
 
@@ -198,12 +202,12 @@ end
 
 # Test read(ws) bad mask error handling
 
-info("Provoking close handshake from protocol error without a peer. Waits a reasonable time")
+@info("Provoking close handshake from protocol error without a peer. Waits a reasonable time")
 for clientwriting in [false, true]
     op = WebSockets.OPCODE_TEXT
     test_str = "123456"
     fin = true
-    write_fragment(io, fin, op, clientwriting, copy(Vector{UInt8}(test_str)))
+    write_fragment(io, fin, op, clientwriting, copy(codeunits(test_str)))
     frame = take!(io)
     # let's put this frame on the same kind of socket, and then read it as if it came from the peer
     # This will provoke a close handshake, but since there is no peer it times out.
@@ -236,7 +240,7 @@ for clientwriting = [false, true]
     len = 0
     # Check the frame header 
     # Last frame bit
-    @test bits(frame[1]) == (fin ? "1" : "0") * "000" * bits(op)[end-3:end]
+    @test bitstring(frame[1]) == (fin ? "1" : "0") * "000" * bitstring(op)[end-3:end]
     # payload length bit
     @test frame[2] & 0b0111_1111 == len
     # ismasked bit
@@ -284,7 +288,7 @@ for clientwriting in [false, true], statusnumber in keys(codeDesc)
 
     # Check the frame header 
     # Last frame bit
-    @test bits(frame[1]) == (fin ? "1" : "0") * "000" * bits(op)[end-3:end]
+    @test bitstring(frame[1]) == (fin ? "1" : "0") * "000" * bitstring(op)[end-3:end]
     # payload length bit
     @test frame[2] & 0b0111_1111 == 2
     # ismasked bit
@@ -310,14 +314,14 @@ for clientwriting in [false, true], statusnumber in keys(codeDesc)
     fin = true
     thisws = dummyws(!clientwriting)
     statuscode = vcat(reinterpret(UInt8, [hton(UInt16(statusnumber))]), 
-                Vector{UInt8}(freereason))
+                codeunits(freereason))
     locked_write(thisws.socket, true, op, !thisws.server, copy(statuscode))
     close(thisws.socket)
     frame = read(thisws.socket)
 
     # Check the frame header 
     # Last frame bit
-    @test bits(frame[1]) == (fin ? "1" : "0") * "000" * bits(op)[end-3:end]
+    @test bitstring(frame[1]) == (fin ? "1" : "0") * "000" * bitstring(op)[end-3:end]
     # payload length bit
     @test frame[2] & 0b0111_1111 == length(statuscode)
     # ismasked bit

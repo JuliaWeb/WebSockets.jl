@@ -30,5 +30,3 @@ info("\nAbrupt close & error handling test\n")
 end
 
 end
-# TODO
-# restructure browsertests

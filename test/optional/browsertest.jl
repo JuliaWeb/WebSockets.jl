@@ -1,4 +1,5 @@
 # These tests are not currently run from runtests.jl
+# to use, make sure you have the package JSON installed.
 
 # Tests may currently fail 'randomly' because of the limitations
 # of running everything in a single thread, using libuv.
