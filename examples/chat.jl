@@ -29,7 +29,7 @@ wsh = WebSocketHandler() do req, client
             println("EMITTING MESSAGE: $(content)")
             for (k,v) in connections
                 if k != id
-                    write(v.client, (v.name * ": " * content))
+                    write(v.client, connections[id].name * ": " * content)
                 end
             end
         end
