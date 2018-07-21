@@ -17,7 +17,7 @@ using otherwise the same functions as TCP sockets.
 dummyws(server::Bool)  = WebSocket(BufferStream(), server)
 io = IOBuffer()
 
-# maskswitch 
+# maskswitch
 empty1 = UInt8[]
 empty2 = UInt8[]
 @test length(maskswitch!(empty1)) == 4
@@ -41,7 +41,7 @@ for len = [8, 125], fin=[true, false], clientwriting = [false, true]
     # test that the original input string was not masked.
     @test maskunmask == Vector{UInt8}(test_str)
     frame = take!(io)
-    # Check the frame header 
+    # Check the frame header
     # Last frame bit
     @test bits(frame[1]) == (fin ? "1" : "0") * "000" * bits(op)[end-3:end]
     # payload length bit
@@ -63,19 +63,19 @@ for len = [8, 125], fin=[true, false], clientwriting = [false, true]
     #  masked frame-> websocket|server
     #  unmasked frame -> websocket|client
 
-    # Let's pretend TCP has moved our frame into the peer websocket 
+    # Let's pretend TCP has moved our frame into the peer websocket
     receivingws = dummyws(!clientwriting)
     write(receivingws.socket, frame)
     @test_throws WebSockets.WebSocketError read_frame(receivingws)
     close(receivingws.socket)
 
-    # Let's pretend receivingws didn't error like it should, but 
-    # echoed our message back with identical masking. 
+    # Let's pretend receivingws didn't error like it should, but
+    # echoed our message back with identical masking.
     dws = dummyws(clientwriting)
     @test dws.server == clientwriting
     write(dws.socket, frame)
     # read the frame back, now represented as a WebSocketFragment
-   
+
     frag_back = read_frame(dws)
     close(dws.socket)
     @test frag_back.is_last == fin
@@ -173,7 +173,7 @@ for op in 0xB:0xF
     @test thiserror.msg == " while handle_control_frame(ws|client, wsf): Unknown opcode $op"
 
     close(dws.socket)
-end 
+end
 
 
 # Test multi-frame message
@@ -198,7 +198,7 @@ end
 
 # Test read(ws) bad mask error handling
 
-info("Provoking close handshake from protocol error without a peer. Waits a reasonable time")
+@info("Provoking close handshake from protocol error without a peer. Waits a reasonable time")
 for clientwriting in [false, true]
     op = WebSockets.OPCODE_TEXT
     test_str = "123456"
@@ -234,7 +234,7 @@ for clientwriting = [false, true]
     write_fragment(io, fin, op, clientwriting, UInt8[])
     frame = take!(io)
     len = 0
-    # Check the frame header 
+    # Check the frame header
     # Last frame bit
     @test bits(frame[1]) == (fin ? "1" : "0") * "000" * bits(op)[end-3:end]
     # payload length bit
@@ -268,7 +268,7 @@ for clientwriting in [false, true]
     wsf = read_frame(peerws)
     @test is_control_frame(wsf)
     @test wsf.opcode == WebSockets.OPCODE_CLOSE
-    @test wsf.payload_len == 0 
+    @test wsf.payload_len == 0
 end
 
 # Close with status number
@@ -282,7 +282,7 @@ for clientwriting in [false, true], statusnumber in keys(codeDesc)
     close(thisws.socket)
     frame = read(thisws.socket)
 
-    # Check the frame header 
+    # Check the frame header
     # Last frame bit
     @test bits(frame[1]) == (fin ? "1" : "0") * "000" * bits(op)[end-3:end]
     # payload length bit
@@ -309,13 +309,13 @@ for clientwriting in [false, true], statusnumber in keys(codeDesc)
     op = WebSockets.OPCODE_CLOSE
     fin = true
     thisws = dummyws(!clientwriting)
-    statuscode = vcat(reinterpret(UInt8, [hton(UInt16(statusnumber))]), 
+    statuscode = vcat(reinterpret(UInt8, [hton(UInt16(statusnumber))]),
                 Vector{UInt8}(freereason))
     locked_write(thisws.socket, true, op, !thisws.server, copy(statuscode))
     close(thisws.socket)
     frame = read(thisws.socket)
 
-    # Check the frame header 
+    # Check the frame header
     # Last frame bit
     @test bits(frame[1]) == (fin ? "1" : "0") * "000" * bits(op)[end-3:end]
     # payload length bit
@@ -332,11 +332,11 @@ for clientwriting in [false, true], statusnumber in keys(codeDesc)
     @test wsf.opcode == WebSockets.OPCODE_CLOSE
     @test wsf.payload_len == length(statuscode)
     scode = Int(reinterpret(UInt16, reverse(wsf.data[1:2]))[1])
-    reason = string(scode) * ":" * 
-            get(codeDesc, scode, "") * 
+    reason = string(scode) * ":" *
+            get(codeDesc, scode, "") *
             " " * String(wsf.data[3:end])
-    @test reason == string(statusnumber) * ":" * 
-            get(codeDesc, statusnumber, "") * 
+    @test reason == string(statusnumber) * ":" *
+            get(codeDesc, statusnumber, "") *
             " " * freereason
 end
 

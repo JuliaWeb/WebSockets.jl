@@ -1,10 +1,10 @@
-info("Loading HTTP methods...")
+@info("Loading HTTP methods...")
 
 """
 Initiate a websocket|client connection to server defined by url. If the server accepts
 the connection and the upgrade to websocket, f is called with an open websocket|client
 
-e.g. say hello, close and leave 
+e.g. say hello, close and leave
 ```julia
 import HTTP
 using WebSockets
@@ -16,7 +16,7 @@ end;
 If a server is listening and accepts, "Hello" is sent (as a Vector{UInt8}).
 
 On exit, a closing handshake is started. If the server is not currently reading
-(which is a blocking function), this side will reset the underlying connection (ECONNRESET) 
+(which is a blocking function), this side will reset the underlying connection (ECONNRESET)
 after a reasonable amount of time and continue execution.
 """
 function open(f::Function, url; verbose=false, subprotocol = "", kw...)
@@ -41,7 +41,7 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
         throw(ArgumentError(" bad argument url: Scheme not ws or wss. Input scheme: $(uri.scheme)"))
     end
 
-    
+
     try
         HTTP.open("GET", uri, headers;
                 reuse_limit=0, verbose=verbose ? 2 : 0, kw...) do http
@@ -52,8 +52,8 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
             throw(WebSocketClosedError(" while open ws|client: $(string(err))"))
         elseif typeof(err) <: HTTP.ExceptionRequest.StatusError
             return err.response
-        else 
-           rethrow(err) 
+        else
+           rethrow(err)
         end
     end
 end
@@ -66,7 +66,7 @@ function _openstream(f::Function, http::HTTP.Streams.Stream, key::String)
     if status != 101
         return
     end
-    
+
     check_upgrade(http)
 
     if HTTP.header(http, "Sec-WebSocket-Accept") != generate_websocket_key(key)
@@ -81,7 +81,7 @@ function _openstream(f::Function, http::HTTP.Streams.Stream, key::String)
     finally
         close(ws)
     end
-    
+
 end
 
 
@@ -90,7 +90,7 @@ Used as part of a server definition. Call this if
 is_upgrade(http.message) returns true.
 
 Responds to a WebSocket handshake request.
-If the connection is acceptable, sends status code 101 
+If the connection is acceptable, sends status code 101
 and headers according to RFC 6455, then calls
 user's handler function f with the connection wrapped in
 a WebSocket instance.
@@ -99,7 +99,7 @@ f(ws)           is called with the websocket and no client info
 f(headers, ws)  also receives a dictionary of request headers for added security measures
 
 On exit from f, a closing handshake is started. If the client is not currently reading
-(which is a blocking function), this side will reset the underlying connection (ECONNRESET) 
+(which is a blocking function), this side will reset the underlying connection (ECONNRESET)
 after a reasonable amount of time and continue execution.
 
 If the upgrade is not accepted, responds to client with '400'.
@@ -181,7 +181,7 @@ function upgrade(f::Function, http::HTTP.Stream)
     end
 end
 
-"It is up to the user to call 'is_upgrade' on received messages. 
+"It is up to the user to call 'is_upgrade' on received messages.
 This provides double checking from within the 'upgrade' function."
 function check_upgrade(http)
     if !HTTP.hasheader(http, "Upgrade", "websocket")
@@ -193,7 +193,7 @@ function check_upgrade(http)
 end
 
 """
-Fast checking for websockets vs http requests, performed on all new HTTP requests. 
+Fast checking for websockets vs http requests, performed on all new HTTP requests.
 Similar to HttpServer.is_websocket_handshake
 """
 function is_upgrade(r::HTTP.Message)
@@ -218,14 +218,14 @@ origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")
 WebsocketHandler(f::Function) <: HTTP.Handler
 
 A simple Function-wrapper for HTTP.
-The provided argument should be one of the forms 
+The provided argument should be one of the forms
     `f(WebSocket) => nothing`
     `f(HTTP.Request, WebSocket) => nothing`
 The latter form is intended for gatekeeping, ref. RFC 6455 section 10.1
 
 f accepts a `WebSocket` and does interesting things with it, like reading, writing and exiting when finished.
 
-Take note of the very similar WebSocketHandler (capital 'S'), which is a subtype of HttpServer, an alternative 
+Take note of the very similar WebSocketHandler (capital 'S'), which is a subtype of HttpServer, an alternative
 to HTTP.
 """
 struct WebsocketHandler{F <: Function} <: HTTP.Handler
@@ -252,7 +252,7 @@ mutable struct ServerWS{T <: HTTP.Servers.Scheme, H <: HTTP.Handler, W <: Websoc
         new{T, H, W}(handler, wshandler, logger, ch, ch2, options)
 end
 
-ServerWS(h::Function, w::Function, l::IO=HTTP.compat_stdout(); 
+ServerWS(h::Function, w::Function, l::IO=HTTP.compat_stdout();
             cert::String="", key::String="", args...) = ServerWS(HTTP.HandlerFunction(h), WebsocketHandler(w), l;
                                                          cert=cert, key=key, args...)
 function ServerWS(handler::H,

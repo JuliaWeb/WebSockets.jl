@@ -1,10 +1,10 @@
-info("Loading HttpServer methods...")
+@info("Loading HttpServer methods...")
 
 export WebSocketHandler
 
 """
-Called by HttpServer. Responds to a WebSocket handshake request. 
-If the connection is acceptable, sends status code 101 
+Called by HttpServer. Responds to a WebSocket handshake request.
+If the connection is acceptable, sends status code 101
 and headers according to RFC 6455. Function returns
 a WebSocket instance with the open socket as one of the fields.
 
@@ -78,7 +78,7 @@ function websocket_handshake(request, client)
     response.headers["Upgrade"] = "websocket"
     response.headers["Connection"] = "Upgrade"
     response.headers["Sec-WebSocket-Accept"] = resp_key
-   
+
     Base.write(client.sock, response)
     return true
 end
@@ -88,7 +88,7 @@ WebSocketHandler(f::Function) <: HttpServer.WebSocketInterface
 
 A simple Function-wrapper for HttpServer.
 
-The provided argument should be of the form 
+The provided argument should be of the form
     `f(Request, WebSocket) => nothing`
 
 Request is intended for gatekeeping, ref. RFC 6455 section 10.1.
