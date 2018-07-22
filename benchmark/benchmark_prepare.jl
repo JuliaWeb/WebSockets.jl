@@ -11,7 +11,7 @@
 
 
 if !isdefined(:SRCPATH)
-    const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
+    const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") : Base.source_dir()
     const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
     SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
     LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
@@ -80,8 +80,8 @@ init_clientbandwidths = Dict(testid => clientbandwidth);
 sleep(2)
 # Brief output to file and console
 clog(testid, " Initial test run with messagesize ", INITSIZE, " bytes \n\t",
-    "serverbandwidth = ", :yellow,  round(serverbandwidth, 4), :normal, " [ns/b] = [s/GB]\n\t",
-    :normal, "clientbandwidth = ", :yellow, round(clientbandwidth, 4), :normal, " [ns/b] = [s/GB]")
+    "serverbandwidth = ", :yellow,  round(serverbandwidth, digits=4), :normal, " [ns/b] = [s/GB]\n\t",
+    :normal, "clientbandwidth = ", :yellow, round(clientbandwidth, digits=4), :normal, " [ns/b] = [s/GB]")
 
 #
 #  Continue initial test run with HTS-BCE, brief text output for each browser
@@ -116,8 +116,8 @@ while success
         push!(init_clientbandwidths, testid => clientbandwidth);
         # Brief output to file and console
         clog(testid, " Initial test run with messagesize ", INITSIZE, " bytes \n\t",
-            "serverbandwidth = ", :yellow,  round(serverbandwidth, 4), :normal, " [ns/b] = [s/GB]\n\t",
-            :normal, "clientbandwidth = ", :yellow, round(clientbandwidth, 4), :normal, " [ns/b] = [s/GB]")
+            "serverbandwidth = ", :yellow,  round(serverbandwidth, digits=4), :normal, " [ns/b] = [s/GB]\n\t",
+            :normal, "clientbandwidth = ", :yellow, round(clientbandwidth, digits=4), :normal, " [ns/b] = [s/GB]")
     else
         success = false
     end
@@ -247,9 +247,9 @@ for testid in keys(serverbandwidths)
 
     # Brief output to file and console
     clog_notime(testid, :normal, " Varying message size: \n\t",
-        "bestserverbandwidth = ", :yellow,  round(bestserverbandwidth, 4), :normal, " [ns/b] = [s/GB]",
+        "bestserverbandwidth = ", :yellow,  round(bestserverbandwidth, digits=4), :normal, " [ns/b] = [s/GB]",
         " @ size = ", VSIZE[findfirst(serverbandwidth, bestserverbandwidth)], " b\n\t",
-        :normal, "bestclientbandwidth = ", :yellow, round(bestclientbandwidth, 4), :normal, " [ns/b] = [s/GB]",
+        :normal, "bestclientbandwidth = ", :yellow, round(bestclientbandwidth, digits=4), :normal, " [ns/b] = [s/GB]",
         " @ size = ", VSIZE[findfirst(clientbandwidth, bestclientbandwidth)], " b\n\t",
         "bestserverlatency = ", :yellow,  Int(round(bestserverlatency)), :normal, " [ns] ",
         " @ size = ", VSIZE[findfirst(serverlatency, bestserverlatency)], " b\n\t",
@@ -312,12 +312,12 @@ end
 
 clog_notime(ID, :bold, :yellow, " Dictionary  :test_bestserverbandwidths [ns/b]")
 for (ke, va) in  test_bestserverbandwidths
-    clog_notime(ke, " => \t", round(va, 4))
+    clog_notime(ke, " => \t", round(va, digits=4))
 end
 
 clog_notime(ID, :bold, :yellow, " Dictionary  :test_bestclientbandwidths [ns/b]")
 for (ke, va) in  test_bestclientbandwidths
-    clog_notime(ke, " => \t", round(va, 4))
+    clog_notime(ke, " => \t", round(va, digits=4))
 end
 
 zflush()

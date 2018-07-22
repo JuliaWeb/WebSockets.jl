@@ -29,7 +29,7 @@ wsh = WebSocketHandler() do req, client
             println("EMITTING MESSAGE: $(content)")
             for (k,v) in connections
                 if k != id
-                    write(v.client, (v.name * ": " * content))
+                    write(v.client, connections[id].name * ": " * content)
                 end
             end
         end
@@ -37,7 +37,7 @@ wsh = WebSocketHandler() do req, client
 end
 
 httph = HttpHandler() do req::Request, res::Response
-    onepage = readstring(Pkg.dir("WebSockets","examples","chat-client.html"))
+    onepage = read(Pkg.dir("WebSockets","examples","chat-client.html"), String)
     Response(onepage)
 end
 

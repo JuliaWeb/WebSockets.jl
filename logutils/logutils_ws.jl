@@ -96,7 +96,7 @@ Log to the given device, but also to STDOUT if that's not the given device.
 """
 function clog(vars::Vararg)
     _zlog(CURDEVICE.s, vars...)
-    _devicecategory(CURDEVICE.s) != ColorDevice && _zlog(ColorDevice(STDOUT), vars...)
+    _devicecategory(CURDEVICE.s) != ColorDevice && _zlog(ColorDevice(stdout), vars...)
     nothing
 end
 """
@@ -104,7 +104,7 @@ Log to the given device, but also to STDOUT if that's not the given device.
 """
 function clog_notime(vars::Vararg)
     _zlog_notime(CURDEVICE.s, vars...)
-    _devicecategory(CURDEVICE.s) != ColorDevice  && _zlog_notime(ColorDevice(STDOUT), vars...)
+    _devicecategory(CURDEVICE.s) != ColorDevice  && _zlog_notime(ColorDevice(stdout), vars...)
     nothing
 end
 """
@@ -216,7 +216,7 @@ end
 
 "Print dict, no heading, three pairs per line, truncate end to fit"
 function _show(d::AbstractDevice, di::Dict)
-    linelength = displaysize(STDOUT)[2]
+    linelength = displaysize(stdout)[2]
     indent = 8
     npa = 3
     plen = div(linelength - indent, npa)
@@ -336,7 +336,7 @@ end
 
 
 function _showdata(d::AbstractDevice, data::Array{UInt8,1}, contenttype::String)
-    if ismatch(r"(text|script|html|xml|julia|java)", lowercase(contenttype))
+    if occursin(lowercase(contenttype), r"(text|script|html|xml|julia|java)")
         _log(d, :green, "\Data length: ", length(data), " ", :bold, :blue)
         s = data |> String |> _limlen
         write(d.s, replace(s, r"\s+", " "))

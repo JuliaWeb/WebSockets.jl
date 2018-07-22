@@ -1,7 +1,7 @@
 # Included in benchmark_prepare.jl and in browsertests.jl
 # Refers logutils
 if !isdefined(:SRCPATH)
-    const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
+    const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") : Base.source_dir()
     const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
     SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
     LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
@@ -26,7 +26,7 @@ function fwhich(s)
     fi = ""
     if Sys.is_windows()
         try
-            fi = split(readstring(`where.exe $s`), "\r\n")[1]
+            fi = split(read(`where.exe $s`, String), "\r\n")[1]
             if !isfile(fi)
                 fi = ""
             end
