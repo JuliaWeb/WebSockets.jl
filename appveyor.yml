@@ -43,4 +43,4 @@ build_script:
 test_script:
   - ps: |
       Write-Host "This is PS"
-      julia -e 'redirect_stderr(STDOUT);info(\"Local websockets directory:\", Pkg.dir(\"WebSockets\"));Pkg.test(\"WebSockets\")'
+      julia -e 'redirect_stderr(STDOUT);@info(\"Local websockets directory:\", Pkg.dir(\"WebSockets\"));Pkg.test(\"WebSockets\")'

@@ -15,7 +15,7 @@ end
 
 "Start and wait for async hts server"
 function start_hts(timeout)
-    hts_task = @schedule ws_hts.listen_hts()
+    hts_task = @async ws_hts.listen_hts()
     t1 = now() + timeout
     while now() < t1
         sleep(0.5)
