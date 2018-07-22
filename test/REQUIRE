@@ -1,3 +1,5 @@
 HTTP
 HttpServer
 Requires
+HttpCommon
+BufferedStreams

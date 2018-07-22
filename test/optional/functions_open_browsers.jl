@@ -113,33 +113,33 @@ end
 function open_testpage(shortbrowsername)
     dmc = launch_command(shortbrowsername)
     if dmc == ``
-        info("\tCould not find " * shortbrowsername)
+        @info("\tCould not find " * shortbrowsername)
         return false
     else
         try
             if shortbrowsername == "phantomjs"
-                # Run enables text output of phantom messages in the REPL. In Windows  
+                # Run enables text output of phantom messages in the REPL. In Windows
                 # standalone REPL, run will freeze the main thread if not run async.
                 @async run(dmc)
             else
                 spawn(dmc)
             end
         catch
-            info("\tFailed to spawn " * shortbrowsername)
+            @info("\tFailed to spawn " * shortbrowsername)
             return false
         end
     end
     return true
 end
 function open_all_browsers()
-    info("Try to open browsers")
+    @info("Try to open browsers")
     brs = ["chrome", "firefox", "iexplore", "safari", "phantomjs"]
 
     openbrowsers = 0
     for b in brs
         openbrowsers += open_testpage(b)
-        sleep(8) # Reduce simultaneous connections to server. This is not a httpserver stress test. width:  
+        sleep(8) # Reduce simultaneous connections to server. This is not a httpserver stress test. width:
     end
-    info("Out of google chrome, firefox, iexplore, safari and phantomjs, tried to spawn ", openbrowsers)
+    @info("Out of google chrome, firefox, iexplore, safari and phantomjs, tried to spawn ", openbrowsers)
     openbrowsers
 end

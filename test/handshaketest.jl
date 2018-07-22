@@ -1,8 +1,20 @@
 # included in runtests.jl
-using Test
-using HTTP
-using HttpServer
-using WebSockets
+if !@isdefined Test
+    using Test
+end
+if !@isdefined HTTP
+    using HTTP
+end
+if !@isdefined HttpServer
+    using HttpServer
+end
+if !@isdefined WebSockets
+    using WebSockets
+end
+if !@isdefined BufferedStreams
+    using BufferedStreams
+end
+
 import WebSockets:  generate_websocket_key,
     websocket_handshake,
     upgrade

@@ -9,21 +9,21 @@ Websocket|server relies on a client initiating the connection.
 Websocket|client initiate the connection, but requires HTTP.
 
 The other side of the connection, the peer, is typically a browser with
-scripts enabled. Browsers are always the initiating, client side. But the 
-peer can be any program, in any language, that follows the protocol. That 
+scripts enabled. Browsers are always the initiating, client side. But the
+peer can be any program, in any language, that follows the protocol. That
 includes another Julia session, parallel process or task.
 
     Future improvements:
 1. Logging of refused requests and closures due to bad behavior of client.
-2. Allow users to receive control messages or metadata if they want to. 
-    For example RSV1 (compressed message) would be interesting. 
+2. Allow users to receive control messages or metadata if they want to.
+    For example RSV1 (compressed message) would be interesting.
 3. Check rsv1 to rsv3 values. This will reduce bandwidth.
 4. Optimize maskswitch!, possibly threaded above a certain limit.
 5. Split messages over several frames.
 6. Allow customizable console output (e.g. 'ping'). See HttpServer listen.
 """
 module WebSockets
-import Sockets: TCPSocket
+using Sockets: TCPSocket
 import MbedTLS: digest, MD_SHA1
 using Requires
 export WebSocket,
@@ -73,7 +73,7 @@ const codeDesc = Dict{Int, String}(1000=>"Normal", 1001=>"Going Away",
 
 
 """
-A WebSocket is a wrapper over a TcpSocket. It takes care of wrapping outgoing
+A WebSocket is a wrapper over a TCPSocket. It takes care of wrapping outgoing
 data in a frame and unwrapping (and concatenating) incoming data.
 """
 mutable struct WebSocket{T <: IO} <: IO
@@ -135,7 +135,7 @@ Add to acceptable SUBProtocols through e.g.
 ```julia
    WebSockets.addsubproto("json")
 ```
-Also see function subprotocol 
+Also see function subprotocol
 """
 const SUBProtocols= Array{String,1}()
 
@@ -165,9 +165,9 @@ function write_fragment(io::IO, islast::Bool, opcode, hasmask::Bool, data::Dt)
         if opcode == OPCODE_TEXT
             # Avoid masking Strings bytes in place.
             # This makes client websockets slower than server websockets.
-            data = copy(data)  
+            data = copy(data)
         end
-        # Write the random masking key to io, also mask the data in-place  
+        # Write the random masking key to io, also mask the data in-place
         write(io, maskswitch!(data))
     end
     write(io, data)
@@ -216,7 +216,7 @@ send_pong(ws, data...) = write_pong(ws.socket, !ws.server, data...)
     close(ws::WebSocket, statusnumber = n)
     close(ws::WebSocket, statusnumber = n, freereason = "my reason")
 Send an OPCODE_CLOSE frame, and wait for the same response or until
-a reasonable amount of time, $(round(TIMEOUT_CLOSEHANDSHAKE, digits=1)) s, has passed. 
+a reasonable amount of time, $(round(TIMEOUT_CLOSEHANDSHAKE, digits=1)) s, has passed.
 Data received while closing is dropped.
 Status number n according to RFC 6455 7.4.1 can be included, see WebSockets.codeDesc
 """
@@ -228,8 +228,8 @@ function Base.close(ws::WebSocket; statusnumber = 0, freereason = "")
         elseif freereason == ""
             statuscode = reinterpret(UInt8, [hton(UInt16(statusnumber))])
             locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, copy(statuscode))
-        else 
-            statuscode = vcat(reinterpret(UInt8, [hton(UInt16(statusnumber))]), 
+        else
+            statuscode = vcat(reinterpret(UInt8, [hton(UInt16(statusnumber))]),
                                 Vector{UInt8}(freereason))
             locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, copy(statuscode))
         end
@@ -350,10 +350,10 @@ function handle_control_frame(ws::WebSocket, wsf::WebSocketFragment)
         end
         throw(WebSocketClosedError("ws|$(ws.server ? "server" : "client") respond to OPCODE_CLOSE " * reason))
     elseif wsf.opcode == OPCODE_PING
-        info("ws|$(ws.server ? "server" : "client") received OPCODE_PING")
+        @info("ws|$(ws.server ? "server" : "client") received OPCODE_PING")
         send_pong(ws, wsf.data)
     elseif wsf.opcode == OPCODE_PONG
-        info("ws|$(ws.server ? "server" : "client") received OPCODE_PONG")
+        @info("ws|$(ws.server ? "server" : "client") received OPCODE_PONG")
         # Nothing to do here; no reply is needed for a pong message.
     else  # %xB-F are reserved for further control frames
         error(" while handle_control_frame(ws|$(ws.server ? "server" : "client"), wsf): Unknown opcode $(wsf.opcode)")
@@ -437,12 +437,12 @@ function Base.read(ws::WebSocket)
     catch err
         try
             errtyp = typeof(err)
-            if errtyp <: InterruptException 
+            if errtyp <: InterruptException
                 msg = " while read(ws|$(ws.server ? "server" : "client") received InterruptException."
                 # This exception originates from this side. Follow close protocol so as not to irritate the other side.
                 close(ws, statusnumber = 1006, freereason = msg)
                 throw(WebSocketClosedError(msg * " Performed closing handshake."))
-            elseif errtyp <: WebSocketError 
+            elseif errtyp <: WebSocketError
                 # This exception originates on the other side. Follow close protocol with reason.
                 close(ws, statusnumber = err.status)
                 throw(WebSocketClosedError(" while read(ws|$(ws.server ? "server" : "client")) $(err.message) - Performed closing handshake."))
@@ -491,10 +491,16 @@ function readframe_nonblocking(ws)
     yield()
     # Define a task for throwing interrupt exception to the (possibly blocked) read task.
     # We don't start this task because it would never return
-    killta = @task try;Base.throwto(rt, InterruptException());catch; end
+    killta = @task try
+        Base.throwto(rt, InterruptException())
+    catch
+    end
     # We start the killing task. When it is scheduled the second time,
     # we pass an InterruptException through the scheduler.
-    try;schedule(killta, InterruptException(), error = false);catch; end
+    try
+        schedule(killta, InterruptException(), error = false)
+    catch
+    end
     # We now have content on chnl, and no additional tasks.
     take!(chnl)
 end
@@ -514,10 +520,10 @@ function generate_websocket_key(key)
 end
 
 """
-    maskswitch!(data)      
-    maskswitch!(data, key:: 4-element Vector{UInt8}) 
+    maskswitch!(data)
+    maskswitch!(data, key:: 4-element Vector{UInt8})
 
-Masks or unmasks data in-place, returns the key used. 
+Masks or unmasks data in-place, returns the key used.
 Calling twice with the same key restores data.
 Ref. RFC 6455 5-3.
 """
@@ -525,7 +531,7 @@ function maskswitch!(data, mask = rand(UInt8, 4))
     for i in 1:length(data)
         data[i] = data[i] ⊻ mask[((i-1) % 4)+1]
     end
-    return mask 
+    return mask
 end
 
 "Used in handshake. See SUBProtocols"
@@ -632,15 +638,15 @@ end
 `writeguarded(websocket, message) => Bool`
 
 Return true if write is successful, false if not.
-The peer can potentially disconnect at any time, but no matter the 
+The peer can potentially disconnect at any time, but no matter the
 cause you will usually just want to exit your websocket handling function
 when you can't write to it.
-    
+
 """
 function writeguarded(ws, msg)
     try
         write(ws, msg)
-    catch 
+    catch
         return false
     end
     true
@@ -653,7 +659,7 @@ Return (data::Vector, true)
         or
         (Vector{UInt8}(), false)
 
-The peer can potentially disconnect at any time, but no matter the 
+The peer can potentially disconnect at any time, but no matter the
 cause you will usually just want to exit your websocket handling function
 when you can't write to it.
 
@@ -679,7 +685,8 @@ function readguarded(ws)
     end
 end
 
-
-@require HTTP="cd3eb016-35fb-5094-929b-558a96fad6f3" include("HTTP.jl")
-@require HttpServer="58cfbd8c-6b7d-5447-85c1-563540e28d27" include("HttpServer.jl")
+function __init__()
+    @require HTTP="cd3eb016-35fb-5094-929b-558a96fad6f3" include("HTTP.jl")
+    @require HttpServer="58cfbd8c-6b7d-5447-85c1-563540e28d27" include("HttpServer.jl")
+end
 end # module WebSockets

@@ -3,21 +3,21 @@
 
 # Tests may currently fail 'randomly' because of the limitations
 # of running everything in a single thread, using libuv.
-# For example, trying to connect while the websocket is 
+# For example, trying to connect while the websocket is
 # busy in a blocking operation can cause timeouts somewhere.
 #
 # The test set outside of this is now complete, and /benchmark
 # is a more effective context for testing the efficiency.
 #
 # TODO
-# 'functions_open_browsers.jl' is an older version 
+# 'functions_open_browsers.jl' is an older version
 #     of the same file name from /benchmark. Using that requires
 #     some restructuring of this file.
-# 'functions_log_test.jl' is an older version of 
+# 'functions_log_test.jl' is an older version of
 #     /logutils/...  Use the new methods.
 
 # Launches available browsers on browsertest.html.
-# Websockets are intiated by the browser / web page. 
+# Websockets are intiated by the browser / web page.
 # Handler_functions_websockets respond and store allocations & etc.
 # After a successfull exchange, the browsers navigate to a second html page
 # for binary performance tests. In the end, all websockets are closed
@@ -48,7 +48,7 @@ include("functions_server.jl")
 closeall()
 server = start_ws_server_async()
 include("functions_open_browsers.jl")
-info("This OS is $(string(Sys.KERNEL))\n")
+@info("This OS is $(string(Sys.KERNEL))\n")
 n_browsers = 0
 #n_browsers += open_testpage("phantom")
 n_browsers += open_all_browsers()#
@@ -56,7 +56,7 @@ n_browsers += open_all_browsers()#
 # Control flow passes to async handler functions
 
 if n_browsers > 0
-    info("Sleeping main thread for an initial minimum of $FIRSTWAIT\n")
+    @info("Sleeping main thread for an initial minimum of $FIRSTWAIT\n")
     t0 = now()
     while now()-t0 < FIRSTWAIT
         sleep(1)
@@ -70,7 +70,7 @@ if n_browsers > 0
             sleep(2)
             passedtime = now() - t0
             exitlatestin = MAXWAIT + t0- now()
-            info("$(div(passedtime.value, 1000)) s passed. Max remaining test time $(div(exitlatestin.value, 1000)) s\n")
+            @info("$(div(passedtime.value, 1000)) s passed. Max remaining test time $(div(exitlatestin.value, 1000)) s\n")
         end
         sleep(.5)
         contwait = contwait && count_open_websockets() > 0
@@ -79,7 +79,7 @@ end
 n_opensockets = count_open_websockets()
 
 closeall()
-info(Dates.format(now(), "HH:MM:SS"), "\tClosed web sockets and servers.")
+@info(Dates.format(now(), "HH:MM:SS"), "\tClosed web sockets and servers.")
 # sum up
 allocs = Vector{Int64}()
 times = Vector{Float64}()
@@ -104,8 +104,8 @@ end
 n_binary = n_msgs - n_text
 
 # print summary
-info("Spawned $n_browsers browsers. $n_browsers made requests. Opened $n_ws sockets, $n_opensockets did not close as intended.")
-info("Received $n_msgs messages, $n_text text and $n_binary binary, $(round(sum(lengths)/ 1000 / 1000, digits=3)) Mb, sent a similar amount.")
+@info("Spawned $n_browsers browsers. $n_browsers made requests. Opened $n_ws sockets, $n_opensockets did not close as intended.")
+@info("Received $n_msgs messages, $n_text text and $n_binary binary, $(round(sum(lengths)/ 1000 / 1000, digits=3)) Mb, sent a similar amount.")
 
 
 
@@ -128,33 +128,33 @@ if n_msgs > 0
     minspeed = minimum(va -> va > 0.0 ? va : typemax(va), lengths ./ times)
     avgspeed = sum(lengths) / sum(times)
 
-    info("Length of messages received\n",
+    @info("Length of messages received\n",
         "\t\tAverage length:\t\t", round(avglength / 1000, digits=3), " kB\n",
         "\t\t\Minimum :\t\t", minlength , " b\n",
         "\t\t\Maximum :\t\t", round(maxlength / 1000 / 1000 , digits=3), " Mb\n")
 
-    info("Time spent reading and waiting for received messages\n",
+    @info("Time spent reading and waiting for received messages\n",
         "\t\tAverage time:\t\t", round(avgtime, digits=4), " s\n",
         "\t\t\Minimum :\t\t", mintime , " s\n",
         "\t\t\Maximum :\t\t", maxtime, " s\n")
 
-    info("Reading speed (strongly affected by the active browsers)\n",
+    @info("Reading speed (strongly affected by the active browsers)\n",
         "\t\tAverage speed:\t", round(avgspeed / 1000 / 1000, digits=3), " Mb/s\n",
         "\t\t\Minimum :\t", round(minspeed / 1000 / 1000 , digits=10), " Mb/s\n",
         "\t\t\Maximum :\t", round(maxspeed / 1000 / 1000, digits=3), " Mb/s\n")
 
-    info("Allocations for reading, bytes allocated per byte received\n",
+    @info("Allocations for reading, bytes allocated per byte received\n",
         "\t\tAverage allocation:\t", round(avgaloc, digits=3), "\n",
         "\t\t\Minimum :\t\t", round(minaloc, digits=3), "\n",
         "\t\t\Maximum :\t\t", round(maxaloc, digits=3), "\n",)
 
-    info("Text messages received per websocket:")
+    @info("Text messages received per websocket:")
     for m in RECEIVED_WS_MSGS
         display(m)
     end
 
 else
-    info("Failure on speed / allocation test.")
+    @info("Failure on speed / allocation test.")
 end
 
 @test n_opensockets == 0

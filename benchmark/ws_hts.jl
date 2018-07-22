@@ -161,7 +161,7 @@ const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
 SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
 LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
 import ws_hts.listen_hts
-tas = @schedule ws_hts.listen_hts()
+tas = @async ws_hts.listen_hts()
 sleep(7)
 hts = ws_hts.getws_hts()
 """
