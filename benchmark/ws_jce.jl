@@ -52,7 +52,7 @@ function echowithdelay_jce()
         zlog(id, :green, " Websocket closed, control returned.")
     catch err
         clog(id, :red, err)
-        clog_notime.(catch_stacktrace()[1:4])
+        clog_notime.(stacktrace(catch_backtrace())[1:4])
         zflush()
     finally
         clog(id, :green, " Closing log ", LOGFILE)

@@ -1,7 +1,5 @@
 # included in runtests.jl
-if !@isdefined Test
-    using Test
-end
+import Test: @test
 if !@isdefined HTTP
     using HTTP
 end
@@ -11,8 +9,13 @@ end
 if !@isdefined Sockets
     using Sockets
 end
+if !@isdefined WebSockets
+    using WebSockets
+end
 import WebSockets:  is_upgrade,
-                    upgrade
+                    upgrade,
+                    WebSocketHandler
+import Random.randstring
 function echows(req, ws)
     @test origin(req) == ""
     @test target(req) == "/"
@@ -52,17 +55,23 @@ server_WS = WebSockets.ServerWS(
 tas = @async WebSockets.serve(server_WS, "127.0.0.1", port_HTTP_ServeWS)
 while !istaskstarted(tas);yield();end
 
-const servers = [
-    ("HTTP",        "ws://127.0.0.1:$(port_HTTP)"),
-    ("HttpServer",  "ws://127.0.0.1:$(port_HttpServer)"),
-    ("HTTTP ServerWS",  "ws://127.0.0.1:$(port_HTTP_ServeWS)"),
-    ("ws",          "ws://echo.websocket.org"),
-    ("wss",         "wss://echo.websocket.org")]
+#const servers = [
+#    ("HTTP",        "ws://127.0.0.1:$(port_HTTP)"),
+#    ("HttpServer",  "ws://127.0.0.1:$(port_HttpServer)"),
+#    ("HTTTP ServerWS",  "ws://127.0.0.1:$(port_HTTP_ServeWS)"),
+#    ("ws",          "ws://echo.websocket.org"),
+#    ("wss",         "wss://echo.websocket.org")]
 
+const servers = [
+        ("HTTP",        "ws://127.0.0.1:$(port_HTTP)"),
+        ("HTTTP ServerWS",  "ws://127.0.0.1:$(port_HTTP_ServeWS)"),
+        ("ws",          "ws://echo.websocket.org"),
+        ("wss",         "wss://echo.websocket.org")]
+    
 const lengths = [0, 125, 126, 127, 2000]
 
 for (s, url) in servers, len in lengths, closestatus in [false, true]
-    len == 0 && contains(url, "echo.websocket.org") && continue
+    len == 0 && occursin("echo.websocket.org", url) && continue
     @info("Testing client -> server at $(url), message length $len")
     test_str = randstring(len)
     forcecopy_str = test_str |> collect |> copy |> join

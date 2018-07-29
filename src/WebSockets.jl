@@ -23,8 +23,9 @@ includes another Julia session, parallel process or task.
 6. Allow customizable console output (e.g. 'ping'). See HttpServer listen.
 """
 module WebSockets
-using Sockets: TCPSocket
+using Sockets: TCPSocket, IPAddr
 import MbedTLS: digest, MD_SHA1
+import Base64: base64encode, base64decode
 using Requires
 export WebSocket,
        readguarded,

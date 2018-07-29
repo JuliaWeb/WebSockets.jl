@@ -1,4 +1,5 @@
 # Included in benchmark.jl
+using Distributed
 "Adds process 2, same LOAD_PATH as process 1"
 function prepareworker()
     # Prepare worker
@@ -121,7 +122,7 @@ function HTS_JCE(n, messagesize)
     zflush()
     write(hts, "exit")
     # We deserialize JCE's time records from this sample
-    bs = BufferStream()
+    bs = Base.BufferStream()
     write(bs, read(hts))
     close(bs)
     if bytesavailable(bs) > 0
@@ -217,7 +218,6 @@ end
 Constant message size [b], measured time interval vectors [ns]
     -> server and client speeds, server and client bandwidth [ns/b]
 "
-
 function serverandclientspeeds(messagesize, serverlatencies, clientlatencies)
     serverspeeds =  serverlatencies / messagesize
     clientspeeds =  clientlatencies / messagesize

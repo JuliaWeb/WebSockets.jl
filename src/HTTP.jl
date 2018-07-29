@@ -122,7 +122,7 @@ try
     end
 catch err
     showerror(STDERR, err)
-    println.(catch_stacktrace()[1:4])
+    println.(stacktrace(catch_backtrace())[1:4])
 end
 ```
 """
@@ -147,7 +147,15 @@ function upgrade(f::Function, http::HTTP.Stream)
         end
     end
     key = HTTP.header(http, "Sec-WebSocket-Key")
-    if length(base64decode(key)) != 16 # Key must be 16 bytes
+    decoded = UInt8[]
+    try 
+        decoded = base64decode(key)
+    catch
+        HTTP.setstatus(http, 400)
+        HTTP.startwrite(http)
+        return
+    end
+    if length(decoded) != 16 # Key must be 16 bytes
         HTTP.setstatus(http, 400)
         HTTP.startwrite(http)
         return
@@ -320,7 +328,7 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
                                 end
                             catch err
                                 put!(server.out, err)
-                                put!(server.out, catch_stacktrace())
+                                put!(server.out, stacktrace(catch_backtrace()))
                             end
             end
     return

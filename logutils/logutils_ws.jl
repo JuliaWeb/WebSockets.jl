@@ -26,9 +26,9 @@ import Base.text_colors
 import Base.color_normal
 import Base.text_colors
 import Base.show
-@require HttpServer include("log_httpserver.jl")
-@require HTTP include("log_http.jl")
-@require WebSockets include("log_ws.jl")
+@require HttpServer = "58cfbd8c-6b7d-5447-85c1-563540e28d27" include("log_httpserver.jl")
+@require HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3" include("log_http.jl")
+@require WebSockets = "104b5d7c-a370-577a-8038-80a2059c5097" include("log_ws.jl")
 export clog
 export clog_notime
 export zlog
@@ -150,7 +150,7 @@ function _log(cd::ColorDevice, vars::Vararg)
     nothing
 end
 "Write directly to colordevice/ IOBuffers"
-function _log(cd::ColorDevice{Base.AbstractIOBuffer{Array{UInt8,1}}}, vars::Vararg)
+function _log(cd::ColorDevice{Base.GenericIOBuffer{Array{UInt8,1}}}, vars::Vararg)
     _show.(cd, vars)
     nothing
 end
@@ -336,12 +336,12 @@ end
 
 
 function _showdata(d::AbstractDevice, data::Array{UInt8,1}, contenttype::String)
-    if occursin(lowercase(contenttype), r"(text|script|html|xml|julia|java)")
-        _log(d, :green, "\Data length: ", length(data), " ", :bold, :blue)
+    if occursin(r"(text|script|html|xml|julia|java)", lowercase(contenttype))
+        _log(d, :green, "\tData length: ", length(data), " ", :bold, :blue)
         s = data |> String |> _limlen
         write(d.s, replace(s, r"\s+", " "))
     else
-        _log(d, :green, "\Data length: ", length(data), "  ", :blue)
+        _log(d, :green, "\tData length: ", length(data), "  ", :blue)
         write(d.s,  data |> _limlen)
     end
     nothing

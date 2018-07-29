@@ -29,5 +29,5 @@ handle(req, res) = Response(200)
 
 server = Server(HttpHandler(handle), 
                 WebSocketHandler(gatekeeper))
-
+@info("Browser > http://127.0.0.1:8080 , F12> console > ws = new WebSocket(\"ws://127.0.0.1:8080\") ")
 @async run(server, 8080)

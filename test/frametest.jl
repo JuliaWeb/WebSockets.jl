@@ -1,7 +1,6 @@
 # included in runtests.jl
-if !@isdefined Test
-    using Test
-end
+import Test: @test,
+             @test_throws
 import Sockets: TCPSocket
 import Random: randstring
 import WebSockets: maskswitch!,

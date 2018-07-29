@@ -69,7 +69,14 @@ function websocket_handshake(request, client)
         return false
     end
     key = request.headers["Sec-WebSocket-Key"]
-    if length(base64decode(key)) != 16 # Key must be 16 bytes
+    decoded = UInt8[]
+    try 
+        decoded = base64decode(key)
+    catch
+        Base.write(client.sock, HttpServer.Response(400))
+        return false
+    end
+    if length(decoded) != 16 # Key must be 16 bytes
         Base.write(client.sock, HttpServer.Response(400))
         return false
     end
@@ -123,7 +130,7 @@ Similar to is_upgrade(r::HTTP.Message)
 """
 function HttpServer.is_websocket_handshake(handler::WebSocketHandler, req::HttpServer.Request)
     if req.method == "GET"
-        if occursin(get(req.headers, "Connection", ""), r"upgrade"i)
+        if occursin(r"upgrade"i, get(req.headers, "Connection", ""))
             if lowercase(get(req.headers, "Upgrade", "")) == "websocket"
                 return true
             end

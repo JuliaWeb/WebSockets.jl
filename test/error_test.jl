@@ -3,9 +3,6 @@
 if !@isdefined Test
     using Test
 end
-if !@isdefined Base64
-    using Base64
-end
 import HTTP
 import HttpServer: HttpHandler,
         Server
@@ -132,7 +129,7 @@ server_WS = ServerWS(   HTTP.HandlerFunction(req-> HTTP.Response(200)),
                                                         read(ws_serv)
                                                     catch err
                                                         put!(chfromserv, err)
-                                                        put!(chfromserv, catch_stacktrace()[1:2])
+                                                        put!(chfromserv, stacktrace(catch_backtrace())[1:2])
                                                     end
                                                 end
                                             end);

@@ -1,21 +1,29 @@
 # included in runtests.jl
 # focus on HTTP.jl
-if !@isdefined Test
-    using Test
-end
+import Test: @test,
+             @test_throws
 if !@isdefined HTTP
     using HTTP
+end
+if !@isdefined WebSockets
+    using WebSockets
 end
 import WebSockets:  is_upgrade,
                     upgrade,
                     _openstream,
                     addsubproto,
                     generate_websocket_key
-
+if !@isdefined Sockets
+    using Sockets
+end
+import Base.BufferStream
+if !@isdefined Base64
+    using Base64
+end
 sethd(r::HTTP.Messages.Response, pa::Pair) = HTTP.Messages.setheader(r, HTTP.Header(pa))
 
 const NEWPORT = 8091
-const TCPREF2 = Ref{Base.TCPServer}()
+const TCPREF2 = Ref{Sockets.TCPServer}()
 
 @info("start HTTP server\n")
 sleep(1)
@@ -40,11 +48,11 @@ res = WebSockets.open((_)->nothing, URL, subprotocol = "unapproved");
 
 @info("try open with uknown port\n")
 sleep(1)
-caughterr = WebSockets.WebSocketClosedError("")
+global caughterr = WebSockets.WebSocketClosedError("")
 try
 WebSockets.open((_)->nothing, "ws://127.0.0.1:8099");
 catch err
-    caughterr = err
+    global caughterr = err
 end
 @test typeof(caughterr) <: WebSockets.WebSocketClosedError
 @test caughterr.message == " while open ws|client: connect: connection refused (ECONNREFUSED)"
