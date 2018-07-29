@@ -1,13 +1,12 @@
 # WebSockets.jl - Julia 0.7 branch
 
 *Current state 22/7-18*:
-It is possible to run the examples with some tweaking.
-HttpServer support is working if you 'check out' a rapidly changing set of branches and pull requests on HttpServer and dependencies.
+It is possible to run the examples with some tweaking. HTTP.Response (200) has changed behaviour, so examples are not working fully.
+HttpServer support may work if you 'check out' a rapidly changing set of branches and pull requests on HttpServer and dependencies.
 
-HttpServer support is deprecated and may be fully removed without further warning.
+HttpServer support is deprecated and will be fully removed without further warning when HTTP examples are fully working.
 
-Tests conversion to 0.7 is still rudimentary.
-
+Tests still include HttpServer tests and therefore fail.
 
 *Release version*:
 
