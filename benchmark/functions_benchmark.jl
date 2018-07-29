@@ -1,5 +1,6 @@
 # Included in benchmark.jl
 using Distributed
+using Dates
 "Adds process 2, same LOAD_PATH as process 1"
 function prepareworker()
     # Prepare worker

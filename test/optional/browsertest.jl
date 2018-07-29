@@ -29,6 +29,7 @@ using HttpServer
 using WebSockets
 using Test
 using JSON
+using Dates
 const WEBSOCKETS = Dict{String, WebSockets.WebSocket}()
 const RECEIVED_WS_MSGS_TIME = Dict{String, Vector{Float64}}()
 const RECEIVED_WS_MSGS_ALLOCATED = Dict{String, Vector{Int64}}()

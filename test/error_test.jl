@@ -1,11 +1,11 @@
 # included in runtests.jl
-
-if !@isdefined Test
-    using Test
-end
+import Test: @test
 import HTTP
 import HttpServer: HttpHandler,
         Server
+if !@isdefined WebSockets
+    using WebSockets
+end
 import WebSockets: ServerWS,
         serve,
         open,

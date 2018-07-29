@@ -20,7 +20,6 @@ On exit, a closing handshake is started. If the server is not currently reading
 after a reasonable amount of time and continue execution.
 """
 function open(f::Function, url; verbose=false, subprotocol = "", kw...)
-
     key = base64encode(rand(UInt8, 16))
     headers = [
         "Upgrade" => "websocket",
@@ -178,7 +177,7 @@ function upgrade(f::Function, http::HTTP.Stream)
             f(ws)
         end
 #    catch err
-#        warn("WebSockets.HTTP.upgrade: Caught unhandled error while calling argument function f, the handler / gatekeeper:\n\t")
+#        @warn("WebSockets.HTTP.upgrade: Caught unhandled error while calling argument function f, the handler / gatekeeper:\n\t")
 #        mt = typeof(f).name.mt
 #        fnam = splitdir(string(mt.defs.func.file))[2]
 #        print_with_color(:yellow, STDERR, "f = ", string(f) * " at " * fnam * ":" * string(mt.defs.func.line) * "\nERROR:\t")

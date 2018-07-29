@@ -22,6 +22,7 @@ loaded from separate files with @require. This adds to loading time.
 """
 module logutils_ws
 using Requires
+using Dates
 import Base.text_colors
 import Base.color_normal
 import Base.text_colors

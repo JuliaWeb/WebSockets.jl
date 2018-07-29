@@ -43,7 +43,8 @@ export WebSocket,
 # revisit the need for defining this union type for method definitions. The functions would
 # probably work just as fine with duck typing.
 const Dt = Union{Base.ReinterpretArray{UInt8,1,UInt16,Array{UInt16,1}},
-            Vector{UInt8}}
+            Vector{UInt8}, 
+            Base.CodeUnits{UInt8,String}   }
 "A reasonable amount of time"
 const TIMEOUT_CLOSEHANDSHAKE = 10.0
 
@@ -190,7 +191,8 @@ end
 """ Write text data; will be sent as one frame."""
 function Base.write(ws::WebSocket,data::String)
     # add a method for reinterpreted strings as well? See const Dt.
-    locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, Vector{UInt8}(data)) # Vector{UInt8}(String) will give a warning in v0.7.
+  #  locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, Vector{UInt8}(data)) # Vector{UInt8}(String) will give a warning in v0.7.
+  locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, codeunits(data)) # Vector{UInt8}(String) will give a warning in v0.7.
 end
 
 """ Write binary data; will be sent as one frame."""

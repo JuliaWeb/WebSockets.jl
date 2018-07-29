@@ -13,6 +13,7 @@ import URIParser.URI
 import WebSockets.WebSocketHandler
 import WebSockets.WebSocket
 import Base.print
+using Dates
 "Date time group string"
 dtg() = Dates.format(now(), "HH:MM:SS")
 """
