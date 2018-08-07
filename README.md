@@ -156,7 +156,7 @@ Clients need to use [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl).
 using HTTP
 using WebSockets
 function client_one_message(ws)
-    print_with_color(:green, stdout, "\nws|client input >  ")
+    printstyled(stdout, "\nws|client input >  ", color=:green)
     msg = readline(stdin)
     if writeguarded(ws, msg)
         msg, stillopen = readguarded(ws)
@@ -176,7 +176,7 @@ function main()
         println("ws:// host [ \":\" port ] path [ \"?\" query ]")
         println("Example:\nws://127.0.0.1:8080")
         println("Where do you want to connect? Empty line to exit")
-        print_with_color(:green, stdout, "\nclient_repl_input >  ")
+        printstyled(stdout, "\nclient_repl_input >  ", color=:green)
         wsuri = readline(stdin)
         wsuri == "" && break
         res = WebSockets.open(client_one_message, wsuri)
