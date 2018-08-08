@@ -1,12 +1,15 @@
 # WebSockets.jl - Julia 0.7 branch
 
-*Current state 22/7-18*:
-It is possible to run the examples with some tweaking. HTTP.Response (200) has changed behaviour, so examples are not working fully.
+*Current state on 'master' 8/8-18*:
+
+The next version of WebSockets is dropping version 0.6. Current master worked to some extent on Julia 0.7-alpha, but is now failing due to changes in dependencies. We advise to test dependency MBedTLS as a first step.
+
+When running current examples, note that HTTP.Response(200) has changed behaviour, so examples are not working fully and you will need to incorporate a mini HTML page in order to run them. 
+
 HttpServer support may work if you 'check out' a rapidly changing set of branches and pull requests on HttpServer and dependencies.
 
 HttpServer support is deprecated and will be fully removed without further warning when HTTP examples are fully working.
 
-Tests still include HttpServer tests and therefore fail.
 
 *Release version*:
 
