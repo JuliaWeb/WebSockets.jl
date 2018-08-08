@@ -120,7 +120,7 @@ try
         end
     end
 catch err
-    showerror(STDERR, err)
+    showerror(stderr, err)
     println.(stacktrace(catch_backtrace())[1:4])
 end
 ```
