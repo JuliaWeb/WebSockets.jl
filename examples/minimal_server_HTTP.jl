@@ -32,4 +32,5 @@ handle(req, res) = HTTP.Response(200)
 server = WebSockets.ServerWS(HTTP.HandlerFunction(handle), 
                 WebSockets.WebsocketHandler(gatekeeper))
 
+@info("Browser > http://127.0.0.1:8080 , F12> console > ws = new WebSocket(\"ws://127.0.0.1:8080\") ")
 @async WebSockets.serve(server, 8080)

@@ -1,10 +1,11 @@
-info("Loading HttpServer methods...")
+@warn "HttpServer->WebSockets support is deprecated. Using HttpServer may still work if you " *
+       "'git checkout' special branches or pull request of HttpServer and related packages."
 
 export WebSocketHandler
 
 """
-Called by HttpServer. Responds to a WebSocket handshake request. 
-If the connection is acceptable, sends status code 101 
+Called by HttpServer. Responds to a WebSocket handshake request.
+If the connection is acceptable, sends status code 101
 and headers according to RFC 6455. Function returns
 a WebSocket instance with the open socket as one of the fields.
 
@@ -68,7 +69,14 @@ function websocket_handshake(request, client)
         return false
     end
     key = request.headers["Sec-WebSocket-Key"]
-    if length(base64decode(key)) != 16 # Key must be 16 bytes
+    decoded = UInt8[]
+    try 
+        decoded = base64decode(key)
+    catch
+        Base.write(client.sock, HttpServer.Response(400))
+        return false
+    end
+    if length(decoded) != 16 # Key must be 16 bytes
         Base.write(client.sock, HttpServer.Response(400))
         return false
     end
@@ -78,7 +86,7 @@ function websocket_handshake(request, client)
     response.headers["Upgrade"] = "websocket"
     response.headers["Connection"] = "Upgrade"
     response.headers["Sec-WebSocket-Accept"] = resp_key
-   
+
     Base.write(client.sock, response)
     return true
 end
@@ -88,7 +96,7 @@ WebSocketHandler(f::Function) <: HttpServer.WebSocketInterface
 
 A simple Function-wrapper for HttpServer.
 
-The provided argument should be of the form 
+The provided argument should be of the form
     `f(Request, WebSocket) => nothing`
 
 Request is intended for gatekeeping, ref. RFC 6455 section 10.1.
@@ -111,6 +119,7 @@ function HttpServer.handle(handler::WebSocketHandler, req::HttpServer.Request, c
     if isopen(sock)
         try
             close(sock)
+        catch
         end
     end
 end
@@ -121,7 +130,7 @@ Similar to is_upgrade(r::HTTP.Message)
 """
 function HttpServer.is_websocket_handshake(handler::WebSocketHandler, req::HttpServer.Request)
     if req.method == "GET"
-        if ismatch(r"upgrade"i, get(req.headers, "Connection", ""))
+        if occursin(r"upgrade"i, get(req.headers, "Connection", ""))
             if lowercase(get(req.headers, "Upgrade", "")) == "websocket"
                 return true
             end

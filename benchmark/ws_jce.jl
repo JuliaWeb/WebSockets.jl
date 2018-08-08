@@ -12,7 +12,7 @@ using ..WebSockets
 # We want to log to a separate file, and so use our own
 # instance of logutils_ws in this process
 import logutils_ws: logto, clog, zlog, zflush, clog_notime
-const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
+const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") : Base.source_dir()
 const LOGFILE = "ws_jce.log"
 
 const PORT = 8000
@@ -52,7 +52,7 @@ function echowithdelay_jce()
         zlog(id, :green, " Websocket closed, control returned.")
     catch err
         clog(id, :red, err)
-        clog_notime.(catch_stacktrace()[1:4])
+        clog_notime.(stacktrace(catch_backtrace())[1:4])
         zflush()
     finally
         clog(id, :green, " Closing log ", LOGFILE)
@@ -83,7 +83,7 @@ function _jce(ws)
         length(msg) == 4 && msg == Vector{UInt8}("exit") && break
         # react to delay instruction
         if length(msg) < 16 && msg[1:6] == Vector{UInt8}("delay=")
-            delay = parse(Int, String(msg[7:end]))
+            delay = Meta.parse(Int, String(msg[7:end]))
             clog(id, :green, " Changing delay to ", delay, " ms")
             zflush()
         end

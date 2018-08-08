@@ -1,3 +1,5 @@
 HTTP
 HttpServer
-JSON
+Requires
+HttpCommon
+BufferedStreams

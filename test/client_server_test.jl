@@ -1,9 +1,21 @@
 # included in runtests.jl
-using Base.Test
-using HTTP
-using HttpServer
+import Test: @test
+if !@isdefined HTTP
+    using HTTP
+end
+if !@isdefined HttpServer
+    using HttpServer
+end
+if !@isdefined Sockets
+    using Sockets
+end
+if !@isdefined WebSockets
+    using WebSockets
+end
 import WebSockets:  is_upgrade,
-                    upgrade
+                    upgrade,
+                    WebSocketHandler
+import Random.randstring
 function echows(req, ws)
     @test origin(req) == ""
     @test target(req) == "/"
@@ -14,47 +26,53 @@ function echows(req, ws)
         !writeguarded(ws, data) && break
     end
 end
-                    
+
 const port_HTTP = 8000
 const port_HTTP_ServeWS = 8001
 const port_HttpServer = 8081
-const TCPREF = Ref{Base.TCPServer}()
+const TCPREF = Ref{Sockets.TCPServer}()
 
 # Start HTTP listen server on port $port_HTTP"
-tas = @schedule HTTP.listen("127.0.0.1", port_HTTP, tcpref = TCPREF) do s
+tas = @async HTTP.listen("127.0.0.1", port_HTTP, tcpref = TCPREF) do s
     if WebSockets.is_upgrade(s.message)
-        WebSockets.upgrade(echows, s) 
+        WebSockets.upgrade(echows, s)
     end
 end
 while !istaskstarted(tas);yield();end
 
 # Start HttpServer on port $port_HttpServer
-const server = Server(HttpHandler((req, res)->Response(200)), 
+const server = Server(HttpHandler((req, res)->Response(200)),
                       WebSocketHandler(echows));
-tas = @schedule run(server, port_HttpServer)
+tas = @async run(server, port_HttpServer)
 while !istaskstarted(tas);yield();end
 
 
 # Start HTTP ServerWS on port $port_HTTP_ServeWS
 server_WS = WebSockets.ServerWS(
-    HTTP.HandlerFunction(req-> HTTP.Response(200)), 
+    HTTP.HandlerFunction(req-> HTTP.Response(200)),
     WebSockets.WebsocketHandler(echows))
 
-tas = @schedule WebSockets.serve(server_WS, "127.0.0.1", port_HTTP_ServeWS)
+tas = @async WebSockets.serve(server_WS, "127.0.0.1", port_HTTP_ServeWS)
 while !istaskstarted(tas);yield();end
 
-const servers = [
-    ("HTTP",        "ws://127.0.0.1:$(port_HTTP)"), 
-    ("HttpServer",  "ws://127.0.0.1:$(port_HttpServer)"),
-    ("HTTTP ServerWS",  "ws://127.0.0.1:$(port_HTTP_ServeWS)"),
-    ("ws",          "ws://echo.websocket.org"),
-    ("wss",         "wss://echo.websocket.org")]
+#const servers = [
+#    ("HTTP",        "ws://127.0.0.1:$(port_HTTP)"),
+#    ("HttpServer",  "ws://127.0.0.1:$(port_HttpServer)"),
+#    ("HTTTP ServerWS",  "ws://127.0.0.1:$(port_HTTP_ServeWS)"),
+#    ("ws",          "ws://echo.websocket.org"),
+#    ("wss",         "wss://echo.websocket.org")]
 
+const servers = [
+        ("HTTP",        "ws://127.0.0.1:$(port_HTTP)"),
+        ("HTTTP ServerWS",  "ws://127.0.0.1:$(port_HTTP_ServeWS)"),
+        ("ws",          "ws://echo.websocket.org"),
+        ("wss",         "wss://echo.websocket.org")]
+    
 const lengths = [0, 125, 126, 127, 2000]
 
 for (s, url) in servers, len in lengths, closestatus in [false, true]
-    len == 0 && contains(url, "echo.websocket.org") && continue
-    info("Testing client -> server at $(url), message length $len")
+    len == 0 && occursin("echo.websocket.org", url) && continue
+    @info("Testing client -> server at $(url), message length $len")
     test_str = randstring(len)
     forcecopy_str = test_str |> collect |> copy |> join
     WebSockets.open(url) do ws

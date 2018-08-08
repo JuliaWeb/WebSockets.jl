@@ -1,4 +1,6 @@
 # Included in benchmark.jl
+using Distributed
+using Dates
 "Adds process 2, same LOAD_PATH as process 1"
 function prepareworker()
     # Prepare worker
@@ -15,7 +17,7 @@ end
 
 "Start and wait for async hts server"
 function start_hts(timeout)
-    hts_task = @schedule ws_hts.listen_hts()
+    hts_task = @async ws_hts.listen_hts()
     t1 = now() + timeout
     while now() < t1
         sleep(0.5)
@@ -121,10 +123,10 @@ function HTS_JCE(n, messagesize)
     zflush()
     write(hts, "exit")
     # We deserialize JCE's time records from this sample
-    bs = BufferStream()
+    bs = Base.BufferStream()
     write(bs, read(hts))
     close(bs)
-    if nb_available(bs) > 0
+    if bytesavailable(bs) > 0
         receivetimes, replytimes = deserialize(bs)
     else
         error("Did not receive receivetimes, replytimes")
@@ -217,7 +219,6 @@ end
 Constant message size [b], measured time interval vectors [ns]
     -> server and client speeds, server and client bandwidth [ns/b]
 "
-
 function serverandclientspeeds(messagesize, serverlatencies, clientlatencies)
     serverspeeds =  serverlatencies / messagesize
     clientspeeds =  clientlatencies / messagesize
@@ -270,7 +271,7 @@ end
 ## that are defined at module-level (not in a local scope)
 
 "Generate a time series lineplot"
-lp(sy::Symbol) = lineplot(collect(1:length(eval(sy))), eval(sy), title = String(sy), width = displaysize(STDOUT)[2]-20, canvas = AsciiCanvas)
+lp(sy::Symbol) = lineplot(collect(1:length(eval(sy))), eval(sy), title = String(sy), width = displaysize(stdout)[2]-20, canvas = AsciiCanvas)
 
 
 "Generate a vector of time series lineplots with a common title prefix"
@@ -283,7 +284,7 @@ end
 
 "Generate an x-y lineplot in REPL"
 function lp(syx::Symbol, syy::Symbol)
-    lpl = lineplot(eval(syx), eval(syy), title = String(syy), width = displaysize(STDOUT)[2]-20, canvas = AsciiCanvas)
+    lpl = lineplot(eval(syx), eval(syy), title = String(syy), width = displaysize(stdout)[2]-20, canvas = AsciiCanvas)
     xlabel!(lpl, String(syx))
 end
 
@@ -297,6 +298,6 @@ end
 
 "Generate an x-y scatterplot"
 function sp(syx::Symbol, syy::Symbol)
-    spl = scatterplot(eval(syx), eval(syy), title = String(syy), width = displaysize(STDOUT)[2]-15, canvas = DotCanvas)
+    spl = scatterplot(eval(syx), eval(syy), title = String(syy), width = displaysize(stdout)[2]-15, canvas = DotCanvas)
     xlabel!(spl, String(syx))
 end

@@ -1,10 +1,20 @@
-# WebSockets.jl
+# WebSockets.jl - Julia 0.7 branch
+
+*Current state on 'master' 8/8-18*:
+
+The next version of WebSockets is dropping version 0.6. Current master worked to some extent on Julia 0.7-alpha, but is now failing due to changes in dependencies. We advise to test dependency MBedTLS as a first step.
+
+When running current examples, note that HTTP.Response(200) has changed behaviour, so examples are not working fully and you will need to incorporate a mini HTML page in order to run them. 
+
+HttpServer support may work if you 'check out' a rapidly changing set of branches and pull requests on HttpServer and dependencies.
+
+HttpServer support is deprecated and will be fully removed without further warning when HTTP examples are fully working.
+
 
 *Release version*:
 
 [![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6) [![Build Status](https://travis-ci.org/JuliaWeb/WebSockets.jl.svg)](https://travis-ci.org/JuliaWeb/WebSockets.jl)
 [![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg)](https://coveralls.io/r/JuliaWeb/WebSockets.jl)
-[![Appveyor](https://ci.appveyor.com/api/projects/status/github/JuliaWeb/WebSockets.jl?svg=true)](https://ci.appveyor.com/project/JuliaWeb/WebSockets-jl)
 
 
 *Development version*:
@@ -146,8 +156,8 @@ Clients need to use [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl).
 using HTTP
 using WebSockets
 function client_one_message(ws)
-    print_with_color(:green, STDOUT, "\nws|client input >  ")
-    msg = readline(STDIN)
+    print_with_color(:green, stdout, "\nws|client input >  ")
+    msg = readline(stdin)
     if writeguarded(ws, msg)
         msg, stillopen = readguarded(ws)
         println("Received:", String(msg))
@@ -166,8 +176,8 @@ function main()
         println("ws:// host [ \":\" port ] path [ \"?\" query ]")
         println("Example:\nws://127.0.0.1:8080")
         println("Where do you want to connect? Empty line to exit")
-        print_with_color(:green, STDOUT, "\nclient_repl_input >  ")
-        wsuri = readline(STDIN)
+        print_with_color(:green, stdout, "\nclient_repl_input >  ")
+        wsuri = readline(stdin)
         wsuri == "" && break
         res = WebSockets.open(client_one_message, wsuri)
         !isa(res, HTTP.Response) && println(res)

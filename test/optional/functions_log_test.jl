@@ -13,6 +13,7 @@ import URIParser.URI
 import WebSockets.WebSocketHandler
 import WebSockets.WebSocket
 import Base.print
+using Dates
 "Date time group string"
 dtg() = Dates.format(now(), "HH:MM:SS")
 """
@@ -22,9 +23,9 @@ We may, of course, be interrupting other tasks like stacktrace output.
 function clog(args...)
     buf = startbuf()
     pwc(buf, dtg(), " ", args...)
-    lock(STDERR)
-    print(STDERR, String(take!(buf)))
-    unlock(STDERR)
+    lock(stderr)
+    print(stderr, String(take!(buf)))
+    unlock(stderr)
     nothing
 end
 "Print with 'color' arguments Base.text_colors placed anywhere. Color_normal is set after the call is finished. "
@@ -151,10 +152,10 @@ function compact_format(s::String)
                     s->    endswith(s,"\n") ? s  : s*"\n"
 end
 "Text data as a (truncated) repl-friendly string ."
-function printdata{T<:Array{UInt8,1}}(io::IO, data::T, contenttype::String)
+function printdata(io::IO, data::T, contenttype::String) where T<:Array{UInt8,1}
     le = length(data)
     pwc(io, :green, "\tData length: ",  le,"\n")
-    if ismatch(r"^text", contenttype)
+    if occursin(r"^text", contenttype)
         pwc(io, :blue, data|> prettystring)
     end
 end
@@ -187,6 +188,7 @@ function print(io::IO, wsh::WebSocketHandler)
         pwc(io,   :bold , Base.info_color(), "\tWebSocketHandler")
         pwc(io, :blue, :bold, "\t", :normal, "Function called with (request, client):\n")
         pwc(io,  :green, "\t", wsh.handle, "\n")
+    catch
     end
     nothing
 end
@@ -200,6 +202,7 @@ function print(io::IO, ws::WebSocket)
         pwc(io, :green, "\t", :normal, "Websocket id: ", :bold, ws.id)
         pwc(io, :green, :bold, "\t", ws.state )
         pwc(io,  "\n")
+    catch
     end
     nothing
 end

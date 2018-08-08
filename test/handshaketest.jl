@@ -1,13 +1,27 @@
 # included in runtests.jl
-using Base.Test
-using HTTP
-using HttpServer
-using WebSockets
+import Test: @test
+import Base: convert, BufferStream
+if !@isdefined HTTP
+    using HTTP
+end
+import HTTP.Header
+if !@isdefined HttpServer
+    using HttpServer
+end
+if !@isdefined WebSockets
+    using WebSockets
+end
+if !@isdefined BufferedStreams
+    using BufferedStreams
+end
+
+
 import WebSockets:  generate_websocket_key,
     websocket_handshake,
     upgrade
-import HttpCommon:Request
+import HttpServer:Request
 import HttpServer:  is_websocket_handshake
+
 
 
 function templaterequests()
@@ -15,15 +29,16 @@ function templaterequests()
                                             "Upgrade"=>"websocket")
     firefoxheaders = Dict{String, String}("Connection"=>"keep-alive, Upgrade",
                                             "Upgrade"=>"websocket")
-    chromerequest = HttpCommon.Request("GET", "", chromeheaders, "")
+    chromerequest = HttpServer.Request("GET", "", chromeheaders, "")
     firefoxrequest= Request("GET", "", firefoxheaders, "")
     chromerequest_HTTP = HTTP.Messages.Request("GET", "/", collect(chromeheaders))
     firefoxrequest_HTTP = HTTP.Messages.Request("GET", "/", collect(firefoxheaders))
     return [chromerequest, firefoxrequest, chromerequest_HTTP, firefoxrequest_HTTP]
 end
-
+convert(::Type{Header}, pa::Pair{String,String}) = Pair(SubString(pa[1]), SubString(pa[2]))
 sethd(r::Request, pa::Pair) = push!(r.headers, pa)
-sethd(r::HTTP.Messages.Request, pa::Pair) = HTTP.Messages.setheader(r, HTTP.Header(pa)) 
+sethd(r::HTTP.Messages.Request, pa::Pair) = sethd(r, convert(Header, pa)) 
+sethd(r::HTTP.Messages.Request, pa::Header) = HTTP.Messages.setheader(r, pa) 
 
 takefirstline(buf::IOBuffer) = strip(split(buf |> take! |> String, "\r\n")[1])
 takefirstline(buf::BufferStream) = strip(split(buf |> read |> String, "\r\n")[1])
@@ -91,7 +106,7 @@ for r in templaterequests()
     @test handshakeresponse(r) == REJECT
     sethd(r,  "Sec-WebSocket-Key"       => "17 bytes key is not accepted")
     @test handshakeresponse(r) == REJECT
-    sethd(r,  "Sec-WebSocket-Key"       => "16 bytes key this is surely")
+    sethd(r,  "Sec-WebSocket-Key"       => "AQIDBAUGBwgJCgsMDQ4PEA==")
     sethd(r,  "Sec-WebSocket-Protocol"  => "unsupported")
     @test handshakeresponse(r) == REJECT
 end
@@ -100,7 +115,7 @@ end
 #  Test simple handshakes, acceptable
 for r in templaterequests()
     sethd(r, "Sec-WebSocket-Version"    => "13")
-    sethd(r,  "Sec-WebSocket-Key"       => "16 bytes key this is surely")
+    sethd(r,  "Sec-WebSocket-Key"       => "AQIDBAUGBwgJCgsMDQ4PEA==")
     @test handshakeresponse(r) == SWITCH
 end
 
@@ -109,7 +124,7 @@ end
 #  Test unacceptable subprotocol handshake subprotocol
 for r in templaterequests()
     sethd(r, "Sec-WebSocket-Version"    => "13")
-    sethd(r, "Sec-WebSocket-Key"        => "16 bytes key this is surely")
+    sethd(r, "Sec-WebSocket-Key"        => "AQIDBAUGBwgJCgsMDQ4PEA==")
     sethd(r, "Sec-WebSocket-Protocol"       => "my.server/json-zmq")
     @test handshakeresponse(r) == REJECT
 end
@@ -123,7 +138,7 @@ end
 # "Test handshake subprotocol now acceptable"
 for r in templaterequests()
     sethd(r, "Sec-WebSocket-Version"    => "13")
-    sethd(r,  "Sec-WebSocket-Key"        => "16 bytes key this is surely")
+    sethd(r,  "Sec-WebSocket-Key"        => "AQIDBAUGBwgJCgsMDQ4PEA==")
     sethd(r, "Sec-WebSocket-Protocol"       => "xml")
     @test handshakeresponse(r) == SWITCH
     sethd(r, "Sec-WebSocket-Protocol"       => "my.server/json-zmq")

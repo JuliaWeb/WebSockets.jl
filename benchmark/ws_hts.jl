@@ -11,7 +11,7 @@ using ..WebSockets
 # We want to log to a separate file, so
 # we use our own instance of logutils_ws here.
 import logutils_ws: logto, clog, zlog, zflush, clog_notime
-const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
+const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") : Base.source_dir()
 const SERVEFILE = "bce.html"
 const PORT = 8000
 const SERVER = "127.0.0.1"
@@ -34,7 +34,7 @@ function listen_hts()
         end
     catch err
         clog(id, :red, err)
-        clog_notime.(catch_stacktrace()[1:4])
+        clog_notime.(stacktrace(catch_backtrace())[1:4])
         zflush()
     end
 end
@@ -109,6 +109,7 @@ function handlerequest(request::HTTP.Request)
         else
             response = HTTP.Response(501, "Not implemented method: $(request.method), fix $id")
         end
+    catch
     end
     zlog(id, response)
     response
@@ -154,13 +155,14 @@ For debugging:
 
 import HTTP
 using WebSockets
+using Dates
 const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
 const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
 # for finding local modules
 SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
 LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
 import ws_hts.listen_hts
-tas = @schedule ws_hts.listen_hts()
+tas = @async ws_hts.listen_hts()
 sleep(7)
 hts = ws_hts.getws_hts()
 """
