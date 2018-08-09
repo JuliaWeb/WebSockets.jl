@@ -1,4 +1,4 @@
-# WebSockets.jl - Julia 0.7 branch
+# WebSockets.jl
 
 *Current state on 'master' 8/8-18*:
 
