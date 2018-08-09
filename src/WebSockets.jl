@@ -272,7 +272,7 @@ function Base.close(ws::WebSocket; statusnumber = 0, freereason = "")
             # Typical 'errors' received while closing down are neglected.
             errtyp = typeof(err)
             errtyp != InterruptException &&
-                errtyp != Base.UVError &&
+                errtyp != Base.IOError &&
                 errtyp != Base.BoundsError &&
                 errtyp != Base.EOFError &&
                 errtyp != Base.ArgumentError &&
@@ -373,14 +373,14 @@ function read_frame(ws::WebSocket)
     ab can be assigned, but of length 1. Use an enclosing try..catch in the calling function
     =#
     a = ab[1]
-    fin    = a & 0b1000_0000 >>> 7  # If fin, then is final fragment
+    fin    = (a & 0b1000_0000) >>> 7  # If fin, then is final fragment
     rsv1   = a & 0b0100_0000  # If not 0, fail.
     rsv2   = a & 0b0010_0000  # If not 0, fail.
     rsv3   = a & 0b0001_0000  # If not 0, fail.
     opcode = a & 0b0000_1111  # If not known code, fail.
 
     b = ab[2]
-    mask = b & 0b1000_0000 >>> 7
+    mask = (b & 0b1000_0000) >>> 7
     hasmask = mask != 0
 
     if hasmask != ws.server
@@ -449,7 +449,7 @@ function Base.read(ws::WebSocket)
                 # This exception originates on the other side. Follow close protocol with reason.
                 close(ws, statusnumber = err.status)
                 throw(WebSocketClosedError(" while read(ws|$(ws.server ? "server" : "client")) $(err.message) - Performed closing handshake."))
-            elseif  errtyp <: Base.UVError ||
+            elseif  errtyp <: Base.IOError ||
                     errtyp <: Base.BoundsError ||
                     errtyp <: Base.EOFError ||
                     errtyp <: Base.ArgumentError

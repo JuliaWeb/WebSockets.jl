@@ -52,7 +52,7 @@ for len = [8, 125], fin=[true, false], clientwriting = [false, true]
     # payload length bit
     @test frame[2] & 0b0111_1111 == len
     # ismasked bit
-    hasmsk = frame[2] & 0b1000_0000 >>> 7 != 0
+    hasmsk = (frame[2] & 0b1000_0000) >>> 7 != 0
     @test hasmsk  == clientwriting
     # payload data
     if hasmsk
@@ -245,7 +245,7 @@ for clientwriting = [false, true]
     # payload length bit
     @test frame[2] & 0b0111_1111 == len
     # ismasked bit
-    hasmsk = frame[2] & 0b1000_0000 >>> 7 != 0
+    hasmsk = (frame[2] & 0b1000_0000) >>> 7 != 0
     @test hasmsk  == clientwriting
     # the peer of the writer is
     dws = dummyws(clientwriting)
@@ -293,7 +293,7 @@ for clientwriting in [false, true], statusnumber in keys(codeDesc)
     # payload length bit
     @test frame[2] & 0b0111_1111 == 2
     # ismasked bit
-    hasmsk = frame[2] & 0b1000_0000 >>> 7 != 0
+    hasmsk = (frame[2] & 0b1000_0000) >>> 7 != 0
     @test hasmsk  == clientwriting
     # the peer of the writer is
     peerws = dummyws(clientwriting)
@@ -326,7 +326,7 @@ for clientwriting in [false, true], statusnumber in keys(codeDesc)
     # payload length bit
     @test frame[2] & 0b0111_1111 == length(statuscode)
     # ismasked bit
-    hasmsk = frame[2] & 0b1000_0000 >>> 7 != 0
+    hasmsk = (frame[2] & 0b1000_0000) >>> 7 != 0
     @test hasmsk  == clientwriting
     # the peer of the writer is
     peerws = dummyws(clientwriting)

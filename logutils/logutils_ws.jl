@@ -207,7 +207,7 @@ function _show(d::AbstractDevice, err::ErrorException)
     showerror(d.s, err, [])
     _log(d, :normal, "\n")
 end
-function _show(d::AbstractDevice, err::Base.UVError)
+function _show(d::AbstractDevice, err::Base.IOError)
     _log(d, Base.error_color(), typeof(err), "\n")
     showerror(d.s, err, [])
     _log(d, :normal, "\n")

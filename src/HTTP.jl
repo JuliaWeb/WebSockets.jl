@@ -46,7 +46,7 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
                     _openstream(f, http, key)
                 end
     catch err
-        if typeof(err) <: Base.UVError
+        if typeof(err) <: Base.IOError
             throw(WebSocketClosedError(" while open ws|client: $(string(err))"))
         elseif typeof(err) <: HTTP.ExceptionRequest.StatusError
             return err.response
@@ -218,7 +218,7 @@ end
 # Inline docs in 'WebSockets.jl'
 target(req::HTTP.Messages.Request) = req.target
 subprotocol(req::HTTP.Messages.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
-origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")
+origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")  # TODO check or replace with HTTP.Sockets.getsockname(?)
 
 """
 WebsocketHandler(f::Function) <: HTTP.Handler

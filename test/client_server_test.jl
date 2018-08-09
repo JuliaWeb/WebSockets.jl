@@ -55,19 +55,14 @@ server_WS = WebSockets.ServerWS(
 tas = @async WebSockets.serve(server_WS, "127.0.0.1", port_HTTP_ServeWS)
 while !istaskstarted(tas);yield();end
 
-#const servers = [
-#    ("HTTP",        "ws://127.0.0.1:$(port_HTTP)"),
-#    ("HttpServer",  "ws://127.0.0.1:$(port_HttpServer)"),
-#    ("HTTTP ServerWS",  "ws://127.0.0.1:$(port_HTTP_ServeWS)"),
-#    ("ws",          "ws://echo.websocket.org"),
-#    ("wss",         "wss://echo.websocket.org")]
-
 const servers = [
         ("HTTP",        "ws://127.0.0.1:$(port_HTTP)"),
         ("HTTTP ServerWS",  "ws://127.0.0.1:$(port_HTTP_ServeWS)"),
         ("ws",          "ws://echo.websocket.org"),
         ("wss",         "wss://echo.websocket.org")]
-    
+# note, HttpServer freezing.
+#    ("HttpServer",  "ws://127.0.0.1:$(port_HttpServer)"),
+        
 const lengths = [0, 125, 126, 127, 2000]
 
 for (s, url) in servers, len in lengths, closestatus in [false, true]
