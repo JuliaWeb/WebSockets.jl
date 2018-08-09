@@ -1,7 +1,7 @@
 using HTTP
 using WebSockets
 function client_one_message(ws)
-    print_with_color(:green, stdout, "\nws|client input >  ")
+    printstyled(stdout, "\nws|client input >  ", color=:green)
     msg = readline(stdin)
     if writeguarded(ws, msg)
         msg, stillopen = readguarded(ws)
