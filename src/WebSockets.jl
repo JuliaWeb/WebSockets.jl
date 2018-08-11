@@ -689,6 +689,5 @@ end
 
 function __init__()
     @require HTTP="cd3eb016-35fb-5094-929b-558a96fad6f3" include("HTTP.jl")
-    @require HttpServer="58cfbd8c-6b7d-5447-85c1-563540e28d27" include("HttpServer.jl")
 end
 end # module WebSockets
