@@ -53,24 +53,16 @@ end
 # Test reject / switch format"
 io = IOBuffer()
 const REJECT = "HTTP/1.1 400 Bad Request"
-Base.write(io, Response(400))
+Base.write(io, WebSockets.Response(400))
 @test takefirstline(io) == REJECT
 Base.write(io, HTTP.Messages.Response(400))
 @test takefirstline(io) == REJECT
 
 const SWITCH = "HTTP/1.1 101 Switching Protocols"
-Base.write(io, Response(101))
+Base.write(io, WebSockets.Response(101))
 @test takefirstline(io) == SWITCH
 Base.write(io, HTTP.Messages.Response(101))
 @test takefirstline(io) == SWITCH
-
-
-chromerequest, firefoxrequest, chromerequest_HTTP, firefoxrequest_HTTP = Tuple(templaterequests())
-wshandler = WebSocketHandler((x,y)->nothing)
-for request in [chromerequest, firefoxrequest]
-    @test is_websocket_handshake(wshandler, request) == true
-end
-
 
 # "Test simple handshakes that are unacceptable"
 
