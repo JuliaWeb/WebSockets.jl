@@ -72,5 +72,4 @@ resp = HTTP.request("GET", "http://127.0.0.1:$(port_HTTP_ServeWS)")
 
 # Close the servers
 close(TCPREF[])
-close(server.http.sock)
 put!(server_WS.in, HTTP.Servers.KILL)
