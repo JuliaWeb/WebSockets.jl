@@ -5,13 +5,10 @@ using WebSockets
 using BufferedStreams
 import Base: convert, BufferStream
 import HTTP.Header
-using HttpServer
 
 import WebSockets:  generate_websocket_key,
     websocket_handshake,
     upgrade
-import HttpServer:Request
-import HttpServer:  is_websocket_handshake
 
 
 
@@ -20,11 +17,9 @@ function templaterequests()
                                             "Upgrade"=>"websocket")
     firefoxheaders = Dict{String, String}("Connection"=>"keep-alive, Upgrade",
                                             "Upgrade"=>"websocket")
-    chromerequest = HttpServer.Request("GET", "", chromeheaders, "")
-    firefoxrequest= Request("GET", "", firefoxheaders, "")
     chromerequest_HTTP = HTTP.Messages.Request("GET", "/", collect(chromeheaders))
     firefoxrequest_HTTP = HTTP.Messages.Request("GET", "/", collect(firefoxheaders))
-    return [chromerequest, firefoxrequest, chromerequest_HTTP, firefoxrequest_HTTP]
+    return [chromerequest_HTTP, firefoxrequest_HTTP]
 end
 convert(::Type{Header}, pa::Pair{String,String}) = Pair(SubString(pa[1]), SubString(pa[2]))
 sethd(r::Request, pa::Pair) = push!(r.headers, pa)
@@ -33,11 +28,6 @@ sethd(r::HTTP.Messages.Request, pa::Header) = HTTP.Messages.setheader(r, pa)
 
 takefirstline(buf::IOBuffer) = strip(split(buf |> take! |> String, "\r\n")[1])
 takefirstline(buf::BufferStream) = strip(split(buf |> read |> String, "\r\n")[1])
-function handshakeresponse(request::Request)
-    cli = HttpServer.Client(2, IOBuffer())
-    websocket_handshake(request, cli)
-    strip(takefirstline(cli.sock))
-end
 function handshakeresponse(request::HTTP.Messages.Request)
     buf = BufferStream()
     c = HTTP.ConnectionPool.Connection(buf)
