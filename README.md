@@ -1,12 +1,8 @@
 # WebSockets.jl
 
-*Current state on 'master' 8/8-18*:
+*Current state on 'master' 11/8-18*:
 
-Partly working. HTTP.ServerWS does not serve pages in a way acceptable to browser chrome. 
-
-HttpServer support may work if you 'check out' a rapidly changing set of branches and pull requests on HttpServer and dependencies. Tests are likely to segfault due to HTTPServer calls.
-
-HttpServer support is deprecated and will be fully removed without further warning when HTTP examples are fully working.
+Working on Julia 0.7 and 1.0, but tests still include HttpServer files and will fail.
 
 
 *Release version*:
@@ -27,28 +23,34 @@ HttpServer support is deprecated and will be fully removed without further warni
 Server and client side [Websockets](https://tools.ietf.org/html/rfc6455) protocol in Julia. WebSockets is a small overhead message protocol layered over [TCP](https://tools.ietf.org/html/rfc793). It uses HTTP(S) for establishing the connections. 
 
 ## Getting started
-WebSockets.jl must be used with either HttpServer.jl or HTTP.jl, but neither is a dependency of this package. You will need to first add one or both, i.e.:
+On Julia pre 0.6, see an earlier version of this repository.
+On Julia 0.7 or newer :
 
 ```julia
-julia> Pkg.add("HttpServer") 
-julia> Pkg.add("HTTP")
-julia> Pkg.add("WebSockets")
+(v0.7) pkg>add WebSockets
+julia> using WebSockets
+julia> cd(joinpath((WebSockets |> Base.pathof |> splitdir)[1],  "..", "examples"))
+julia> readdir()
+julia> include("chat_explore.jl")
 ```
 ### Open a client side connection
-Client side websockets are created by calling `WebSockets.open` (with a server running). Client side websockets require [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl). 
+Client side websockets are created by calling `WebSockets.open` (with a server running). Example (you can run this in a second REPL, or in the same):
+```julia
+julia> include("client_repl_input.jl")
+```
 
-### Accept server side connections
+### Debugging server side connections
 
-Server side websockets are asyncronous [tasks](https://docs.julialang.org/en/stable/stdlib/parallel/#Tasks-1), spawned by either
-[HttpServer.jl](https://github.com/JuliaWeb/HttpServer.jl) or HTTP.jl. 
+Server side websockets are asyncronous [tasks](https://docs.julialang.org/en/stable/stdlib/parallel/#Tasks-1), which makes debugging harder. The error messages may not spill into the REPL.
 
-##### Using HttpServer
-Call `run`, which is a wrapper for calling `listen`. See inline docs.
+##### Using WebSockets.serve
+Error messages are directed to a channel. See inline docs: ?Websockets.serve.
 
-##### Using HTTP
-Call `WebSockets.serve`, which is a wrapper for `HTTP.listen`. See inline docs.
+##### Using WebSockets.listen
+Error messages are by default sent as messages to the client. This is not nice if you're serving pages to the internet.
 
 ## What does WebSockets.jl enable?
+Some packages rely on WebSockets for communication. You can also use it directly:
 
 - reading and writing between entities you can program or know about
 - low latency, high speed messaging
@@ -63,12 +65,11 @@ WebSockets are well suited for user interactions via a browser or [cross-platfor
 
 The /logutils folder contains some specialized logging functionality that is quite fast and can make working with multiple asyncronous tasks easier. See /benchmark code for how to use. Logging  may be moved out of WebSockets in the future, depending on how other logging capabilities develop.
 
-You should also have a look at alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) or the implementation currently part of HTTP.jl.
+You can also have a look at alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) or the implementation currently part of HTTP.jl.
 
 ## What are the main downsides to WebSockets (in Julia)?
 
 - Logging. We need customizable and very fast logging for building networked applications.
-- Security. Julia's Http(s) servers are currently not fully working to our knowledge.
 - Compression is not implemented.
 - Possibly non-compliant proxies on the internet, company firewalls. 
 - 'Warm-up', i.e. compilation when a method is first used. Warm-up is excluded from current benchmarks.
@@ -79,7 +80,7 @@ You should also have a look at alternative Julia packages: [DandelionWebSockets]
 - Since 'read' is a blocking function, you can easily end up reading indefinitely from both sides.
 
 ## Server side example
-
+(Work in progress, see /examples.)
 As a first example, we can create a WebSockets echo server. We use named function arguments for more readable stacktraces while debugging. 
 
 ```julia
