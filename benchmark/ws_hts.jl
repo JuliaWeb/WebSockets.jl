@@ -34,7 +34,7 @@ function listen_hts()
         end
     catch err
         clog(id, :red, err)
-        clog_notime.(catch_stacktrace()[1:4])
+        clog_notime.(stacktrace(catch_backtrace())[1:4])
         zflush()
     end
 end

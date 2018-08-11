@@ -47,7 +47,7 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
                     _openstream(f, http, key)
                 end
     catch err
-        if typeof(err) <: Base.UVError
+        if typeof(err) <: Base.IOError
             throw(WebSocketClosedError(" while open ws|client: $(string(err))"))
         elseif typeof(err) <: HTTP.ExceptionRequest.StatusError
             return err.response
@@ -122,7 +122,7 @@ try
     end
 catch err
     showerror(STDERR, err)
-    println.(catch_stacktrace()[1:4])
+    println.(stacktrace(catch_backtrace())[1:4])
 end
 ```
 """
@@ -174,7 +174,7 @@ function upgrade(f::Function, http::HTTP.Stream)
 #        mt = typeof(f).name.mt
 #        fnam = splitdir(string(mt.defs.func.file))[2]
 #        print_with_color(:yellow, STDERR, "f = ", string(f) * " at " * fnam * ":" * string(mt.defs.func.line) * "\nERROR:\t")
-#        showerror(STDERR, err, catch_stacktrace())
+#        showerror(STDERR, err, stacktrace(catch_backtrace()))
     finally
         close(ws)
     end
@@ -320,7 +320,7 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
                                 end
                             catch err
                                 put!(server.out, err)
-                                put!(server.out, catch_stacktrace())
+                                put!(server.out, stacktrace(catch_backtrace()))
                             end
             end
     return

@@ -29,7 +29,7 @@ Echoes any message except "exit" and "delay".
 Delays to reading, in the websocket use situation, would be caused by usefully spent
 calculation time between reads. However, they may be interpreted by the underlying protocol
 as transmission problems and cause large slowdowns. Hence the interest in testing
-with delays. A countermeasure for optimizing speed might be to run a websocket 
+with delays. A countermeasure for optimizing speed might be to run a websocket
 reading function in a parallel, not asyncronous process, putting messages on an internal queue.
 
 At exit or after CLOSEAFTER, this function sends one message containing two vectors of
@@ -52,7 +52,7 @@ function echowithdelay_jce()
         zlog(id, :green, " Websocket closed, control returned.")
     catch err
         clog(id, :red, err)
-        clog_notime.(catch_stacktrace()[1:4])
+        clog_notime.(stacktrace(catch_backtrace())[1:4])
         zflush()
     finally
         clog(id, :green, " Closing log ", LOGFILE)

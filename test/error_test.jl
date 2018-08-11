@@ -132,7 +132,7 @@ server_WS = ServerWS(   HTTP.HandlerFunction(req-> HTTP.Response(200)),
                                                         read(ws_serv)
                                                     catch err
                                                         put!(chfromserv, err)
-                                                        put!(chfromserv, catch_stacktrace()[1:2])
+                                                        put!(chfromserv, stacktrace(catch_backtrace())[1:2])
                                                     end
                                                 end
                                             end);

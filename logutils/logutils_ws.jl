@@ -10,14 +10,14 @@ since opening and closing files is so slow it may affect the sequence of things.
 
 This module dispatches on an ad-hoc type AbstractDevice, instead of putting
 additional data on an IOContext method like 'show' does. When AbstracDevice points to
-Base.NullDevice(), the input arguments are processed before the call is made, but 
-that is all. 
+Base.NullDevice(), the input arguments are processed before the call is made, but
+that is all.
 
 In Julia 0.7, current logging functionality is replaced with macros, which
 can be even faster. Macros can also retrieve the current function's name without using stacktraces.
 With this module, each function defines id = "thisfunction".
 
-Methods in this file have no external dependencies. Methods with dependencies are 
+Methods in this file have no external dependencies. Methods with dependencies are
 loaded from separate files with @require. This adds to loading time.
 """
 module logutils_ws
@@ -206,7 +206,7 @@ function _show(d::AbstractDevice, err::ErrorException)
     showerror(d.s, err, [])
     _log(d, :normal, "\n")
 end
-function _show(d::AbstractDevice, err::Base.UVError)
+function _show(d::AbstractDevice, err::Base.IOError)
     _log(d, Base.error_color(), typeof(err), "\n")
     showerror(d.s, err, [])
     _log(d, :normal, "\n")
