@@ -1,11 +1,7 @@
 # included in runtests.jl
 
-if !@isdefined Test
-    using Test
-end
-if !@isdefined Base64
-    using Base64
-end
+using Test
+using Base64
 import HTTP
 import HttpServer: HttpHandler,
         Server

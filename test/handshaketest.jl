@@ -1,19 +1,8 @@
 # included in runtests.jl
-if !@isdefined Test
-    using Test
-end
-if !@isdefined HTTP
-    using HTTP
-end
-if !@isdefined HttpServer
-    using HttpServer
-end
-if !@isdefined WebSockets
-    using WebSockets
-end
-if !@isdefined BufferedStreams
-    using BufferedStreams
-end
+using Test
+using HTTP
+using WebSockets
+using BufferedStreams
 
 import WebSockets:  generate_websocket_key,
     websocket_handshake,
@@ -35,14 +24,14 @@ function templaterequests()
 end
 
 sethd(r::Request, pa::Pair) = push!(r.headers, pa)
-sethd(r::HTTP.Messages.Request, pa::Pair) = HTTP.Messages.setheader(r, HTTP.Header(pa)) 
+sethd(r::HTTP.Messages.Request, pa::Pair) = HTTP.Messages.setheader(r, HTTP.Header(pa))
 
 takefirstline(buf::IOBuffer) = strip(split(buf |> take! |> String, "\r\n")[1])
 takefirstline(buf::BufferStream) = strip(split(buf |> read |> String, "\r\n")[1])
 function handshakeresponse(request::Request)
     cli = HttpServer.Client(2, IOBuffer())
     websocket_handshake(request, cli)
-    strip(takefirstline(cli.sock)) 
+    strip(takefirstline(cli.sock))
 end
 function handshakeresponse(request::HTTP.Messages.Request)
     buf = BufferStream()
@@ -127,7 +116,7 @@ for r in templaterequests()
 end
 
 #  add simple subprotocol to acceptable list
-@test true == WebSockets.addsubproto("xml") 
+@test true == WebSockets.addsubproto("xml")
 
 # add subprotocol with difficult name
 @test true == WebSockets.addsubproto("my.server/json-zmq")

@@ -3,7 +3,7 @@ __precompile__()
     WebSockets
 This module implements the WebSockets protocol.
 
-WebSockets relies on either packages HttpServer, HTTP or both.
+WebSockets relies on the package HTTP.jl
 
 Websocket|server relies on a client initiating the connection.
 Websocket|client initiate the connection, but requires HTTP.

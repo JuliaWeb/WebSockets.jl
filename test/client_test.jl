@@ -1,11 +1,7 @@
 # included in runtests.jl
 # focus on HTTP.jl
-if !@isdefined Test
-    using Test
-end
-if !@isdefined HTTP
-    using HTTP
-end
+using Test
+using HTTP
 import WebSockets:  is_upgrade,
                     upgrade,
                     _openstream,

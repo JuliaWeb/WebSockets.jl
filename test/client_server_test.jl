@@ -1,16 +1,7 @@
 # included in runtests.jl
-if !@isdefined Test
-    using Test
-end
-if !@isdefined HTTP
-    using HTTP
-end
-if !@isdefined HttpServer
-    using HttpServer
-end
-if !@isdefined Sockets
-    using Sockets
-end
+using Test
+using HTTP
+using Sockets
 import WebSockets:  is_upgrade,
                     upgrade
 function echows(req, ws)
