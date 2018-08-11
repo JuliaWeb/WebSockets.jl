@@ -22,7 +22,6 @@ function templaterequests()
     return [chromerequest_HTTP, firefoxrequest_HTTP]
 end
 convert(::Type{Header}, pa::Pair{String,String}) = Pair(SubString(pa[1]), SubString(pa[2]))
-sethd(r::Request, pa::Pair) = push!(r.headers, pa)
 sethd(r::HTTP.Messages.Request, pa::Pair) = sethd(r, convert(Header, pa))
 sethd(r::HTTP.Messages.Request, pa::Header) = HTTP.Messages.setheader(r, pa)
 
