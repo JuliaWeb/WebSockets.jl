@@ -1,12 +1,9 @@
-@info "Loading HTTP methods..."
-
 """
 Initiate a websocket|client connection to server defined by url. If the server accepts
 the connection and the upgrade to websocket, f is called with an open websocket|client
 
 e.g. say hello, close and leave
 ```julia
-import HTTP
 using WebSockets
 WebSockets.open("ws://127.0.0.1:8000") do ws
     write(ws, "Hello")
@@ -218,7 +215,10 @@ end
 # Inline docs in 'WebSockets.jl'
 target(req::HTTP.Messages.Request) = req.target
 subprotocol(req::HTTP.Messages.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
-origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")  # TODO check or replace with HTTP.Sockets.getsockname(?)
+function origin(req::HTTP.Messages.Request)
+    @warn("Originator of the request may not be fully implemented. Checks pending. See Sockets.getsockname and https://github.com/JuliaWeb/HTTP.jl/issues/254", maxlog = 1)
+    HTTP.header(req, "Origin")  
+end    
 
 """
 WebsocketHandler(f::Function) <: HTTP.Handler
@@ -260,7 +260,7 @@ end
 
 ServerWS(h::Function, w::Function, l::IO=HTTP.compat_stdout();
             cert::String="", key::String="", args...) = ServerWS(HTTP.HandlerFunction(h), WebsocketHandler(w), l;
-                                                         cert=cert, key=key, args...)
+                                                         cert=cert, key=key, ratelimit = 1//0, args...)
 function ServerWS(handler::H,
                 wshandler::W,
                 logger::IO = HTTP.compat_stdout();
@@ -274,7 +274,7 @@ function ServerWS(handler::H,
     end
     return serverws
 end
-
+ratlimit = 1//0
 """
     WebSockets.serve(server::ServerWS, port)
     WebSockets.serve(server::ServerWS, host, port)
@@ -288,11 +288,8 @@ To stop a running server, put HTTP.Servers.KILL on the .in channel.
 ```
 After a suspected connection task failure:
 ```julia
-    if isready(server.out)
-        err = take!(myserver_WS.out)
-    end
     if isready(myserver_WS.out)
-        stack_trace = take!(server_WS.out)
+        stack_trace = take!(myserver_WS.out)
     end
 ```
 """

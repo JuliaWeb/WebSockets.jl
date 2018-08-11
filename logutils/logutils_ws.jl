@@ -1,4 +1,10 @@
 __precompile__()
+#=
+ TODO deal with Julia 0.7 warning: 
+    Warning: broadcast will default to iterating over its arguments in the future. Wrap arguments of
+     type `x::logutils_ws.ColorDevice{Base.GenericIOBuffer{Array{UInt8,1}}}` with `Ref(x)` to ensure they broadcast as "scalar" elements.
+=#
+
 """
 Specialized logging for testing and examples in WebSockets.
 
