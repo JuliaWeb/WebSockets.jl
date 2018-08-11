@@ -6,9 +6,7 @@ using BufferedStreams
 import Base: convert, BufferStream
 import HTTP.Header
 
-import WebSockets:  generate_websocket_key,
-    websocket_handshake,
-    upgrade
+import WebSockets:  generate_websocket_key, upgrade
 
 
 
