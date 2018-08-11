@@ -46,7 +46,7 @@ catch err
     global caughterr = err
 end
 @test typeof(caughterr) <: WebSockets.WebSocketClosedError
-@test caughterr.message == " while open ws|client: connect: connection refused (ECONNREFUSED)"
+@test caughterr.message == " while open ws|client: Base.IOError(\"connect: connection refused (ECONNREFUSED)\", -111)"
 
 @info("try open with uknown scheme\n")
 sleep(1)
