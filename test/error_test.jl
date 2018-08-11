@@ -5,6 +5,7 @@ using Base64
 import HTTP
 import HttpServer: HttpHandler,
         Server
+using WebSockets
 import WebSockets: ServerWS,
         serve,
         open,

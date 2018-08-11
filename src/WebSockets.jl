@@ -23,8 +23,9 @@ includes another Julia session, parallel process or task.
 6. Allow customizable console output (e.g. 'ping'). See HttpServer listen.
 """
 module WebSockets
-using Sockets: TCPSocket
+using Sockets: TCPSocket, IPAddr
 import MbedTLS: digest, MD_SHA1
+import Base64: base64encode, base64decode
 using Requires
 using Sockets: TCPSocket, IPAddr
 using Base64: base64encode, base64decode
@@ -44,7 +45,8 @@ export WebSocket,
 # revisit the need for defining this union type for method definitions. The functions would
 # probably work just as fine with duck typing.
 const Dt = Union{Base.ReinterpretArray{UInt8,1,UInt16,Array{UInt16,1}},
-            Vector{UInt8}}
+            Vector{UInt8},
+            Base.CodeUnits{UInt8,String}   }
 "A reasonable amount of time"
 const TIMEOUT_CLOSEHANDSHAKE = 10.0
 
@@ -191,7 +193,8 @@ end
 """ Write text data; will be sent as one frame."""
 function Base.write(ws::WebSocket,data::String)
     # add a method for reinterpreted strings as well? See const Dt.
-    locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, Vector{UInt8}(data)) # Vector{UInt8}(String) will give a warning in v0.7.
+  #  locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, Vector{UInt8}(data)) # Vector{UInt8}(String) will give a warning in v0.7.
+  locked_write(ws.socket, true, OPCODE_TEXT, !ws.server, codeunits(data)) # Vector{UInt8}(String) will give a warning in v0.7.
 end
 
 """ Write binary data; will be sent as one frame."""
@@ -373,10 +376,10 @@ function read_frame(ws::WebSocket)
     =#
     a = ab[1]
     fin    = (a & 0b1000_0000) >>> 7  # If fin, then is final fragment
-    rsv1   = (a & 0b0100_0000)  # If not 0, fail.
-    rsv2   = (a & 0b0010_0000)  # If not 0, fail.
-    rsv3   = (a & 0b0001_0000)  # If not 0, fail.
-    opcode = (a & 0b0000_1111)  # If not known code, fail.
+    rsv1   = a & 0b0100_0000  # If not 0, fail.
+    rsv2   = a & 0b0010_0000  # If not 0, fail.
+    rsv3   = a & 0b0001_0000  # If not 0, fail.
+    opcode = a & 0b0000_1111  # If not known code, fail.
 
     b = ab[2]
     mask = (b & 0b1000_0000) >>> 7
@@ -689,5 +692,6 @@ end
 
 function __init__()
     @require HTTP="cd3eb016-35fb-5094-929b-558a96fad6f3" include("HTTP.jl")
+    @require HttpServer="58cfbd8c-6b7d-5447-85c1-563540e28d27" include("HttpServer.jl")
 end
 end # module WebSockets

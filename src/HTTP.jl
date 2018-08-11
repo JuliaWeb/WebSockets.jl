@@ -20,7 +20,6 @@ On exit, a closing handshake is started. If the server is not currently reading
 after a reasonable amount of time and continue execution.
 """
 function open(f::Function, url; verbose=false, subprotocol = "", kw...)
-
     key = base64encode(rand(UInt8, 16))
     headers = [
         "Upgrade" => "websocket",
@@ -121,7 +120,7 @@ try
         end
     end
 catch err
-    showerror(STDERR, err)
+    showerror(stderr, err)
     println.(stacktrace(catch_backtrace())[1:4])
 end
 ```
@@ -147,7 +146,15 @@ function upgrade(f::Function, http::HTTP.Stream)
         end
     end
     key = HTTP.header(http, "Sec-WebSocket-Key")
-    if length(base64decode(key)) != 16 # Key must be 16 bytes
+    decoded = UInt8[]
+    try
+        decoded = base64decode(key)
+    catch
+        HTTP.setstatus(http, 400)
+        HTTP.startwrite(http)
+        return
+    end
+    if length(decoded) != 16 # Key must be 16 bytes
         HTTP.setstatus(http, 400)
         HTTP.startwrite(http)
         return
@@ -170,7 +177,7 @@ function upgrade(f::Function, http::HTTP.Stream)
             f(ws)
         end
 #    catch err
-#        warn("WebSockets.HTTP.upgrade: Caught unhandled error while calling argument function f, the handler / gatekeeper:\n\t")
+#        @warn("WebSockets.HTTP.upgrade: Caught unhandled error while calling argument function f, the handler / gatekeeper:\n\t")
 #        mt = typeof(f).name.mt
 #        fnam = splitdir(string(mt.defs.func.file))[2]
 #        print_with_color(:yellow, STDERR, "f = ", string(f) * " at " * fnam * ":" * string(mt.defs.func.line) * "\nERROR:\t")
@@ -211,7 +218,7 @@ end
 # Inline docs in 'WebSockets.jl'
 target(req::HTTP.Messages.Request) = req.target
 subprotocol(req::HTTP.Messages.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
-origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")
+origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")  # TODO check or replace with HTTP.Sockets.getsockname(?)
 
 """
 WebsocketHandler(f::Function) <: HTTP.Handler

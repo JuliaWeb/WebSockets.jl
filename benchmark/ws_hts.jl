@@ -155,6 +155,7 @@ For debugging:
 
 import HTTP
 using WebSockets
+using Dates
 const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
 const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
 # for finding local modules

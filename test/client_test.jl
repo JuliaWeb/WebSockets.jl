@@ -2,16 +2,19 @@
 # focus on HTTP.jl
 using Test
 using HTTP
+using WebSockets
 import WebSockets:  is_upgrade,
                     upgrade,
                     _openstream,
                     addsubproto,
                     generate_websocket_key
-
+using Sockets
+using Base64
+import Base.BufferStream
 sethd(r::HTTP.Messages.Response, pa::Pair) = HTTP.Messages.setheader(r, HTTP.Header(pa))
 
 const NEWPORT = 8091
-const TCPREF2 = Ref{Base.TCPServer}()
+const TCPREF2 = Ref{Sockets.TCPServer}()
 
 @info("start HTTP server\n")
 sleep(1)
@@ -40,7 +43,7 @@ caughterr = WebSockets.WebSocketClosedError("")
 try
 WebSockets.open((_)->nothing, "ws://127.0.0.1:8099");
 catch err
-    caughterr = err
+    global caughterr = err
 end
 @test typeof(caughterr) <: WebSockets.WebSocketClosedError
 @test caughterr.message == " while open ws|client: connect: connection refused (ECONNREFUSED)"

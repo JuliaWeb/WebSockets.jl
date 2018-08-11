@@ -9,6 +9,15 @@ HttpServer support is deprecated and may be fully removed without further warnin
 Tests conversion to 0.7 is still rudimentary.
 
 
+*Current state on 'master' 8/8-18*:
+
+Partly working. HTTP.ServerWS does not serve pages in a way acceptable to browser chrome.
+
+HttpServer support may work if you 'check out' a rapidly changing set of branches and pull requests on HttpServer and dependencies. Tests are likely to segfault due to HTTPServer calls.
+
+HttpServer support is deprecated and will be fully removed without further warning when HTTP examples are fully working.
+
+
 *Release version*:
 
 [![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6) [![Build Status](https://travis-ci.org/JuliaWeb/WebSockets.jl.svg)](https://travis-ci.org/JuliaWeb/WebSockets.jl)
@@ -24,23 +33,23 @@ Tests conversion to 0.7 is still rudimentary.
 
 
 
-Server and client side [Websockets](https://tools.ietf.org/html/rfc6455) protocol in Julia. WebSockets is a small overhead message protocol layered over [TCP](https://tools.ietf.org/html/rfc793). It uses HTTP(S) for establishing the connections. 
+Server and client side [Websockets](https://tools.ietf.org/html/rfc6455) protocol in Julia. WebSockets is a small overhead message protocol layered over [TCP](https://tools.ietf.org/html/rfc793). It uses HTTP(S) for establishing the connections.
 
 ## Getting started
 WebSockets.jl must be used with either HttpServer.jl or HTTP.jl, but neither is a dependency of this package. You will need to first add one or both, i.e.:
 
 ```julia
-julia> Pkg.add("HttpServer") 
+julia> Pkg.add("HttpServer")
 julia> Pkg.add("HTTP")
 julia> Pkg.add("WebSockets")
 ```
 ### Open a client side connection
-Client side websockets are created by calling `WebSockets.open` (with a server running). Client side websockets require [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl). 
+Client side websockets are created by calling `WebSockets.open` (with a server running). Client side websockets require [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl).
 
 ### Accept server side connections
 
 Server side websockets are asyncronous [tasks](https://docs.julialang.org/en/stable/stdlib/parallel/#Tasks-1), spawned by either
-[HttpServer.jl](https://github.com/JuliaWeb/HttpServer.jl) or HTTP.jl. 
+[HttpServer.jl](https://github.com/JuliaWeb/HttpServer.jl) or HTTP.jl.
 
 ##### Using HttpServer
 Call `run`, which is a wrapper for calling `listen`. See inline docs.
@@ -70,7 +79,7 @@ You should also have a look at alternative Julia packages: [DandelionWebSockets]
 - Logging. We need customizable and very fast logging for building networked applications.
 - Security. Julia's Http(s) servers are currently not fully working to our knowledge.
 - Compression is not implemented.
-- Possibly non-compliant proxies on the internet, company firewalls. 
+- Possibly non-compliant proxies on the internet, company firewalls.
 - 'Warm-up', i.e. compilation when a method is first used. Warm-up is excluded from current benchmarks.
 - Garbage collection, which increases message latency at semi-random intervals. See benchmark plots.
 - If a connection is closed improperly, the connection task will throw uncaught ECONNRESET and similar messages.
@@ -80,7 +89,7 @@ You should also have a look at alternative Julia packages: [DandelionWebSockets]
 
 ## Server side example
 
-As a first example, we can create a WebSockets echo server. We use named function arguments for more readable stacktraces while debugging. 
+As a first example, we can create a WebSockets echo server. We use named function arguments for more readable stacktraces while debugging.
 
 ```julia
 using HttpServer
@@ -112,7 +121,7 @@ end
 
 handle(req, res) = Response(200)
 
-server = Server(HttpHandler(handle), 
+server = Server(HttpHandler(handle),
                 WebSocketHandler(gatekeeper))
 
 @async run(server, 8080)
@@ -132,9 +141,9 @@ Why?                                        debugger eval code:1:28
 ```
 
 If you now navigate or close the browser, this happens:
-1. the client side of the websocket connection will quickly send a close request and go away. 
+1. the client side of the websocket connection will quickly send a close request and go away.
 2. Server side `readguarded(ws)` has been waiting for messages, but instead closes 'ws' and returns ("", false)
-3. `coroutine(ws)` is finished and the task's control flow returns to HttpServer 
+3. `coroutine(ws)` is finished and the task's control flow returns to HttpServer
 4. HttpServer does nothing other than exit this task. In fact, it often crashes because
     somebody else (the browser) has closed the underlying TCP stream.
 5. The server, which spawned the task, continues to listen for incoming connections, and you're stuck. Ctrl + C!
@@ -147,19 +156,19 @@ You could replace 'using HttpServer' with 'using HTTP'. Also:
 
 ## Client side example
 
-Clients need to use [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl).  
+Clients need to use [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl).
 
 
 ```julia
 using HTTP
 using WebSockets
 function client_one_message(ws)
-    print_with_color(:green, stdout, "\nws|client input >  ")
+    printstyled(stdout, "\nws|client input >  ", color=:green)
     msg = readline(stdin)
     if writeguarded(ws, msg)
         msg, stillopen = readguarded(ws)
         println("Received:", String(msg))
-        if stillopen 
+        if stillopen
             println("The connection is active, but we leave. WebSockets.jl will close properly.")
         else
             println("Disconnect during reading.")
@@ -174,7 +183,7 @@ function main()
         println("ws:// host [ \":\" port ] path [ \"?\" query ]")
         println("Example:\nws://127.0.0.1:8080")
         println("Where do you want to connect? Empty line to exit")
-        print_with_color(:green, stdout, "\nclient_repl_input >  ")
+        printstyled(stdout, "\nclient_repl_input >  ", color=:green)
         wsuri = readline(stdin)
         wsuri == "" && break
         res = WebSockets.open(client_one_message, wsuri)
@@ -199,14 +208,14 @@ The introduction of client side websockets to this package may require changes i
 
 ## Switching from HttpServer to HTTP?
 Some types and methods are not exported. See inline docs:
-- `Server` -> `WebSockets.ServerWS` 
+- `Server` -> `WebSockets.ServerWS`
 - `WebSocketHandler` -> `WebSockets.WebsocketHandler`
 - `run` -> `WebSockets.serve()`
 - `Response` -> `HTTP.Response`
 - `Request` -> `HTTP.Response`
 - `HttpHandler`-> `HTTP.HandlerFunction`
 
- You may also want to consider using `target`, `orgin`and `subprotocol`, which 
+ You may also want to consider using `target`, `orgin`and `subprotocol`, which
  are compatible with both of the types above.
 
 

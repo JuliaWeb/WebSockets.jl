@@ -24,6 +24,7 @@ global lastws= 0
 using HttpServer
 using HTTP
 using WebSockets
+using Dates
 const CLOSEAFTER = Base.Dates.Second(1800)
 const HTTPPORT = 8080
 const HTTPSERVERPORT = 8000
@@ -128,7 +129,7 @@ function gatekeeper(req, ws)
     if startswith(orig, "http://localhost") || startswith(orig, "http://127.0.0.1")
         coroutine(ws)
     else
-        warn("Unauthorized websocket connection, $orig not approved by gatekeeper")
+        @warn("Unauthorized websocket connection, $orig not approved by gatekeeper")
     end
     nothing
 end

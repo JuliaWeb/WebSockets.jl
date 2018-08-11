@@ -13,6 +13,7 @@ import URIParser.URI
 import WebSockets.WebSocketHandler
 import WebSockets.WebSocket
 import Base.print
+using Dates
 "Date time group string"
 dtg() = Dates.format(now(), "HH:MM:SS")
 """
@@ -154,7 +155,7 @@ end
 function printdata(io::IO, data::T, contenttype::String) where T<:Array{UInt8,1}
     le = length(data)
     pwc(io, :green, "\tData length: ",  le,"\n")
-    if occursin(contenttype, r"^text")
+    if occursin(r"^text", contenttype)
         pwc(io, :blue, data|> prettystring)
     end
 end

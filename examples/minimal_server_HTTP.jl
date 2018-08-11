@@ -1,6 +1,7 @@
 using HTTP
 using WebSockets
-
+const BAREHTML = "<head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">
+ <title>Empty.html</title></head><body></body></html>"
 function coroutine(ws)
     while isopen(ws)
         data, = readguarded(ws)
@@ -27,9 +28,10 @@ function gatekeeper(req, ws)
     end
 end
 
-handle(req, res) = HTTP.Response(200)
+handle(req, res) = HTTP.Response(BAREHTML)
 
 server = WebSockets.ServerWS(HTTP.HandlerFunction(handle), 
                 WebSockets.WebsocketHandler(gatekeeper))
 
+@info("Browser > http://127.0.0.1:8080 , F12> console > ws = new WebSocket(\"ws://127.0.0.1:8080\") ")
 @async WebSockets.serve(server, 8080)

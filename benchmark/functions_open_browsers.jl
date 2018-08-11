@@ -1,6 +1,6 @@
 # Included in benchmark_prepare.jl and in browsertests.jl
 # Refers logutils
-if !isdefined(:SRCPATH)
+if !@isdefined(SRCPATH)
     const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") : Base.source_dir()
     const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
     SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
@@ -165,7 +165,7 @@ In some cases we expect an immediate indication
 of failure, for example when the corresponding browser
 is not found on the system. In other cases, we will
 just wait in vain. In those cases,
-call this function again after a reasonable timeout. 
+call this function again after a reasonable timeout.
 The function remembers which browsers were tried before.
 "
 function open_a_browser()

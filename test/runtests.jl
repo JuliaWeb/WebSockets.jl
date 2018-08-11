@@ -1,8 +1,8 @@
 using Test
 using Pkg
-cd(Pkg.dir("WebSockets", "test"))
+#cd(Pkg.dir("WebSockets", "test"))
 
-@sync yield() # avoid mixing of  output with possible deprecation warnings from .juliarc
+#@sync yield() # avoid mixing of  output with possible deprecation warnings from .juliarc
 
 @testset "WebSockets" begin
 @info("\nFragment and unit tests\n")
