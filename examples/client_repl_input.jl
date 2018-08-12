@@ -6,7 +6,7 @@ function client_one_message(ws)
     if writeguarded(ws, msg)
         msg, stillopen = readguarded(ws)
         println("Received:", String(msg))
-        if stillopen 
+        if stillopen
             println("The connection is active, but we leave. WebSockets.jl will close properly.")
         else
             println("Disconnect during reading.")

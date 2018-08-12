@@ -1,11 +1,9 @@
 # included in runtests.jl
-import Test: @test
+
+using Test
+using Base64
 import HTTP
-import HttpServer: HttpHandler,
-        Server
-if !@isdefined WebSockets
-    using WebSockets
-end
+using WebSockets
 import WebSockets: ServerWS,
         serve,
         open,
@@ -90,33 +88,6 @@ catch err
 end
 
 put!(server_WS.in, HTTP.Servers.KILL)
-
-
-@info("\n\nStart a HttpServer\n")
-sleep(1)
-server = Server(HttpHandler() do req, res
-                    Response(200)
-                end,
-                WebSocketHandler() do req, ws_serv
-                    while isopen(ws_serv)
-                        readguarded(ws_serv)
-                    end
-                end)
-tas = @async run(server, THISPORT)
-while !istaskstarted(tas);yield();end
-sleep(3)
-@info("Attempt to write to a closing ws|client, served by HttpServer (this takes some time, there is no check
-      in WebSockets against it). Check caught error.")
-try
-    WebSockets.open(URL) do ws_client
-        close(ws_client)
-        write(ws_client, "writethis")
-    end
-catch err
-     @test typeof(err) <: HTTP.IOExtras.IOError
-end
-close(server)
-sleep(1)
 
 
 @info("\nStart an async HTTP server. The wshandler use global channels for inspecting caught errors.\n")

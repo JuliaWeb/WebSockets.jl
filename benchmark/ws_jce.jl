@@ -29,7 +29,7 @@ Echoes any message except "exit" and "delay".
 Delays to reading, in the websocket use situation, would be caused by usefully spent
 calculation time between reads. However, they may be interpreted by the underlying protocol
 as transmission problems and cause large slowdowns. Hence the interest in testing
-with delays. A countermeasure for optimizing speed might be to run a websocket 
+with delays. A countermeasure for optimizing speed might be to run a websocket
 reading function in a parallel, not asyncronous process, putting messages on an internal queue.
 
 At exit or after CLOSEAFTER, this function sends one message containing two vectors of

@@ -144,7 +144,7 @@ function upgrade(f::Function, http::HTTP.Stream)
     end
     key = HTTP.header(http, "Sec-WebSocket-Key")
     decoded = UInt8[]
-    try 
+    try
         decoded = base64decode(key)
     catch
         HTTP.setstatus(http, 400)
@@ -178,7 +178,7 @@ function upgrade(f::Function, http::HTTP.Stream)
 #        mt = typeof(f).name.mt
 #        fnam = splitdir(string(mt.defs.func.file))[2]
 #        print_with_color(:yellow, STDERR, "f = ", string(f) * " at " * fnam * ":" * string(mt.defs.func.line) * "\nERROR:\t")
-#        showerror(STDERR, err, catch_stacktrace())
+#        showerror(STDERR, err, stacktrace(catch_backtrace()))
     finally
         close(ws)
     end

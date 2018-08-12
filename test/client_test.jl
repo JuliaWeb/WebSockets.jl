@@ -1,25 +1,16 @@
 # included in runtests.jl
 # focus on HTTP.jl
-import Test: @test,
-             @test_throws
-if !@isdefined HTTP
-    using HTTP
-end
-if !@isdefined WebSockets
-    using WebSockets
-end
+using Test
+using HTTP
+using WebSockets
 import WebSockets:  is_upgrade,
                     upgrade,
                     _openstream,
                     addsubproto,
                     generate_websocket_key
-if !@isdefined Sockets
-    using Sockets
-end
+using Sockets
+using Base64
 import Base.BufferStream
-if !@isdefined Base64
-    using Base64
-end
 sethd(r::HTTP.Messages.Response, pa::Pair) = HTTP.Messages.setheader(r, HTTP.Header(pa))
 
 const NEWPORT = 8091
@@ -48,14 +39,14 @@ res = WebSockets.open((_)->nothing, URL, subprotocol = "unapproved");
 
 @info("try open with uknown port\n")
 sleep(1)
-global caughterr = WebSockets.WebSocketClosedError("")
+caughterr = WebSockets.WebSocketClosedError("")
 try
 WebSockets.open((_)->nothing, "ws://127.0.0.1:8099");
 catch err
     global caughterr = err
 end
 @test typeof(caughterr) <: WebSockets.WebSocketClosedError
-@test caughterr.message == " while open ws|client: connect: connection refused (ECONNREFUSED)"
+@test caughterr.message == " while open ws|client: Base.IOError(\"connect: connection refused (ECONNREFUSED)\", -111)"
 
 @info("try open with uknown scheme\n")
 sleep(1)

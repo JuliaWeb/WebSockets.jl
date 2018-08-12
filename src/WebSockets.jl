@@ -3,7 +3,7 @@ __precompile__()
     WebSockets
 This module implements the WebSockets protocol.
 
-WebSockets relies on either packages HttpServer, HTTP or both.
+WebSockets relies on the package HTTP.jl
 
 Websocket|server relies on a client initiating the connection.
 Websocket|client initiate the connection, but requires HTTP.
@@ -48,7 +48,7 @@ export WebSocket,
 # revisit the need for defining this union type for method definitions. The functions would
 # probably work just as fine with duck typing.
 const Dt = Union{Base.ReinterpretArray{UInt8,1,UInt16,Array{UInt16,1}},
-            Vector{UInt8}, 
+            Vector{UInt8},
             Base.CodeUnits{UInt8,String}   }
 "A reasonable amount of time"
 const TIMEOUT_CLOSEHANDSHAKE = 10.0

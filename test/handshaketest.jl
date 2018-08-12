@@ -1,26 +1,12 @@
 # included in runtests.jl
-import Test: @test
+using Test
+using HTTP
+using WebSockets
+using BufferedStreams
 import Base: convert, BufferStream
-if !@isdefined HTTP
-    using HTTP
-end
 import HTTP.Header
-if !@isdefined HttpServer
-    using HttpServer
-end
-if !@isdefined WebSockets
-    using WebSockets
-end
-if !@isdefined BufferedStreams
-    using BufferedStreams
-end
 
-
-import WebSockets:  generate_websocket_key,
-    websocket_handshake,
-    upgrade
-import HttpServer:Request
-import HttpServer:  is_websocket_handshake
+import WebSockets:  generate_websocket_key, upgrade
 
 
 
@@ -29,24 +15,16 @@ function templaterequests()
                                             "Upgrade"=>"websocket")
     firefoxheaders = Dict{String, String}("Connection"=>"keep-alive, Upgrade",
                                             "Upgrade"=>"websocket")
-    chromerequest = HttpServer.Request("GET", "", chromeheaders, "")
-    firefoxrequest= Request("GET", "", firefoxheaders, "")
     chromerequest_HTTP = HTTP.Messages.Request("GET", "/", collect(chromeheaders))
     firefoxrequest_HTTP = HTTP.Messages.Request("GET", "/", collect(firefoxheaders))
-    return [chromerequest, firefoxrequest, chromerequest_HTTP, firefoxrequest_HTTP]
+    return [chromerequest_HTTP, firefoxrequest_HTTP]
 end
 convert(::Type{Header}, pa::Pair{String,String}) = Pair(SubString(pa[1]), SubString(pa[2]))
-sethd(r::Request, pa::Pair) = push!(r.headers, pa)
-sethd(r::HTTP.Messages.Request, pa::Pair) = sethd(r, convert(Header, pa)) 
-sethd(r::HTTP.Messages.Request, pa::Header) = HTTP.Messages.setheader(r, pa) 
+sethd(r::HTTP.Messages.Request, pa::Pair) = sethd(r, convert(Header, pa))
+sethd(r::HTTP.Messages.Request, pa::Header) = HTTP.Messages.setheader(r, pa)
 
 takefirstline(buf::IOBuffer) = strip(split(buf |> take! |> String, "\r\n")[1])
 takefirstline(buf::BufferStream) = strip(split(buf |> read |> String, "\r\n")[1])
-function handshakeresponse(request::Request)
-    cli = HttpServer.Client(2, IOBuffer())
-    websocket_handshake(request, cli)
-    strip(takefirstline(cli.sock)) 
-end
 function handshakeresponse(request::HTTP.Messages.Request)
     buf = BufferStream()
     c = HTTP.ConnectionPool.Connection(buf)
@@ -75,24 +53,16 @@ end
 # Test reject / switch format"
 io = IOBuffer()
 const REJECT = "HTTP/1.1 400 Bad Request"
-Base.write(io, Response(400))
+Base.write(io, WebSockets.Response(400))
 @test takefirstline(io) == REJECT
 Base.write(io, HTTP.Messages.Response(400))
 @test takefirstline(io) == REJECT
 
 const SWITCH = "HTTP/1.1 101 Switching Protocols"
-Base.write(io, Response(101))
+Base.write(io, WebSockets.Response(101))
 @test takefirstline(io) == SWITCH
 Base.write(io, HTTP.Messages.Response(101))
 @test takefirstline(io) == SWITCH
-
-
-chromerequest, firefoxrequest, chromerequest_HTTP, firefoxrequest_HTTP = Tuple(templaterequests())
-wshandler = WebSocketHandler((x,y)->nothing)
-for request in [chromerequest, firefoxrequest]
-    @test is_websocket_handshake(wshandler, request) == true
-end
-
 
 # "Test simple handshakes that are unacceptable"
 
@@ -130,7 +100,7 @@ for r in templaterequests()
 end
 
 #  add simple subprotocol to acceptable list
-@test true == WebSockets.addsubproto("xml") 
+@test true == WebSockets.addsubproto("xml")
 
 # add subprotocol with difficult name
 @test true == WebSockets.addsubproto("my.server/json-zmq")

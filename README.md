@@ -1,4 +1,5 @@
-# WebSockets.jl
+# WebSockets.jl - Julia 0.7 branch
+
 
 *Current state on 'master' 11/8-18*:
 
@@ -20,7 +21,7 @@ Working on Julia 0.7 and 1.0, but tests still include HttpServer files and will 
 
 
 
-Server and client side [Websockets](https://tools.ietf.org/html/rfc6455) protocol in Julia. WebSockets is a small overhead message protocol layered over [TCP](https://tools.ietf.org/html/rfc793). It uses HTTP(S) for establishing the connections. 
+Server and client side [Websockets](https://tools.ietf.org/html/rfc6455) protocol in Julia. WebSockets is a small overhead message protocol layered over [TCP](https://tools.ietf.org/html/rfc793). It uses HTTP(S) for establishing the connections.
 
 ## Getting started
 On Julia pre 0.6, see an earlier version of this repository.
@@ -71,7 +72,7 @@ You can also have a look at alternative Julia packages: [DandelionWebSockets](ht
 
 - Logging. We need customizable and very fast logging for building networked applications.
 - Compression is not implemented.
-- Possibly non-compliant proxies on the internet, company firewalls. 
+- Possibly non-compliant proxies on the internet, company firewalls.
 - 'Warm-up', i.e. compilation when a method is first used. Warm-up is excluded from current benchmarks.
 - Garbage collection, which increases message latency at semi-random intervals. See benchmark plots.
 - If a connection is closed improperly, the connection task will throw uncaught ECONNRESET and similar messages.
@@ -81,7 +82,7 @@ You can also have a look at alternative Julia packages: [DandelionWebSockets](ht
 
 ## Server side example
 (Work in progress, see /examples.)
-As a first example, we can create a WebSockets echo server. We use named function arguments for more readable stacktraces while debugging. 
+As a first example, we can create a WebSockets echo server. We use named function arguments for more readable stacktraces while debugging.
 
 ```julia
 using HttpServer
@@ -113,7 +114,7 @@ end
 
 handle(req, res) = Response(200)
 
-server = Server(HttpHandler(handle), 
+server = Server(HttpHandler(handle),
                 WebSocketHandler(gatekeeper))
 
 @async run(server, 8080)
@@ -133,9 +134,9 @@ Why?                                        debugger eval code:1:28
 ```
 
 If you now navigate or close the browser, this happens:
-1. the client side of the websocket connection will quickly send a close request and go away. 
+1. the client side of the websocket connection will quickly send a close request and go away.
 2. Server side `readguarded(ws)` has been waiting for messages, but instead closes 'ws' and returns ("", false)
-3. `coroutine(ws)` is finished and the task's control flow returns to HttpServer 
+3. `coroutine(ws)` is finished and the task's control flow returns to HttpServer
 4. HttpServer does nothing other than exit this task. In fact, it often crashes because
     somebody else (the browser) has closed the underlying TCP stream.
 5. The server, which spawned the task, continues to listen for incoming connections, and you're stuck. Ctrl + C!
@@ -148,7 +149,7 @@ You could replace 'using HttpServer' with 'using HTTP'. Also:
 
 ## Client side example
 
-Clients need to use [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl).  
+Clients need to use [HTTP.jl](https://github.com/JuliaWeb/HttpServer.jl).
 
 
 ```julia
@@ -160,7 +161,7 @@ function client_one_message(ws)
     if writeguarded(ws, msg)
         msg, stillopen = readguarded(ws)
         println("Received:", String(msg))
-        if stillopen 
+        if stillopen
             println("The connection is active, but we leave. WebSockets.jl will close properly.")
         else
             println("Disconnect during reading.")
@@ -200,14 +201,14 @@ The introduction of client side websockets to this package may require changes i
 
 ## Switching from HttpServer to HTTP?
 Some types and methods are not exported. See inline docs:
-- `Server` -> `WebSockets.ServerWS` 
+- `Server` -> `WebSockets.ServerWS`
 - `WebSocketHandler` -> `WebSockets.WebsocketHandler`
 - `run` -> `WebSockets.serve()`
 - `Response` -> `HTTP.Response`
 - `Request` -> `HTTP.Response`
 - `HttpHandler`-> `HTTP.HandlerFunction`
 
- You may also want to consider using `target`, `orgin`and `subprotocol`, which 
+ You may also want to consider using `target`, `orgin`and `subprotocol`, which
  are compatible with both of the types above.
 
 
