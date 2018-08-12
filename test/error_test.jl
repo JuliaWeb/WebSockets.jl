@@ -139,7 +139,7 @@ global err = take!(server_WS.out)
 @test typeof(err) <: WebSocketClosedError
 @test err.message == " while read(ws|server) BoundsError(UInt8[], (1,))"
 global stack_trace = take!(server_WS.out);
-@test length(stack_trace) == 6
+@test length(stack_trace) in [5, 6]
 
 while isready(server_WS.out)
     take!(server_WS.out)
