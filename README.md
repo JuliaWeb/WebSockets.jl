@@ -1,9 +1,9 @@
 # WebSockets.jl - Julia 0.7 branch
 
 
-*Current state on 'master' 11/8-18*:
+*Current state on 'master' 12/8-18*:
 
-Working on Julia 0.7 and 1.0, but tests still include HttpServer files and will fail.
+Tests passing without deprecation warnings on Julia 0.7 and 1.0. Some utility files still refer HttpServer. CI scripts not checked.
 
 
 *Release version*:
