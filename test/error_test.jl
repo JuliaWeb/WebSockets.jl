@@ -9,7 +9,7 @@ import WebSockets: ServerWS,
         open,
         readguarded,
         writeguarded,
-        WebSocketHandler,
+        WebsocketHandler,
         WebSocketClosedError,
         close
 
@@ -109,36 +109,36 @@ while !istaskstarted(tas); yield(); end
 sleep(3)
 
 @info("Open a ws|client, close it out of protocol. Check server error on channel.\n")
-res = WebSockets.open((ws)-> close(ws.socket), URL)
+global res = WebSockets.open((ws)-> close(ws.socket), URL)
 @test res.status == 101
 sleep(1)
-err = take!(chfromserv)
+global err = take!(chfromserv)
 @test typeof(err) <: WebSocketClosedError
 @test err.message == " while read(ws|server) BoundsError(UInt8[], (1,))"
-stack_trace = take!(chfromserv)
+global stack_trace = take!(chfromserv)
 @test length(stack_trace) == 2
 put!(server_WS.in, HTTP.Servers.KILL)
 sleep(1)
 
 @info("\nStart an async HTTP server. Errors are output on built-in channel\n")
 sleep(1)
-server_WS = ServerWS(   HTTP.HandlerFunction(req-> HTTP.Response(200)),
+global server_WS = ServerWS(   HTTP.HandlerFunction(req-> HTTP.Response(200)),
                         WebSockets.WebsocketHandler() do ws_serv
                                                 while isopen(ws_serv)
                                                         read(ws_serv)
                                                 end
                                             end);
-tas = @async WebSockets.serve(server_WS, "127.0.0.1", THISPORT, false)
+global tas = @async WebSockets.serve(server_WS, "127.0.0.1", THISPORT, false)
 while !istaskstarted(tas); yield(); end
 sleep(3)
 
 @info("Open a ws|client, close it out of protocol. Check server error on server.out channel.\n")
 sleep(1)
 WebSockets.open((ws)-> close(ws.socket), URL);
-err = take!(server_WS.out)
+global err = take!(server_WS.out)
 @test typeof(err) <: WebSocketClosedError
 @test err.message == " while read(ws|server) BoundsError(UInt8[], (1,))"
-stack_trace = take!(server_WS.out);
+global stack_trace = take!(server_WS.out);
 @test length(stack_trace) == 6
 
 while isready(server_WS.out)
@@ -155,7 +155,7 @@ for (ke, va) in WebSockets.codeDesc
     sleep(0.3)
     WebSockets.open((ws)-> close(ws, statusnumber = ke), URL)
     wait(server_WS.out)
-    err = take!(server_WS.out)
+    global err = take!(server_WS.out)
     @test typeof(err) <: WebSocketClosedError
     @test err.message == "ws|server respond to OPCODE_CLOSE $ke:$va"
     wait(server_WS.out)
@@ -171,14 +171,14 @@ end
       " and also a custom reason string. Verify error messages on server.out reflect the codes.")
 
 sleep(1)
-va = 1000
+global va = 1000
 @info("Closing ws|client with reason", va, " ", WebSockets.codeDesc[va], " and goodbye!")
 WebSockets.open((ws)-> close(ws, statusnumber = va, freereason = "goodbye!"), URL)
 wait(server_WS.out)
-err = take!(server_WS.out)
+global err = take!(server_WS.out)
 @test typeof(err) <: WebSocketClosedError
 @test err.message == "ws|server respond to OPCODE_CLOSE 1000:goodbye!"
-stack_trace = take!(server_WS.out)
+global stack_trace = take!(server_WS.out)
 sleep(1)
 
 
@@ -195,9 +195,9 @@ function selfinterruptinghandler(ws)
 end
 WebSockets.open(selfinterruptinghandler, URL)
 sleep(6)
-err = take!(server_WS.out)
+global err = take!(server_WS.out)
 @test typeof(err) <: WebSocketClosedError
 @test err.message == "ws|server respond to OPCODE_CLOSE 1006: while read(ws|client received InterruptException."
-stack_trace = take!(server_WS.out)
+global stack_trace = take!(server_WS.out)
 put!(server_WS.in, HTTP.Servers.KILL)
 sleep(2)

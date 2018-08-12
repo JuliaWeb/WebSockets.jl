@@ -215,10 +215,7 @@ end
 # Inline docs in 'WebSockets.jl'
 target(req::HTTP.Messages.Request) = req.target
 subprotocol(req::HTTP.Messages.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
-function origin(req::HTTP.Messages.Request)
-    @warn("Originator of the request may not be fully implemented. Checks pending. See Sockets.getsockname and https://github.com/JuliaWeb/HTTP.jl/issues/254", maxlog = 1)
-    HTTP.header(req, "Origin")  
-end    
+origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")  
 
 """
 WebsocketHandler(f::Function) <: HTTP.Handler
@@ -230,9 +227,6 @@ The provided argument should be one of the forms
 The latter form is intended for gatekeeping, ref. RFC 6455 section 10.1
 
 f accepts a `WebSocket` and does interesting things with it, like reading, writing and exiting when finished.
-
-Take note of the very similar WebSocketHandler (capital 'S'), which is a subtype of HttpServer, an alternative
-to HTTP.
 """
 struct WebsocketHandler{F <: Function} <: HTTP.Handler
     func::F # func(ws) or func(request, ws)
