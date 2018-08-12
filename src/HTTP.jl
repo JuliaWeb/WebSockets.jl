@@ -1,12 +1,9 @@
-@info "Loading HTTP methods..."
-
 """
 Initiate a websocket|client connection to server defined by url. If the server accepts
 the connection and the upgrade to websocket, f is called with an open websocket|client
 
 e.g. say hello, close and leave
 ```julia
-import HTTP
 using WebSockets
 WebSockets.open("ws://127.0.0.1:8000") do ws
     write(ws, "Hello")
@@ -147,7 +144,7 @@ function upgrade(f::Function, http::HTTP.Stream)
     end
     key = HTTP.header(http, "Sec-WebSocket-Key")
     decoded = UInt8[]
-    try 
+    try
         decoded = base64decode(key)
     catch
         HTTP.setstatus(http, 400)
@@ -181,7 +178,7 @@ function upgrade(f::Function, http::HTTP.Stream)
 #        mt = typeof(f).name.mt
 #        fnam = splitdir(string(mt.defs.func.file))[2]
 #        print_with_color(:yellow, STDERR, "f = ", string(f) * " at " * fnam * ":" * string(mt.defs.func.line) * "\nERROR:\t")
-#        showerror(STDERR, err, catch_stacktrace())
+#        showerror(STDERR, err, stacktrace(catch_backtrace()))
     finally
         close(ws)
     end
@@ -218,7 +215,7 @@ end
 # Inline docs in 'WebSockets.jl'
 target(req::HTTP.Messages.Request) = req.target
 subprotocol(req::HTTP.Messages.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
-origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")  # TODO check or replace with HTTP.Sockets.getsockname(?)
+origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")  
 
 """
 WebsocketHandler(f::Function) <: HTTP.Handler
@@ -230,9 +227,6 @@ The provided argument should be one of the forms
 The latter form is intended for gatekeeping, ref. RFC 6455 section 10.1
 
 f accepts a `WebSocket` and does interesting things with it, like reading, writing and exiting when finished.
-
-Take note of the very similar WebSocketHandler (capital 'S'), which is a subtype of HttpServer, an alternative
-to HTTP.
 """
 struct WebsocketHandler{F <: Function} <: HTTP.Handler
     func::F # func(ws) or func(request, ws)
@@ -260,7 +254,7 @@ end
 
 ServerWS(h::Function, w::Function, l::IO=HTTP.compat_stdout();
             cert::String="", key::String="", args...) = ServerWS(HTTP.HandlerFunction(h), WebsocketHandler(w), l;
-                                                         cert=cert, key=key, args...)
+                                                         cert=cert, key=key, ratelimit = 1//0, args...)
 function ServerWS(handler::H,
                 wshandler::W,
                 logger::IO = HTTP.compat_stdout();
@@ -274,7 +268,7 @@ function ServerWS(handler::H,
     end
     return serverws
 end
-
+ratlimit = 1//0
 """
     WebSockets.serve(server::ServerWS, port)
     WebSockets.serve(server::ServerWS, host, port)
@@ -288,11 +282,8 @@ To stop a running server, put HTTP.Servers.KILL on the .in channel.
 ```
 After a suspected connection task failure:
 ```julia
-    if isready(server.out)
-        err = take!(myserver_WS.out)
-    end
     if isready(myserver_WS.out)
-        stack_trace = take!(server_WS.out)
+        stack_trace = take!(myserver_WS.out)
     end
 ```
 """

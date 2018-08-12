@@ -1,4 +1,10 @@
 __precompile__()
+#=
+ TODO deal with Julia 0.7 warning: 
+    Warning: broadcast will default to iterating over its arguments in the future. Wrap arguments of
+     type `x::logutils_ws.ColorDevice{Base.GenericIOBuffer{Array{UInt8,1}}}` with `Ref(x)` to ensure they broadcast as "scalar" elements.
+=#
+
 """
 Specialized logging for testing and examples in WebSockets.
 
@@ -10,14 +16,14 @@ since opening and closing files is so slow it may affect the sequence of things.
 
 This module dispatches on an ad-hoc type AbstractDevice, instead of putting
 additional data on an IOContext method like 'show' does. When AbstracDevice points to
-Base.NullDevice(), the input arguments are processed before the call is made, but 
-that is all. 
+Base.NullDevice(), the input arguments are processed before the call is made, but
+that is all.
 
 In Julia 0.7, current logging functionality is replaced with macros, which
 can be even faster. Macros can also retrieve the current function's name without using stacktraces.
 With this module, each function defines id = "thisfunction".
 
-Methods in this file have no external dependencies. Methods with dependencies are 
+Methods in this file have no external dependencies. Methods with dependencies are
 loaded from separate files with @require. This adds to loading time.
 """
 module logutils_ws

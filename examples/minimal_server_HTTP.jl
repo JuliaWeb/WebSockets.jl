@@ -2,36 +2,44 @@ using HTTP
 using WebSockets
 const BAREHTML = "<head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">
  <title>Empty.html</title></head><body></body></html>"
+import Sockets
+const LOCALIP = string(Sockets.getipaddr())
+const PORT = 8080
+const BODY =  "<body><p>Press F12
+                <p>ws = new WebSocket(\"ws://$LOCALIP:$PORT\")
+                <p>ws.onmessage = function(e){console.log(e.data)}
+                <p>ws.send(\"Browser console says hello!\")
+                </body>"
 function coroutine(ws)
     while isopen(ws)
         data, = readguarded(ws)
         s = String(data)
         if s == ""
+            writeguarded(ws, "Goodbye!")
             break
         end
         println("Received: ", s)
-        if s[1] == "P"
-            writeguarded(ws, "No, I'm not!")
-        else
-            writeguarded(ws, "Why?")
-        end
+        writeguarded(ws, "Hello! Send empty message to exit, or just leave.")
     end
 end
 
 function gatekeeper(req, ws)
-    println("\nOrigin:", origin(req), "    Target:", target(req), "    subprotocol:", subprotocol(req))
-    # Non-browser clients don't send Origin. We liberally accept in this case.
-    if origin(req) == "" || origin(req) == "http://127.0.0.1:8080" || origin(req) == "http://localhost:8080"
+    orig = WebSockets.origin(req)
+    println("\nOrigin:", orig, "    Target:", target(req), "    subprotocol:", subprotocol(req))
+    if occursin(LOCALIP, orig)
+        coroutine(ws)
+    elseif orig == "" 
+        @info "Non-browser clients don't send Origin. We liberally accept the update request in this case."
         coroutine(ws)
     else
-        println("Inacceptable request")
+        @warn "Inacceptable request"
     end
 end
 
-handle(req, res) = HTTP.Response(BAREHTML)
+handle(req) = replace(BAREHTML, "<body></body>" => BODY) |> HTTP.Response
 
 server = WebSockets.ServerWS(HTTP.HandlerFunction(handle), 
                 WebSockets.WebsocketHandler(gatekeeper))
 
-@info("Browser > http://127.0.0.1:8080 , F12> console > ws = new WebSocket(\"ws://127.0.0.1:8080\") ")
-@async WebSockets.serve(server, 8080)
+@info("Browser > $LOCALIP:$PORT , F12> console > ws = new WebSocket(\"ws://$LOCALIP:$PORT\") ")
+@async WebSockets.serve(server, LOCALIP, PORT);

@@ -1,12 +1,12 @@
-using HTTP
 using WebSockets
+import HTTP.Response
 function client_one_message(ws)
     printstyled(stdout, "\nws|client input >  ", color=:green)
     msg = readline(stdin)
     if writeguarded(ws, msg)
         msg, stillopen = readguarded(ws)
         println("Received:", String(msg))
-        if stillopen 
+        if stillopen
             println("The connection is active, but we leave. WebSockets.jl will close properly.")
         else
             println("Disconnect during reading.")
@@ -25,7 +25,7 @@ function main()
         wsuri = readline(stdin)
         wsuri == "" && break
         res = WebSockets.open(client_one_message, wsuri)
-        !isa(res, HTTP.Response) && println(res)
+        !isa(res, Response) && println(res)
     end
     println("Have a nice day")
 end

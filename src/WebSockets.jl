@@ -3,7 +3,7 @@ __precompile__()
     WebSockets
 This module implements the WebSockets protocol.
 
-WebSockets relies on either packages HttpServer, HTTP or both.
+WebSockets relies on the package HTTP.jl
 
 Websocket|server relies on a client initiating the connection.
 Websocket|client initiate the connection, but requires HTTP.
@@ -26,7 +26,12 @@ module WebSockets
 using Sockets: TCPSocket, IPAddr
 import MbedTLS: digest, MD_SHA1
 import Base64: base64encode, base64decode
-using Requires
+using HTTP
+import HTTP:Response,
+            Request,
+            HandlerFunction
+
+include("HTTP.jl")
 export WebSocket,
        readguarded,
        writeguarded,
@@ -43,7 +48,7 @@ export WebSocket,
 # revisit the need for defining this union type for method definitions. The functions would
 # probably work just as fine with duck typing.
 const Dt = Union{Base.ReinterpretArray{UInt8,1,UInt16,Array{UInt16,1}},
-            Vector{UInt8}, 
+            Vector{UInt8},
             Base.CodeUnits{UInt8,String}   }
 "A reasonable amount of time"
 const TIMEOUT_CLOSEHANDSHAKE = 10.0
@@ -688,8 +693,8 @@ function readguarded(ws)
     end
 end
 
-function __init__()
-    @require HTTP="cd3eb016-35fb-5094-929b-558a96fad6f3" include("HTTP.jl")
-    @require HttpServer="58cfbd8c-6b7d-5447-85c1-563540e28d27" include("HttpServer.jl")
-end
+#function __init__()
+#    @require HTTP="cd3eb016-35fb-5094-929b-558a96fad6f3" include("HTTP.jl")
+#    @require HttpServer="58cfbd8c-6b7d-5447-85c1-563540e28d27" include("HttpServer.jl")
+#end
 end # module WebSockets

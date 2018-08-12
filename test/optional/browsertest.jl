@@ -25,7 +25,6 @@
 
 cd(Pkg.dir("WebSockets", "test", "optional"))
 using Compat
-using HttpServer
 using WebSockets
 using Test
 using JSON

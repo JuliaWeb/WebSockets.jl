@@ -1,26 +1,22 @@
 # included in runtests.jl
 # focus on HTTP.jl
-import Test: @test,
-             @test_throws
-if !@isdefined HTTP
-    using HTTP
-end
-if !@isdefined WebSockets
-    using WebSockets
-end
+using Test
+using HTTP
+using WebSockets
 import WebSockets:  is_upgrade,
                     upgrade,
                     _openstream,
                     addsubproto,
                     generate_websocket_key
-if !@isdefined Sockets
-    using Sockets
-end
+import HTTP.Header
+using Sockets
+using Base64
 import Base.BufferStream
-if !@isdefined Base64
-    using Base64
-end
-sethd(r::HTTP.Messages.Response, pa::Pair) = HTTP.Messages.setheader(r, HTTP.Header(pa))
+convert(::Type{Header}, pa::Pair{String,String}) = Pair(SubString(pa[1]), SubString(pa[2]))
+sethd(r::HTTP.Messages.Response, pa::Pair) = sethd(r, convert(Header, pa))
+sethd(r::HTTP.Messages.Response, pa::Header) = HTTP.Messages.setheader(r, pa)
+
+#sethd(r::HTTP.Messages.Response, pa::Pair) = HTTP.Messages.setheader(r, HTTP.Header(pa))
 
 const NEWPORT = 8091
 const TCPREF2 = Ref{Sockets.TCPServer}()
@@ -55,25 +51,25 @@ catch err
     global caughterr = err
 end
 @test typeof(caughterr) <: WebSockets.WebSocketClosedError
-@test caughterr.message == " while open ws|client: connect: connection refused (ECONNREFUSED)"
+@test startswith(caughterr.message, " while open ws|client: Base.IOError(\"connect: connection refused (ECONNREFUSED)")
 
 @info("try open with uknown scheme\n")
 sleep(1)
-caughterr = ArgumentError("")
+global caughterr = ArgumentError("")
 try
 WebSockets.open((_)->nothing, "ww://127.0.0.1:8099");
 catch err
-    caughterr = err
+    global caughterr = err
 end
 @test typeof(caughterr) <: ArgumentError
 @test caughterr.msg == " bad argument url: Scheme not ws or wss. Input scheme: ww"
 
 
-caughterr = ArgumentError("")
+global caughterr = ArgumentError("")
 try
 WebSockets.open((_)->nothing, "ws://127.0.0.1:8099/svg/#");
 catch err
-    caughterr = err
+    global caughterr = err
 end
 @test typeof(caughterr) <: ArgumentError
 @test caughterr.msg == " replace '#' with %23 in url: ws://127.0.0.1:8099/svg/#"

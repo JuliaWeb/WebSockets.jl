@@ -1,16 +1,13 @@
 #=
 
-A chat application using both HttpServer and HTTP to do
-the same thing: Start a new task for each browser (tab) that connects.
+A chat application. Starts a new task for each browser (tab) that connects.
 
 To use:
     - include("chat_explore.jl") in REPL
-    - start a browser on address 127.0.0.1:8000, and another on 127.0.0.1:8080
+    - start a browser on address 127.0.0.1:8080
     - inspect global variables starting with 'last' while the chat is running asyncronously
 
 To call in from other devices, figure out your IP address on the network and change the 'gatekeeper' code.
-
-Note that type of 'lastreq' changes depending on whether the last call was made through HttpServer or HTTP.
 
 Functions used as arguments are explicitly defined with names instead of anonymous functions (do..end constructs).
 This may improve debugging readability at the cost of increased verbosity.
@@ -21,19 +18,21 @@ global lastws= 0
 global lastmsg= 0
 global lastws= 0
 
-using HttpServer
-using HTTP
 using WebSockets
+import WebSockets:Response,
+                  Request,
+                  HandlerFunction
 using Dates
-const CLOSEAFTER = Base.Dates.Second(1800)
+import Sockets
+const CLOSEAFTER = Dates.Second(1800)
 const HTTPPORT = 8080
-const HTTPSERVERPORT = 8000
-const URL = "127.0.0.1"
+const LOCALIP = string(Sockets.getipaddr())
 const USERNAMES = Dict{String, WebSocket}()
-const HTMLSTRING = read(Pkg.dir("WebSockets","examples","chat_explore.html"), String);
+const HTMLSTRING = read(joinpath(@__DIR__, "chat_explore.html"), String)
 
-# If we are to access a websocket from outside
-# it's websocket handler function, we need some kind of
+
+# Since we are to access a websocket from outside
+# it's own websocket handler coroutine, we need some kind of
 # mutable container for storing references:
 const WEBSOCKETS = Dict{WebSocket, Int}()
 
@@ -126,39 +125,29 @@ function gatekeeper(req, ws)
     global lastreq = req
     global lastws = ws
     orig = WebSockets.origin(req)
-    if startswith(orig, "http://localhost") || startswith(orig, "http://127.0.0.1")
+    if occursin(LOCALIP, orig)
         coroutine(ws)
     else
-        @warn("Unauthorized websocket connection, $orig not approved by gatekeeper")
+        @warn("Unauthorized websocket connection, $orig not approved by gatekeeper, expected $LOCALIP")
     end
     nothing
 end
 
 "Request to response. Response is the predefined HTML page with some javascript"
-req2resp(req::HttpServer.Request, resp) = HTMLSTRING |> Response
-req2resp(req::HTTP.Request) =       HTMLSTRING |> HTTP.Response
+req2resp(req::Request) =       HTMLSTRING |> Response
 
 # Both server definitions need two function wrappers; one handler function for page requests,
 # one for opening websockets (which the javascript in the HTML page will try to do)
-server_httpserver = Server(HttpHandler(req2resp), WebSocketHandler(gatekeeper))
-server_HTTP = WebSockets.ServerWS(HTTP.HandlerFunction(req2resp), WebSockets.WebsocketHandler(gatekeeper))
+server_HTTP = WebSockets.ServerWS(HandlerFunction(req2resp), WebSockets.WebsocketHandler(gatekeeper))
 
 # Start the HTTP server asyncronously, and stop it later
-litas_HTTP = @async WebSockets.serve(server_HTTP, URL, HTTPPORT)
+litas_HTTP = @async WebSockets.serve(server_HTTP, LOCALIP, HTTPPORT)
 @async begin
-    println("HTTP server listening on $URL:$HTTPPORT for $CLOSEAFTER")
+    println("HTTP server listening on $LOCALIP:$HTTPPORT for $CLOSEAFTER")
     sleep(CLOSEAFTER.value)
     println("Time out, closing down $HTTPPORT")
     Base.throwto(litas_HTTP, InterruptException())
 end
 
-# Start the HttpServer asyncronously, stop it later
-litas_httpserver = @async run(server_httpserver, HTTPSERVERPORT)
-@async begin
-          println("HttpServer listening on $URL:$HTTPSERVERPORT for $CLOSEAFTER")
-          sleep(CLOSEAFTER.value + 2)
-          println("Time out, closing down $HTTPSERVERPORT")
-          Base.throwto(litas_httpserver, InterruptException())
-end
 
 nothing

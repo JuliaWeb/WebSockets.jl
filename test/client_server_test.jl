@@ -1,17 +1,8 @@
 # included in runtests.jl
-import Test: @test
-if !@isdefined HTTP
-    using HTTP
-end
-if !@isdefined HttpServer
-    using HttpServer
-end
-if !@isdefined Sockets
-    using Sockets
-end
-if !@isdefined WebSockets
-    using WebSockets
-end
+using Test
+using HTTP
+using Sockets
+using WebSockets
 import WebSockets:  is_upgrade,
                     upgrade,
                     WebSocketHandler
@@ -29,7 +20,6 @@ end
 
 const port_HTTP = 8000
 const port_HTTP_ServeWS = 8001
-const port_HttpServer = 8081
 const TCPREF = Ref{Sockets.TCPServer}()
 
 # Start HTTP listen server on port $port_HTTP"
@@ -39,13 +29,6 @@ tas = @async HTTP.listen("127.0.0.1", port_HTTP, tcpref = TCPREF) do s
     end
 end
 while !istaskstarted(tas);yield();end
-
-# Start HttpServer on port $port_HttpServer
-const server = Server(HttpHandler((req, res)->Response(200)),
-                      WebSocketHandler(echows));
-tas = @async run(server, port_HttpServer)
-while !istaskstarted(tas);yield();end
-
 
 # Start HTTP ServerWS on port $port_HTTP_ServeWS
 server_WS = WebSockets.ServerWS(
@@ -60,9 +43,7 @@ const servers = [
         ("HTTTP ServerWS",  "ws://127.0.0.1:$(port_HTTP_ServeWS)"),
         ("ws",          "ws://echo.websocket.org"),
         ("wss",         "wss://echo.websocket.org")]
-# note, HttpServer freezing.
-#    ("HttpServer",  "ws://127.0.0.1:$(port_HttpServer)"),
-        
+
 const lengths = [0, 125, 126, 127, 2000]
 
 for (s, url) in servers, len in lengths, closestatus in [false, true]
@@ -88,10 +69,7 @@ end
 # make a very simple http request for the servers with defined http handlers
 resp = HTTP.request("GET", "http://127.0.0.1:$(port_HTTP_ServeWS)")
 @test resp.status == 200
-resp = HTTP.request("GET", "http://127.0.0.1:$(port_HttpServer)")
-@test resp.status == 200
 
 # Close the servers
 close(TCPREF[])
-close(server.http.sock)
 put!(server_WS.in, HTTP.Servers.KILL)

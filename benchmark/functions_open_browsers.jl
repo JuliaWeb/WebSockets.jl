@@ -165,7 +165,7 @@ In some cases we expect an immediate indication
 of failure, for example when the corresponding browser
 is not found on the system. In other cases, we will
 just wait in vain. In those cases,
-call this function again after a reasonable timeout. 
+call this function again after a reasonable timeout.
 The function remembers which browsers were tried before.
 "
 function open_a_browser()
