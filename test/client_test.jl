@@ -8,10 +8,15 @@ import WebSockets:  is_upgrade,
                     _openstream,
                     addsubproto,
                     generate_websocket_key
+import HTTP.Header
 using Sockets
 using Base64
 import Base.BufferStream
-sethd(r::HTTP.Messages.Response, pa::Pair) = HTTP.Messages.setheader(r, HTTP.Header(pa))
+convert(::Type{Header}, pa::Pair{String,String}) = Pair(SubString(pa[1]), SubString(pa[2]))
+sethd(r::HTTP.Messages.Response, pa::Pair) = sethd(r, convert(Header, pa))
+sethd(r::HTTP.Messages.Response, pa::Header) = HTTP.Messages.setheader(r, pa)
+
+#sethd(r::HTTP.Messages.Response, pa::Pair) = HTTP.Messages.setheader(r, HTTP.Header(pa))
 
 const NEWPORT = 8091
 const TCPREF2 = Ref{Sockets.TCPServer}()
@@ -39,32 +44,32 @@ res = WebSockets.open((_)->nothing, URL, subprotocol = "unapproved");
 
 @info("try open with uknown port\n")
 sleep(1)
-caughterr = WebSockets.WebSocketClosedError("")
+global caughterr = WebSockets.WebSocketClosedError("")
 try
 WebSockets.open((_)->nothing, "ws://127.0.0.1:8099");
 catch err
     global caughterr = err
 end
 @test typeof(caughterr) <: WebSockets.WebSocketClosedError
-@test caughterr.message == " while open ws|client: Base.IOError(\"connect: connection refused (ECONNREFUSED)\", -111)"
+@test startswith(caughterr.message, " while open ws|client: Base.IOError(\"connect: connection refused (ECONNREFUSED)")
 
 @info("try open with uknown scheme\n")
 sleep(1)
-caughterr = ArgumentError("")
+global caughterr = ArgumentError("")
 try
 WebSockets.open((_)->nothing, "ww://127.0.0.1:8099");
 catch err
-    caughterr = err
+    global caughterr = err
 end
 @test typeof(caughterr) <: ArgumentError
 @test caughterr.msg == " bad argument url: Scheme not ws or wss. Input scheme: ww"
 
 
-caughterr = ArgumentError("")
+global caughterr = ArgumentError("")
 try
 WebSockets.open((_)->nothing, "ws://127.0.0.1:8099/svg/#");
 catch err
-    caughterr = err
+    global caughterr = err
 end
 @test typeof(caughterr) <: ArgumentError
 @test caughterr.msg == " replace '#' with %23 in url: ws://127.0.0.1:8099/svg/#"
