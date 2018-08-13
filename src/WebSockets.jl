@@ -33,6 +33,7 @@ import HTTP:Response,
 
 include("HTTP.jl")
 export WebSocket,
+       serve,
        readguarded,
        writeguarded,
        write,

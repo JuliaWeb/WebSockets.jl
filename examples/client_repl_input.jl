@@ -1,5 +1,4 @@
 using WebSockets
-import HTTP.Response
 function client_one_message(ws)
     printstyled(stdout, "\nws|client input >  ", color=:green)
     msg = readline(stdin)

@@ -1,4 +1,3 @@
-using HTTP
 using WebSockets
 const BAREHTML = "<head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">
  <title>Empty.html</title></head><body></body></html>"
@@ -36,10 +35,10 @@ function gatekeeper(req, ws)
     end
 end
 
-handle(req) = replace(BAREHTML, "<body></body>" => BODY) |> HTTP.Response
+global handle(req) = replace(BAREHTML, "<body></body>" => BODY) |> WebSockets.Response
 
-server = WebSockets.ServerWS(HTTP.HandlerFunction(handle), 
-                WebSockets.WebsocketHandler(gatekeeper))
+global server = WebSockets.ServerWS(handle, 
+                                    gatekeeper)
 
 @info("Browser > $LOCALIP:$PORT , F12> console > ws = new WebSocket(\"ws://$LOCALIP:$PORT\") ")
 @async WebSockets.serve(server, LOCALIP, PORT);

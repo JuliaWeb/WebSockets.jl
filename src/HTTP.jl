@@ -220,7 +220,7 @@ origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")
 """
 WebsocketHandler(f::Function) <: HTTP.Handler
 
-A simple Function-wrapper for HTTP.
+A simple function wrapper for HTTP.
 The provided argument should be one of the forms
     `f(WebSocket) => nothing`
     `f(HTTP.Request, WebSocket) => nothing`
@@ -260,15 +260,22 @@ function ServerWS(handler::H,
                 logger::IO = HTTP.compat_stdout();
                 cert::String = "",
                 key::String = "",
+                ratelimit = 1//0,
                 args...) where {H <: HTTP.Handler, W <: WebsocketHandler}
     if cert != "" && key != ""
-        serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler, logger, Channel(1), Channel(2), HTTP.ServerOptions(; sslconfig=HTTP.MbedTLS.SSLConfig(cert, key), args...))
+        serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler, 
+                                                     logger, Channel(1), Channel(2), 
+                                                     HTTP.ServerOptions(; sslconfig=HTTP.MbedTLS.SSLConfig(cert, key), 
+                                                                          ratelimit = ratelimit, 
+                                                                          args...))
     else
-        serverws = ServerWS{HTTP.Servers.http, H, W}(handler, wshandler, logger, Channel(1), Channel(2), HTTP.ServerOptions(; args...))
+        serverws = ServerWS{HTTP.Servers.http, H, W}(handler, wshandler, 
+                                                     logger, Channel(1), Channel(2), 
+                                                     HTTP.ServerOptions(;ratelimit = ratelimit, 
+                                                                         args...))
     end
     return serverws
 end
-ratlimit = 1//0
 """
     WebSockets.serve(server::ServerWS, port)
     WebSockets.serve(server::ServerWS, host, port)
