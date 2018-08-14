@@ -12,11 +12,5 @@ function _show(d::AbstractDevice, ws::WebSocket{T}) where T
     _log(d, ")")
     nothing
 end
-@require HttpServer import WebSockets.WebSocketHandler
-@require HttpServer show(io::IO, wsh::WebSocketHandler) = directto_abstractdevice(io, wsh)
-@require HttpServer function _show(d::AbstractDevice, wsh::WebSocketHandler)
-                        _log(d,  typeof(wsh), "( " , :blue, :bold, wsh.handle, :normal, ")")
-                        nothing
-                    end
 
 nothing

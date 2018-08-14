@@ -122,7 +122,6 @@ end # module
 #=
 For debugging in a separate terminal:
 
-using HTTP
 using WebSockets
 const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
 const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))

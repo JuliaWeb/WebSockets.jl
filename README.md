@@ -18,14 +18,14 @@
 Server and client side [Websockets](https://tools.ietf.org/html/rfc6455) protocol in Julia. WebSockets is a small overhead message protocol layered over [TCP](https://tools.ietf.org/html/rfc793). It uses HTTP(S) for establishing the connections.
 
 ## Getting started
-On Julia pre 0.6, see an earlier version of this repository.
-On Julia 0.7 or newer :
+On Julia pre 0.7, see an earlier version of this repository.
 
 ```julia
 (v0.7) pkg>add WebSockets
 julia> using WebSockets
 julia> varinfo(WebSockets)
 help?> serve
+help?> WebSockets.open
 julia> cd(joinpath((WebSockets |> Base.pathof |> splitdir)[1],  "..", "examples"))
 julia> readdir()
 julia> include("chat_explore.jl")
@@ -36,25 +36,26 @@ Client side websockets are created by calling `WebSockets.open` (with a server r
 julia> cd(joinpath((WebSockets |> Base.pathof |> splitdir)[1],  "..", "examples"))
 julia> include("client_repl_input.jl")
 ```
+We recommend `readguarded` and `writeguarded` instead of `read`and `write` for more effective debugging.
 
 ### Debugging server side connections
 
-Server side websockets are asyncronous [tasks](https://docs.julialang.org/en/stable/stdlib/parallel/#Tasks-1), which makes debugging harder. The error messages may not spill into the REPL. There are two interfaces to starting a server:
+Server side websockets are asyncronous [tasks](https://docs.julialang.org/en/stable/stdlib/parallel/#Tasks-1), which makes debugging harder. The error messages may not spill into the REPL. There are two interfaces to starting a server which includes a websocket handling function:
 
 ##### Using WebSockets.serve
 Error messages are directed to a channel. See inline docs: ?Websockets.serve.
 
 ##### Using HTTP.listen
-Error messages are by default sent as messages to the client. This is not good practice if you're serving pages to the internet.
+Error messages are by default sent as messages to the client. This is not good practice if you're serving pages to the internet, but nice while developing locally.
 
 ## What is nice with WebSockets.jl?
 Some packages rely on WebSockets for communication. You can also use it directly:
 
 - reading and writing between entities you can program or know about
 - low latency, high speed messaging
-- implement your own 'if X send this, Y do that' subprotocols
-- implement registered [websocket subprotocols](https://www.iana.org/assignments/websocket/websocket.xml#version-number)
-- heartbeating, relaying
+- implementing your own 'if X send this, Y do that' subprotocols
+- registered [websocket subprotocols](https://www.iana.org/assignments/websocket/websocket.xml#version-number) for e.g. remote controlled hardware
+- heartbeating, relaying user interaction to backend simulations
 - build a network including browser clients
 - convenience functions for gatekeeping
 - putting http handlers and websocket coroutines ('handlers') in the same process can be a security advantage. It is good practice to modify web page responses to include time-limited tokens in the wsuri.
@@ -63,9 +64,9 @@ WebSockets are well suited for user interactions via a browser or [cross-platfor
 
 The /logutils folder contains some specialized logging functionality that is quite fast and can make working with multiple asyncronous tasks easier. See /benchmark code for how to use. Logging  may be moved entirely out of WebSockets.jl in the future.
 
-You can also have a look at alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) or the implementation currently part of HTTP.jl.
+You can also have a look at alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) or the implementation currently part of [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl).
 
-## What are the main downsides to WebSockets (in Julia)?
+## What are the main downsides to using WebSockets.jl directly?
 
 - Logging. We need customizable and very fast logging for building networked applications.
 - Compression is not implemented.
@@ -74,7 +75,7 @@ You can also have a look at alternative Julia packages: [DandelionWebSockets](ht
 - Garbage collection, which increases message latency at semi-random intervals. See benchmark plots.
 - If a connection is closed improperly, the connection task will throw uncaught ECONNRESET and similar messages.
 - TCP quirks, including 'warm-up' time with low transmission speed after a pause. Heartbeats can alleviate.
-- Since 'read' is a blocking function, you can easily end up reading indefinitely from both sides. See the 'close' function code for an example of non-blocking reads with a timeout.
+- Since `read` is a blocking function, you can easily end up reading indefinitely from any side of the connection. See the `close function code for an example of non-blocking read with a timeout.
 
 ## Errors after updating?
 

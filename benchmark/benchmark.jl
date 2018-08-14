@@ -6,8 +6,8 @@ Server          The side of a connection which accepts.
 Origin          Sender
 Destination     Receiver
 HTS             HTTP server
-JCE             Julia Client Echoing (only compatible with HTS)
-BCE             Browser Client Echoing (compatible with HTS and HSS)
+JCE             Julia Client Echoing
+BCE             Browser Client Echoing
 
 Note we use 'inverse speed' below. In lack of better words, we call this speed.
 This is more compatible with BenchmarkTools and more directly useful.
@@ -40,7 +40,6 @@ serverbandwidth [ns/b] = [s/GB]
 -----  TODO  ----
 
 Not used:
-** HSS             HttpServer server
 ** delay           [ns]    Time usefully spent between received message and start of reply
 ** clientRTT       [ns]    Round-trip-time for a message initiated by client
 ** serverRTT       [ns]    Round-trip-time for a message initiated by server
