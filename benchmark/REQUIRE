@@ -1,6 +1,5 @@
 # Being placed in the benchmark folder, this file has no effect on Julia.
 # To run benchmarks, you may need to Pkg.add("..package below...")
-HTTP
 IndexedTables
 UnicodePlots
 Requires

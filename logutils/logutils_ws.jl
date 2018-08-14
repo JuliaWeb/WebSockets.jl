@@ -3,6 +3,7 @@ __precompile__()
  TODO deal with Julia 0.7 warning: 
     Warning: broadcast will default to iterating over its arguments in the future. Wrap arguments of
      type `x::logutils_ws.ColorDevice{Base.GenericIOBuffer{Array{UInt8,1}}}` with `Ref(x)` to ensure they broadcast as "scalar" elements.
+ TODO consider using Memento.jl in an example application, and to define show(IO, ::WebSocket)
 =#
 
 """
@@ -27,15 +28,13 @@ Methods in this file have no external dependencies. Methods with dependencies ar
 loaded from separate files with @require. This adds to loading time.
 """
 module logutils_ws
-using Requires
 using Dates
 import Base.text_colors
 import Base.color_normal
 import Base.text_colors
 import Base.show
-@require HttpServer = "58cfbd8c-6b7d-5447-85c1-563540e28d27" include("log_httpserver.jl")
-@require HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3" include("log_http.jl")
-@require WebSockets = "104b5d7c-a370-577a-8038-80a2059c5097" include("log_ws.jl")
+include("log_http.jl")
+include("log_ws.jl")
 export clog
 export clog_notime
 export zlog
