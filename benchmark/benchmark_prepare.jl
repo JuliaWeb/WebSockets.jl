@@ -9,33 +9,36 @@
 # Pull request welcome if someone can figure out how to do it.
 # Running this file on a Windows laptop with all browsers takes 5-10 minutes.
 
-
-if !isdefined(:SRCPATH)
-    const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") : Base.source_dir()
-    const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
-    SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
+if !@isdefined LOGGINGPATH
+    (@__DIR__) ∉ LOAD_PATH && push!(LOAD_PATH, @__DIR__)
+    const LOGGINGPATH = realpath(joinpath(@__DIR__, "..", "logutils"))
     LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
-    include(joinpath(SRCPATH, "functions_open_browsers.jl"))
 end
 
+include("functions_open_browsers.jl")
+include("functions_benchmark.jl")
 
 "A vector of message sizes"
 const VSIZE = reverse([i^3 * 1020 for i = 1:12])
-include(joinpath(SRCPATH, "functions_open_browsers.jl"))
-include(joinpath(SRCPATH, "functions_benchmark.jl"))
+
 #
 prepareworker()
-# Load modules on both processes
-import HTTP
-using WebSockets
+import WebSockets: WebSocket
 using ws_jce
-using UnicodePlots
-import IndexedTables.table
-import ws_hts: listen_hts, getws_hts
+import UnicodePlots: lineplot
+using Dates
+using Random
+using Serialization
+import Millboard.table
+import ws_hts: listen_hts,
+               getws_hts,
+               close_hts
+using logutils_ws
+
 #
 remotecall_fetch(ws_jce.clog, 2, "ws_jce ", :green, " is ready")
 # Start async HTS server on this process and check that it is up and running
-const TIMEOUT = Base.Dates.Second(20)
+const TIMEOUT = Second(20)
 hts_task = start_hts(TIMEOUT)
 
 """
@@ -50,8 +53,7 @@ Prepare logging for this process
 """
 const ID = "Benchmark"
 const LOGFILE = "benchmark_prepare.log"
-import logutils_ws: logto, clog, zlog, zflush, clog_notime
-fbm = open(joinpath(SRCPATH, "logs", LOGFILE), "w")
+global fbm = open(joinpath(@__DIR__, "logs", LOGFILE), "w")
 logto(fbm)
 clog(ID, "Started async HTS and prepared parallel worker")
 zflush()
@@ -64,18 +66,19 @@ zflush()
 const INITSIZE = 130560
 const INITN = 200
 
+
 # Measured time interval vectors [ns]
 # Time measurements are taken directly both at server and client
-(testid, serverlatencies, clientlatencies) = HTS_JCE(INITN, INITSIZE)
+global testid, serverlatencies, clientlatencies = HTS_JCE(INITN, INITSIZE)
 # Calculate speeds [ns/b] and averaged speeds (bandwidths)
-(serverspeeds, clientspeeds,
-    serverbandwidth, clientbandwidth) = serverandclientspeeds(INITSIZE, serverlatencies, clientlatencies)
+global serverspeeds, clientspeeds,
+    serverbandwidth, clientbandwidth = serverandclientspeeds(INITSIZE, serverlatencies, clientlatencies)
 # Store plots and a table in dictionaries
-vars= [:serverspeeds, :clientspeeds];
-init_plots = Dict(testid => lp(vars, testid));
-init_tables = Dict(testid => table(eval.(vars)..., names = vars));
-init_serverbandwidths = Dict(testid => serverbandwidth);
-init_clientbandwidths = Dict(testid => clientbandwidth);
+global vars= [:serverspeeds, :clientspeeds]
+global init_plots = Dict(testid => lp(vars, testid));
+global init_tables = Dict(testid => tabulate(vars));
+global init_serverbandwidths = Dict(testid => serverbandwidth);
+global init_clientbandwidths = Dict(testid => clientbandwidth);
 # Sleep to avoid interspersing with worker output to REPL
 sleep(2)
 # Brief output to file and console
@@ -88,30 +91,32 @@ clog(testid, " Initial test run with messagesize ", INITSIZE, " bytes \n\t",
 #
 
 COUNTBROWSER.value = 0
-serverbandwidth = 0.
-clientbandwidth = 0.
-serverbandwidths = Vector{Float64}()
-clientbandwidths = Vector{Float64}()
-t1 = Vector{Int}()
-t2 = Vector{Int}()
-t3 = Vector{Int}()
-t4 = Vector{Int}()
-browser = ""
-success = true
-while success
+global serverbandwidth = 0.
+global clientbandwidth = 0.
+global serverbandwidths = Vector{Float64}()
+global clientbandwidths = Vector{Float64}()
+global t1 = Vector{Int}()
+global t2 = Vector{Int}()
+global t3 = Vector{Int}()
+global t4 = Vector{Int}()
+global browser = ""
+global alright = true
+while alright
     # Measured time interval vectors [ns] for the next browser in line
     # Time measurements are taken only at server; a message pattern
     # is used to distinguish server and client performance
-    (browser, t1, t2, t3, t4) = HTS_BCE(INITN, INITSIZE)
+    global browser, t1, t2, t3, t4 = HTS_BCE(INITN, INITSIZE)
     if browser != ""
         # Calculate speeds [ns/b] and averaged speeds (bandwidths)
-        (serverspeeds, clientspeeds,
-            serverbandwidth, clientbandwidth) =
+        serverspeeds, clientspeeds,
+            serverbandwidth, clientbandwidth =
             serverandclientspeeds_indirect(INITSIZE, t1, t2, t3, t4)
         # Store plots and a table in dictionaries
         testid = "HTS_BCE " * browser
         push!(init_plots, testid => lp(vars, testid));
-        push!(init_tables, testid => table(eval.(vars)..., names = vars));
+        #push!(init_tables, testid => table(eval.(vars)..., names = vars));
+        push!(init_tables, testid => tabulate(vars));
+
         push!(init_serverbandwidths, testid => serverbandwidth);
         push!(init_clientbandwidths, testid => clientbandwidth);
         # Brief output to file and console
@@ -119,7 +124,7 @@ while success
             "serverbandwidth = ", :yellow,  round(serverbandwidth, digits=4), :normal, " [ns/b] = [s/GB]\n\t",
             :normal, "clientbandwidth = ", :yellow, round(clientbandwidth, digits=4), :normal, " [ns/b] = [s/GB]")
     else
-        success = false
+        alright = false
     end
 end
 
@@ -155,17 +160,17 @@ end
 #
 for msgsiz in VSIZE
     COUNTBROWSER.value = 0
-    t1 = Vector{Int}()
-    t2 = Vector{Int}()
-    t3 = Vector{Int}()
-    t4 = Vector{Int}()
-    browser = ""
-    success = true
-    while success
+    global t1 = Vector{Int}()
+    global t2 = Vector{Int}()
+    global t3 = Vector{Int}()
+    global t4 = Vector{Int}()
+    global browser = ""
+    global alright = true
+    while alright
         # Measured time interval vectors [ns] for the next browser in line
         # Time measurements are taken only at server; a message pattern
         # is used to distinguish server and client performance
-        (browser, t1, t2, t3, t4) = HTS_BCE(SAMPLES, msgsiz)
+        global browser, t1, t2, t3, t4 = HTS_BCE(SAMPLES, msgsiz)
         testid = "HTS_BCE " * browser
         if browser != ""
             # Find averaged speed (bandwidth) scalars
@@ -179,7 +184,7 @@ for msgsiz in VSIZE
             push!(serverbandwidths[testid], sbw)
             push!(clientbandwidths[testid], cbw)
         else
-            success = false
+            alright = false
         end
     end
 end
@@ -189,11 +194,11 @@ end
 #
 #   Measurements are done. Close server and log file, open results log file.
 #
-ws_hts.close_hts()
+close_hts()
 clog(ID, "Closing HTS server")
 const RESULTFILE = "benchmark_results.log"
-clog(ID, "Results are summarized in ", joinpath(SRCPATH, "logs", RESULTFILE))
-fbmr = open(joinpath(SRCPATH, "logs", RESULTFILE), "w")
+clog(ID, "Results are summarized in ", joinpath(@__DIR__, "logs", RESULTFILE))
+fbmr = open(joinpath(@__DIR__, "logs", RESULTFILE), "w")
 logto(fbmr)
 close(fbm)
 
@@ -203,22 +208,22 @@ close(fbm)
 # Find optimum message size and nominal 100% bandwidths
 # Make and store plots and tables
 #
-test_bestserverbandwidths = Dict{String, Float64}()
-test_bestclientbandwidths = Dict{String, Float64}()
-test_bestserverlatencies = Dict{String, Float64}()
-test_bestclientlatencies = Dict{String, Float64}()
-test_plots = Dict()
-test_tables = Dict()
-test_latency_plots = Dict()
-test_latency_tables = Dict()
-serverbandwidth = Vector{Float64}()
-clientbandwidth = Vector{Float64}()
-serverlatency = Vector{Float64}()
-clientlatency = Vector{Float64}()
-bestserverbandwidth = 0.
-bestclientbandwidth = 0.
-bestserverlatency = 0.
-bestclientlatency = 0.
+global test_bestserverbandwidths = Dict{String, Float64}()
+global test_bestclientbandwidths = Dict{String, Float64}()
+global test_bestserverlatencies = Dict{String, Float64}()
+global test_bestclientlatencies = Dict{String, Float64}()
+global test_plots = Dict()
+global test_tables = Dict()
+global test_latency_plots = Dict()
+global test_latency_tables = Dict()
+global serverbandwidth = Vector{Float64}()
+global clientbandwidth = Vector{Float64}()
+global serverlatency = Vector{Float64}()
+global clientlatency = Vector{Float64}()
+global bestserverbandwidth = 0.
+global bestclientbandwidth = 0.
+global bestserverlatency = 0.
+global bestclientlatency = 0.
 
 for testid in keys(serverbandwidths)
     serverbandwidth = serverbandwidths[testid]
@@ -232,7 +237,8 @@ for testid in keys(serverbandwidths)
     vars = [:serverbandwidth, :clientbandwidth]
     tvars = vcat([:VSIZE], vars)
     push!(test_plots,  testid => lp([:VSIZE, :VSIZE], vars, testid));
-    push!(test_tables,  testid => table(eval.(tvars)..., names = tvars));
+    push!(test_tables,  testid => tabulate(tvars));
+
     # Store msgsiz-latency line plots and tables in dictionaries
     serverlatency = serverbandwidth .* VSIZE
     clientlatency = clientbandwidth .* VSIZE
@@ -243,18 +249,24 @@ for testid in keys(serverbandwidths)
     vars = [:serverlatency, :clientlatency]
     tvars = vcat([:VSIZE], vars)
     push!(test_latency_plots,  testid => lp([:VSIZE, :VSIZE], vars, testid));
-    push!(test_latency_tables,  testid => table(eval.(tvars)..., names = tvars));
+    push!(test_latency_tables,  testid => tabulate(tvars));
 
     # Brief output to file and console
+
+
+
+
+
+
     clog_notime(testid, :normal, " Varying message size: \n\t",
         "bestserverbandwidth = ", :yellow,  round(bestserverbandwidth, digits=4), :normal, " [ns/b] = [s/GB]",
-        " @ size = ", VSIZE[findfirst(serverbandwidth, bestserverbandwidth)], " b\n\t",
+        " @ size = ", VSIZE[firstmatch(serverbandwidth, bestserverbandwidth)], " b\n\t",
         :normal, "bestclientbandwidth = ", :yellow, round(bestclientbandwidth, digits=4), :normal, " [ns/b] = [s/GB]",
-        " @ size = ", VSIZE[findfirst(clientbandwidth, bestclientbandwidth)], " b\n\t",
+        " @ size = ", VSIZE[firstmatch(clientbandwidth, bestclientbandwidth)], " b\n\t",
         "bestserverlatency = ", :yellow,  Int(round(bestserverlatency)), :normal, " [ns] ",
-        " @ size = ", VSIZE[findfirst(serverlatency, bestserverlatency)], " b\n\t",
+        " @ size = ", VSIZE[firstmatch(serverlatency, bestserverlatency)], " b\n\t",
         :normal, "bestclientlatency = ", :yellow, Int(round(bestclientlatency)), :normal, " [ns]",
-        " @ size = ", VSIZE[findfirst(clientlatency, bestclientlatency)], " b\n\t"
+        " @ size = ", VSIZE[firstmatch(clientlatency, bestclientlatency)], " b\n\t"
         )
 end
 

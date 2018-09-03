@@ -1,16 +1,14 @@
 #=
-Included in logutils.jl
+Included in logutils_ws.jl
 =#
-
-import WebSockets.WebSocket # todo remove when including in WebSockets itself.
-show(io::IO, ws::WebSocket) = directto_abstractdevice(io, ws)
-function _show(d::AbstractDevice, ws::WebSocket{T}) where T
-    _log(d, "WebSocket{", T, "}(")
-    _log(d, ws.server ? "server, " : "client, ")
-    _log(d, ws.socket, " ")
-    showcompact(d.s, ws.state)
-    _log(d, ")")
-    nothing
+print(io::IO, ws::WebSocket) = _show(io, ws)
+show(io::IO, ws::WebSocket) = _show(io, ws)
+function _show(io::IO, ws::WebSocket{T}) where T
+    #println(stderr, "in _show websocket")
+    _log(IOContext(io), "WebSocket{", T, "}(",
+             ws.server ? "server, " : "client, ",
+             ws.socket, ", ",
+             ws.state, ")")
 end
 
 nothing

@@ -1,300 +1,334 @@
-__precompile__()
-#=
- TODO deal with Julia 0.7 warning: 
-    Warning: broadcast will default to iterating over its arguments in the future. Wrap arguments of
-     type `x::logutils_ws.ColorDevice{Base.GenericIOBuffer{Array{UInt8,1}}}` with `Ref(x)` to ensure they broadcast as "scalar" elements.
- TODO consider using Memento.jl in an example application, and to define show(IO, ::WebSocket)
-=#
-
 """
-Specialized logging for testing and examples in WebSockets.
+Based directly on stdlib/ConsoleLogger, this defines a logger with
+special output formatting for some types (from this and other packages).
 
-To avoid type piracy, defines _show for types where specialized show methods exist,
-and falls back to 'show' where they don't.
+It also adds macros based on @warn and @error in Base.CoreLogging
+    @clog Log to console and the given io.
+    @zlog Log to the given io.
 
-When logging to a file, it's beneficial to keep a file open during the whole logging sesssion,
-since opening and closing files is so slow it may affect the sequence of things.
+Intended use is for processes that communicate through WebSockets.
 
-This module dispatches on an ad-hoc type AbstractDevice, instead of putting
-additional data on an IOContext method like 'show' does. When AbstracDevice points to
-Base.NullDevice(), the input arguments are processed before the call is made, but
-that is all.
+TODO: Import and reexport from ConsoleLogger. Copy now.
+------------------
+ConsoleLogger(stream=stderr, min_level=Info; meta_formatter=default_metafmt,
+              show_limited=true, right_justify=0)
 
-In Julia 0.7, current logging functionality is replaced with macros, which
-can be even faster. Macros can also retrieve the current function's name without using stacktraces.
-With this module, each function defines id = "thisfunction".
+Logger with formatting optimized for readability in a text console, for example
+interactive work with the Julia REPL.
 
-Methods in this file have no external dependencies. Methods with dependencies are
-loaded from separate files with @require. This adds to loading time.
+Log levels less than `min_level` are filtered out.
+
+Message formatting can be controlled by setting keyword arguments:
+
+* `meta_formatter` is a function which takes the log event metadata
+`(level, _module, group, id, file, line)` and returns a color (as would be
+passed to printstyled), prefix and suffix for the log message.  The
+default is to prefix with the log level and a suffix containing the module,
+file and line location.
+* `show_limited` limits the printing of large data structures to something
+which can fit on the screen by setting the `:limit` `IOContext` key during
+formatting.
+* `right_justify` is the integer column which log metadata is right justified
+at. The default is zero (metadata goes on its own line).
+
+
 """
 module logutils_ws
-using Dates
-import Base.text_colors
-import Base.color_normal
-import Base.text_colors
-import Base.show
-include("log_http.jl")
-include("log_ws.jl")
-export clog
-export clog_notime
-export zlog
-export zlog_notime
-export logto
-export loggingto
-export directto_abstractdevice
-export AbstractDevice
-export DataDispatch
-export zflush
+import Logging
+import Logging: AbstractLogger,
+                        handle_message,
+                        shouldlog,
+                        min_enabled_level,
+                        catch_exceptions,
+                        LogLevel,
+                        Info,
+                        Warn,
+                        Error,
+                        global_logger,
+                        with_logger
+using Base
+import Base: text_colors,
+            BufferStream,
+            print,
+            show
+using Sockets
+import Sockets: LibuvStream,
+                LibuvServer,
+                TCPSocket
+import WebSockets
+import WebSockets: WebSocket
+export WebSocketLogger, shouldlog, current_logger_root, global_logger, with_logger
 
-const ColorDevices = Union{Base.TTY, IOBuffer, IOContext, Base.PipeEndpoint}
-const BlackWDevices = Union{IOStream, IOBuffer} # and endpoint...
-const LogDevices = Union{ColorDevices, BlackWDevices, Base.DevNullStream}
-abstract type AbstractDevice{T} end
-struct NullDevice <: AbstractDevice{NullDevice}
-        s::Base.DevNullStream
-    end
-struct ColorDevice{S<:ColorDevices}<:AbstractDevice{ColorDevice}
-        s::S
-        end
-struct BlackWDevice{S<:Union{IOStream, IOBuffer}}<:AbstractDevice{BlackWDevice}
-        s::S
-        end
-mutable struct LogDevice
-        s::AbstractDevice
-        end
-_devicecategory(::AbstractDevice{S}) where S = S
-const CURDEVICE = LogDevice(NullDevice(Base.DevNullStream()))
-struct DataDispatch
-    data::Array{UInt8,1}
-    contenttype::String
+struct WebSocketLogger <: AbstractLogger
+    stream::IO
+    min_level::LogLevel
+    meta_formatter
+    show_limited::Bool
+    right_justify::Int
+    message_limits::Dict{Any,Int}
 end
-"""
-Redirect coming zlog calls to a stream. Default is no logging.
-clog calls will duplicate to STDOUT.
-"""
-logto(io::ColorDevices) =  CURDEVICE.s = ColorDevice(io)
-logto(io::BlackWDevices) =  CURDEVICE.s = BlackWDevice(io)
-logto(io::Base.DevNullStream) =  CURDEVICE.s = NullDevice(io)
 
-"""
-Returns the current logging stream
-"""
-loggingto() = CURDEVICE.s.s
+function WebSocketLogger(stream::IO=stderr, min_level=Info;
+                       meta_formatter=default_metafmt, show_limited=false,
+                       right_justify=0)
+    WebSocketLogger(stream, min_level, meta_formatter,
+                  show_limited, right_justify, Dict{Any,Int}())
+end
 
-"""
-Log to (default) nothing, or streams as given in CURDEVICE.
-First argument is expected to be function id.
-"""
-function zlog(vars::Vararg)
-    _zlog(CURDEVICE.s, vars...)
-    nothing
-end
-"""
-Log to (default) NullDevice, or the device given in CURDEVICE.
-Falls back to Base.showdefault when no special methods are defined.
-"""
-function zlog_notime(vars::Vararg)
-    _zlog_notime(CURDEVICE.s, vars...)
-    nothing
-end
-"""
-Log to the given device, but also to STDOUT if that's not the given device.
-"""
-function clog(vars::Vararg)
-    _zlog(CURDEVICE.s, vars...)
-    _devicecategory(CURDEVICE.s) != ColorDevice && _zlog(ColorDevice(stdout), vars...)
-    nothing
-end
-"""
-Log to the given device, but also to STDOUT if that's not the given device.
-"""
-function clog_notime(vars::Vararg)
-    _zlog_notime(CURDEVICE.s, vars...)
-    _devicecategory(CURDEVICE.s) != ColorDevice  && _zlog_notime(ColorDevice(stdout), vars...)
-    nothing
-end
-"""
-Flushing file write buffers, only has an effect on streams.
-We do not flush automatically after every log, because that
-has a relatively dramatic effect on logging speeds.
-"""
-zflush() = isa(CURDEVICE.s.s, IOStream) && flush(CURDEVICE.s.s)
+"Early filtering of events"
+shouldlog(logger::WebSocketLogger, level, _module, group, id) =
+    get(logger.message_limits, id, 1) > 0
 
-
-## Below are internal functions starting with _
-_zlog(::NullDevice, ::Vararg) = nothing
-_zlog_notime(::NullDevice, ::Vararg) = nothing
-"First argument padded and emphasized.
-End the original argument list with a :normal and a new line argument."
-function _zlog(d::AbstractDevice, vars::Vararg{Any,N}) where N
-    if N == 1
-        _log(d, :normal, _tg(), "  ", :bold, :cyan, vars[1], :normal, "\n")
+"Lower bound for log level of accepted events"
+min_enabled_level(logger::WebSocketLogger) = logger.min_level
+"Catch exceptions during event evaluation"
+catch_exceptions(logger::WebSocketLogger) = false
+"Return the current logger. If stacked, find the root."
+current_logger_root() =  _logger_root(Logging.current_logger())
+function _logger_root(cl)
+    if :previous_logger ∈ fieldnames(typeof(cl))
+        return _logger_root(cl.previous_logger)
     else
-        lid = 26
-        pads = repeat(" ", max(0, lid - length(_string(vars[1])))) #rpad don't work with color codes
-        _log(d, :normal, _tg(), "  ", :bold, :cyan, vars[1], :normal, pads, vars[2:end]..., :normal, "\n")
+        return cl
     end
-    nothing
-end
-"zlog, but no time stamp and no different format first argument."
-function _zlog_notime(d::AbstractDevice, vars::Vararg{Any,N}) where N
-    # End the original argument list with a :normal and a new line argument.
-    _log(d, :bold, :cyan, vars[1:end]..., :normal, "\n")
-    nothing
-end
-"Write to blackwdevices, inapplicable formatting neglegted. No linefeed."
-function _log(bwd::BlackWDevice, vars::Vararg)
-    _show.(bwd, vars)
-    nothing
 end
 
-"Write colordevices. Does not reset color codes after, no linefeed."
-function _log(cd::ColorDevice, vars::Vararg)
-    buf = ColorDevice(IOBuffer())
-    _show.(buf, vars)
-    write(cd.s, take!(buf.s))
-    nothing
-end
-"Write directly to colordevice/ IOBuffers"
-function _log(cd::ColorDevice{Base.GenericIOBuffer{Array{UInt8,1}}}, vars::Vararg)
-    _show.(cd, vars)
-    nothing
-end
-
-"Return a string by emulating a bwdevice, where color codes are not output"
-function _string(vars::Vararg)
-    buf = BlackWDevice(IOBuffer())
-    _show.(buf, vars)
-    buf.s |> take! |> String
-end
-
-
-
-"_show takes just device and one other argument.
-It falls back to normal show for nondefined _show methods."
-_show(d::AbstractDevice, var) = show(d.s, var)
-_show(d::AbstractDevice, s::AbstractString) = write(d.s, s);nothing
-
-function _show(d::ColorDevice, sy::Symbol)
-    co =  get(text_colors, sy, :NA)
-    if co != :NA
-        write(d.s, co)
+"Handle a log event.
+If the logger stream is a Base.DevNullStream, exit immediately.
+Note that the appropriate use is to use Logging.DevNullLogger.
+Also exit immediately if the max log limit for this id is reached."
+function handle_message(logger::WebSocketLogger, level, messageargs::T, _module, group, id,
+                        filepath, line; maxlog=nothing, kwargs...) where T
+    if maxlog != nothing && maxlog isa Integer
+        remaining = get!(logger.message_limits, id, maxlog)
+        logger.message_limits[id] = remaining - 1
+        remaining > 0 || return
+    end
+    if logger.stream isa  Base.DevNullStream
+        return
+    end
+    #println("Level:", level, " filepath:", filepath, " line:", line)
+    # Generate a text representation of the message and all key value pairs,
+    # split into lines.
+    if T<: Tuple
+        strbody = logbody_s(logger.stream, messageargs...)
     else
-        write(d.s, sy)
+        strbody = logbody_s(logger.stream, messageargs)
     end
+    msglines = [(indent=0,msg=l) for l in split(chomp(strbody), '\n')]
+    #####
+
+    dsize = displaysize(logger.stream)
+    if !isempty(kwargs)
+        valbuf = IOBuffer()
+        rows_per_value = max(1, dsize[1]÷(length(kwargs)+1))
+        valio = IOContext(IOContext(valbuf, logger.stream),
+                          :displaysize=>(rows_per_value,dsize[2]-5))
+        if logger.show_limited
+            valio = IOContext(valio, :limit=>true)
+        end
+        for (key,val) in pairs(kwargs)
+            showvalue(valio, val)
+            vallines = split(String(take!(valbuf)), '\n')
+            if length(vallines) == 1
+                push!(msglines, (indent=2,msg=SubString("$key = $(vallines[1])")))
+            else
+                push!(msglines, (indent=2,msg=SubString("$key =")))
+                append!(msglines, ((indent=3,msg=line) for line in vallines))
+            end
+        end
+    end
+
+    # Format lines as text with appropriate indentation and with a box
+    # decoration on the left.
+    color,prefix,suffix = logger.meta_formatter(level, _module, group, id, filepath, line)
+    minsuffixpad = 2
+    buf = IOBuffer()
+    iob = IOContext(buf, logger.stream)
+    nonpadwidth = 2 + (isempty(prefix) || length(msglines) > 1 ? 0 : length(prefix)+1) +
+                  msglines[end].indent + termlength(msglines[end].msg) +
+                  (isempty(suffix) ? 0 : length(suffix)+minsuffixpad)
+    justify_width = min(logger.right_justify, dsize[2])
+    if nonpadwidth > justify_width && !isempty(suffix)
+        push!(msglines, (indent=0,msg=SubString("")))
+        minsuffixpad = 0
+        nonpadwidth = 2 + length(suffix)
+    end
+    for (i,(indent,msg)) in enumerate(msglines)
+        boxstr = length(msglines) == 1 ? "[ " :
+                 i == 1                ? "┌ " :
+                 i < length(msglines)  ? "│ " :
+                                         "└ "
+        printstyled(iob, boxstr, bold=true, color=color)
+        if i == 1 && !isempty(prefix)
+            printstyled(iob, prefix, " ", bold=true, color=color)
+        end
+        print(iob, " "^indent, msg)
+        if i == length(msglines) && !isempty(suffix)
+            npad = max(0, justify_width - nonpadwidth) + minsuffixpad
+            print(iob, " "^npad)
+            printstyled(iob, suffix, color=:light_black)
+        end
+        println(iob)
+    end
+
+    write(logger.stream, take!(buf))
     nothing
 end
-function _show(d::ColorDevices, sy::Symbol)
-    co =  get(text_colors, sy, :NA)
-    if co != :NA
-        write(d.s, co)
+
+# Formatting of values in key value pairs
+showvalue(io, msg) = show(io, "text/plain", msg)
+function showvalue(io, e::Tuple{Exception,Any})
+    ex,bt = e
+    showerror(io, ex, bt; backtrace = bt!=nothing)
+end
+showvalue(io, ex::Exception) = showerror(io, ex)
+
+function default_logcolor(level)
+    level < Info  ? Base.debug_color() :
+    level < Warn  ? Base.info_color()  :
+    level < Error ? Base.warn_color()  :
+                    Base.error_color()
+end
+
+function default_metafmt(level, _module, group, id, file, line)
+    color = default_logcolor(level)
+    prefix = (level == Warn ? "WARNING" : string(level))*':'
+    suffix = ""
+    Info <= level < Warn && return color, prefix, suffix
+    _module !== nothing && (suffix *= "$(_module)")
+    if file !== nothing
+        _module !== nothing && (suffix *= " ")
+        suffix *= Base.contractuser(file)
+        if line !== nothing
+            suffix *= ":$(isa(line, UnitRange) ? "$(first(line))-$(last(line))" : line)"
+        end
+    end
+    !isempty(suffix) && (suffix = "@ " * suffix)
+    return color, prefix, suffix
+end
+
+"""
+Length of a string as it will appear in the terminal (after ANSI color codes
+are removed)
+"""
+function termlength(str)
+    N = 0
+    in_esc = false
+    for c in str
+        if in_esc
+            if c == 'm'
+                in_esc = false
+            end
+        else
+            if c == '\e'
+                in_esc = true
+            else
+                N += 1
+            end
+        end
+    end
+    return N
+end
+
+"""
+Return the log message body string, ending with :normal (following text)
+and newline.
+"""
+function logbody_s(context::IO, args...)
+    #println("logbody s arguments ", typeof(args))
+    # create a new buffer which inherits the context of context
+    ioc = IOContext(IOBuffer(), context)
+    _logln(ioc, args...)
+    String(take!(ioc.io))
+end
+
+"""
+Log the arguments to buffer io, end with newline
+(and normal color if applicable).
+"""
+function _logln(io::IOContext, args...)
+    #println("_logln arguments ", typeof(args))
+    if get(io, :color, false)
+        _log(io, args..., :normal, "\n")
     else
-        write(d.s, sy)
+        _log(io, args..., "\n")
     end
-    nothing
 end
 
-function _show(d::BlackWDevice, sy::Symbol)
-    co =  get(text_colors, sy, :NA)
-    if co == :NA
-        write(d.s, ":", sy)
+"""
+Log the arguments to buffer io.
+"""
+function _log(io::IOContext, args...)
+    #println("_log arguments ", typeof(args))
+    for arg in args
+        #println("Going to log ", typeof(arg), arg)
+        _print(io, arg)
     end
-    nothing
 end
 
-function _show(d::AbstractDevice, ex::Exception)
-    _log(d, Base.warn_color(), typeof(ex), "\n")
-    showerror(d.s, ex, [])
-    _log(d, :normal, "\n")
+"""
+Like 'print', avoids string
+decorations, but '_print' keeps general symbol decorations.
+"""
+_print
+"Fallback for unspecified types"
+_print(io::IO, arg::Symbol) = _show(io, arg)
+_print(io::IO, arg::WebSocket) = _show(io, arg)
+function _print(io::IO, arg::WebSockets.ReadyState)
+    arg == WebSockets.CONNECTED && _show(io, :green)
+    arg == WebSockets.CLOSING && _show(io, :yellow)
+    arg == WebSockets.CLOSED && _show(io, :red)
+    _log(io, String(Symbol(arg)), :normal)
 end
-function _show(d::AbstractDevice, err::ErrorException)
-    _log(d, Base.error_color(), typeof(err), "\n")
-    showerror(d.s, err, [])
-    _log(d, :normal, "\n")
-end
-function _show(d::AbstractDevice, err::Base.IOError)
-    _log(d, Base.error_color(), typeof(err), "\n")
-    showerror(d.s, err, [])
-    _log(d, :normal, "\n")
-end
-
-
-
-"Print dict, no heading, three pairs per line, truncate end to fit"
-function _show(d::AbstractDevice, di::Dict)
-    linelength = displaysize(stdout)[2]
-    indent = 8
-    npa = 3
-    plen = div(linelength - indent, npa)
-    pairs = collect(di)
-    lpa = length(pairs)
-    _log(d, :bold, :blue)
-    for i = 1:npa:lpa
-        write(d.s, " "^indent)
-        write(d.s, _pairpad(pairs[i], plen))
-        i+1 <= lpa   &&  write(d.s, _pairpad(pairs[i + 1], plen))
-        i+2 <= lpa   &&  write(d.s, _pairpad(pairs[i + 2], plen))
-        write(d.s, "\n")
+"Type info assumed given by container subtype, excluded here"
+function _print(io::IO, stream::Base.LibuvStream)
+    # A TCPSocket and a BufferStream are examples of LibuvStream.
+    fina = fieldnames(typeof(stream))
+    if :status ∈ fina
+        _log(io, :bold, _uv_status(stream)..., :normal)
+    elseif :is_open ∈ fina
+        stream.is_open ? _log(io, :bold, :green, "✓", :normal) :  _log(io, :bold, :red, "✘", :normal)
+    else
+        _log(io, "status N/A")
     end
-    _log(d, :normal)
-    nothing
-end
-"Print array of pairs, no heading, three pairs per line, truncate end to fit"
-function _show(d::AbstractDevice, pairs::Vector{Pair{SubString{String},SubString{String}}})
-    linelength = 95
-    indent = 8
-    npa = 3
-    plen = div(linelength - indent, npa)
-    lpa = length(pairs)
-    _log(d, :bold, :blue)
-    for i = 1:npa:lpa
-        write(d.s, " "^indent)
-        write(d.s, _pairpad(pairs[i], plen))
-        i+1 <= lpa   &&  write(d.s, _pairpad(pairs[i + 1], plen))
-        i+2 <= lpa   &&  write(d.s, _pairpad(pairs[i + 2], plen))
-        write(d.s, "\n")
+    if :buffer ∈ fina
+        nba = bytesavailable(stream.buffer)
+        nba > 0 && _log(io, ", in bytes: ", nba)
     end
-    _log(d, :normal)
-    nothing
-end
-"Print dict, no heading, two pairs per line, truncate end to fit"
-function _show(d::AbstractDevice, di::Dict{String, Function})
-    linelength = 95
-    indent = 8
-    npa = 2
-    plen = div(linelength - indent, npa)
-    pairs = collect(di)
-    lpa = length(pairs)
-    _log(d, :bold, :blue)
-    for i = 1:npa:lpa
-        write(d.s, " "^indent)
-        write(d.s, _pairpad(pairs[i], plen))
-        i+1 <= lpa   &&  write(d.s, _pairpad(pairs[i + 1], plen))
-        write(d.s, "\n")
+    if :sendbuf ∈ fina
+        nba = bytesavailable(stream.sendbuf)
+        nba > 0 && _log(io, ", out bytes: ", nba)
     end
-    _log(d, :normal)
-    nothing
+end
+function _print(io::IO, arg)
+    #println("_print fallback type ", typeof(arg), " ", arg)
+    print(io, arg)
+end
+# TODO check TCPServer, make ServerWS and other types.
+
+"""
+Unlike _print, includes Julia decorations like ':' and '""'.
+"""
+_show
+"If this is a color, switch, otherwise prefix by :"
+function _show(io::IO, sy::Symbol)
+    co =  get(text_colors, sy, "")
+    if co != ""
+        if get(io, :color, false)
+            write(io, co)
+        end
+    else
+        # The symbol is not a color code.
+        _log(io, ":",  String(sy))
+    end
 end
 
+"Fallback"
+_show(io::IO, arg) = _show(io, arg)
 
-_pairpad(pa::Pair, plen::Int) = Base.cpad(_limlen(_string(pa), plen) , plen )
-_string(pa::Pair) = _string(pa[1]) * " => " * _string(pa[2])
-function _show(d::AbstractDevice, f::Function)
-    mt = typeof(f).name.mt
-    fnam = splitdir(string(mt.defs.func.file))[2]
-    write(d.s, string(f) * " at " * fnam * ":"
-        * string(mt.defs.func.line))
-    nothing
-end
 
-"Type info not printed here as it is assumed the type is given by the context."
-function _show(d::ColorDevice, stream::Base.LibuvStream)
-    _log(d, "(", :bold, _uv_status(stream)..., :normal)
-    nba = Base.nb_available(stream.buffer)
-    nba > 0 && print(d.s, ", ", Base.nb_available(stream.buffer)," bytes waiting")
-    print(d.s, ")")
-    nothing
-end
+"Return status as a tuple with color symbol and descriptive string"
 function _uv_status(x)
     s = x.status
     if x.handle == Base.C_NULL
@@ -325,80 +359,5 @@ function _uv_status(x)
     end
     return :red, "invalid status"
 end
-
-
-function _show(d::AbstractDevice, serv::Base.LibuvServer)
-    _log(d, typeof(serv), "(", :bold, _uv_status(serv)..., :normal, ")")
-    nothing
+include("log_ws.jl")
 end
-
-
-"Data as a truncated string"
-function _show(d::AbstractDevice, datadispatch::DataDispatch)
-    _showdata(d, datadispatch.data, datadispatch.contenttype)
-    write(d.s, "\n")
-    nothing
-end
-
-
-function _showdata(d::AbstractDevice, data::Array{UInt8,1}, contenttype::String)
-    if occursin(r"(text|script|html|xml|julia|java)", lowercase(contenttype))
-        _log(d, :green, "\tData length: ", length(data), " ", :bold, :blue)
-        s = data |> String |> _limlen
-        write(d.s, replace(s, r"\s+", " "))
-    else
-        _log(d, :green, "\tData length: ", length(data), "  ", :blue)
-        write(d.s,  data |> _limlen)
-    end
-    nothing
-end
-
-"Truncates for logging"
-_limlen(data::AbstractString) = _limlen(data, 74)
-function _limlen(data::AbstractString, linelength::Int)
-    le = length(data)
-   if le <  linelength
-        return  normalize_string(string(data), stripcc = true)
-    else
-        adds = " … "
-        addlen = length(adds)
-        truncat = 2 * div(linelength, 3)
-        tail = linelength - truncat - addlen - 1
-        truncstring = String(data)[1:truncat] * adds * String(data)[end-tail:end]
-        return normalize_string(truncstring, stripcc = true)
-    end
-end
-function _limlen(data::Union{Vector{UInt8}, Vector{Float64}})
-    le = length(data)
-    maxlen = 12 # elements, not characters
-	if le <  maxlen
-		return  string(data)
-    else
-        adds =  " ..... "
-        addlen = 2
-        truncat = 2 * div(maxlen, 3)
-        tail = maxlen - truncat - addlen - 1
-        return string(data[1:truncat])[1:end-1] * adds * string(data[end-tail:end])[7:end]
-	end
-end
-
-
-"Time group. show() converts to string only when necessary."
-_tg() = Dates.Time(now())
-
-
-
-"For use in show(io::IO, obj) methods. Hook into this logger's dispatch mechanism."
-function directto_abstractdevice(io::IO, obj)
-	if isa(io, ColorDevices)
-		buf = ColorDevice(IOBuffer())
-	else
-		buf = BlackWDevice(IOBuffer())
-	end
-	_show(buf, obj)
-    write(io, take!(buf.s))
-    nothing
-end
-
-nothing
-end # module

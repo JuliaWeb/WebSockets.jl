@@ -3,21 +3,26 @@ __precompile__(false)
 Submodule Julia Client Echo
 Intended for running in its own worker process.
 HTTP and WebSockets need to be loaded in the calling context.
-LOAD_PATH must include the directory logutils_ws.
+LOAD_PATH must include the directory logutils.
 See comment at the end of this file for debugging code.
 """
 module ws_jce
-using ..HTTP
-using ..WebSockets
-# We want to log to a separate file, and so use our own
-# instance of logutils_ws in this process
-import logutils_ws: logto, clog, zlog, zflush, clog_notime
-const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") : Base.source_dir()
-const LOGFILE = "ws_jce.log"
+# TODO restructure this.
+if !@isdefined LOGGINGPATH
+    (@__DIR__) ∉ LOAD_PATH && push!(LOAD_PATH, @__DIR__)
+    const LOGGINGPATH = realpath(joinpath(@__DIR__, "..", "logutils"))
 
+    LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
+end
+
+using logutils_ws
+import Base.open
+using Serialization, Dates
+import WebSockets
+const LOGFILE = joinpath(@__FILE__, "logs", @__MODULE__ * ".log"
 const PORT = 8000
 const SERVER = "ws://127.0.0.1:$(PORT)"
-const CLOSEAFTER = Base.Dates.Second(30)
+const CLOSEAFTER = Second(30)
 
 """
 Opens a client, echoes with an optional delay, an integer in milliseconds.
@@ -43,7 +48,7 @@ function echowithdelay_jce()
     # sometimes before a line is finished printing.
     # We use :green to distinguish more easily.
     id = "echowithdelay_jce"
-    f = open(joinpath(SRCPATH, "logs", LOGFILE), "w")
+    f = open(joinpath(@__DIR__, "logs", LOGFILE), "w")
     try
         logto(f)
         clog(id, :green, "Open client on ", SERVER, "\nclient side handler ", _jce)
@@ -80,9 +85,10 @@ function _jce(ws)
         ti = time_ns()
         push!(receivetimes, Int64(ti < typemax(Int64) ? ti : 0 ))
         # break out when receiving 'exit'
-        length(msg) == 4 && msg == Vector{UInt8}("exit") && break
+        # length(msg) == 4 && msg == Vector{UInt8}("exit") && break
+        length(msg) == 4 && msg == codeunits("exit") && break
         # react to delay instruction
-        if length(msg) < 16 && msg[1:6] == Vector{UInt8}("delay=")
+        if length(msg) < 16 && msg[1:6] == codeunits("delay=")
             delay = Meta.parse(Int, String(msg[7:end]))
             clog(id, :green, " Changing delay to ", delay, " ms")
             zflush()
@@ -92,9 +98,10 @@ function _jce(ws)
         replytime = time_ns()
         write(ws, msg)
         # clean record of instruction message
-        if length(msg) > 16 && msg[1:6] != Vector{UInt8}("delay=")
+        #if length(msg) > 16 && msg[1:6] != Vector{UInt8}("delay=")
+        if length(msg) > 16 && msg[1:6] != codeunits("delay=")
             push!(replytimes, Int64(replytime < typemax(Int64) ? replytime : 0 ))
-        elseif msg[1:6] != Vector{UInt8}("delay=")
+        elseif msg[1:6] != codeunits("delay=")
             push!(replytimes,  Int64(replytime < typemax(Int64) ? replytime : 0 ))
         end
     end
@@ -120,15 +127,10 @@ end
 end # module
 
 #=
-For debugging in a separate terminal:
+#For debugging in a separate terminal:
 
-using WebSockets
-const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
-const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
-# for finding local modules
-SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
-LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
-
-import ws_jce.echowithdelay_jce
-ws_jce.echowithdelay_jce()
+joinpath("WebSockets" |> Base.find_package |> dirname, "..", "benchmark") |> cd
+(@__DIR__) ∉ LOAD_PATH && push!(LOAD_PATH, @__DIR__)
+import ws_jce: echowithdelay_jce
+echowithdelay_jce()
 =#
