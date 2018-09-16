@@ -7,12 +7,6 @@ git-tree-sha1 = "b530fbeb6f41ab5a83fbe3db1fcbe879334bcd2d"
 uuid = "b99e7846-7c00-51b0-8f62-c81ae34c0232"
 version = "0.4.2"
 
-[[BufferedStreams]]
-deps = ["Compat", "Pkg", "Test"]
-git-tree-sha1 = "5d55b9486590fdda5905c275bb21ce1f0754020f"
-uuid = "e1450e63-4bb3-523b-b2a4-4ffa8c0fd77d"
-version = "1.0.0"
-
 [[Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
 git-tree-sha1 = "ae262fa91da6a74e8937add6b613f58cd56cdad4"
