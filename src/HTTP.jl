@@ -69,8 +69,10 @@ function _openstream(f::Function, http::HTTP.Streams.Stream, key::String)
                                 "$(http.message)"))
     end
 
-    io = HTTP.ConnectionPool.getrawstream(http)
-    ws = WebSocket(io,false)
+    #to fix issue #114
+    # io = HTTP.ConnectionPool.getrawstream(http)
+    # ws = WebSocket(io,false)
+    ws = WebSocket(http.stream, false)
     try
         f(ws)
     finally
@@ -215,7 +217,7 @@ end
 # Inline docs in 'WebSockets.jl'
 target(req::HTTP.Messages.Request) = req.target
 subprotocol(req::HTTP.Messages.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
-origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")  
+origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")
 
 """
 WebsocketHandler(f::Function) <: HTTP.Handler
@@ -263,15 +265,15 @@ function ServerWS(handler::H,
                 ratelimit = 1//0,
                 args...) where {H <: HTTP.Handler, W <: WebsocketHandler}
     if cert != "" && key != ""
-        serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler, 
-                                                     logger, Channel(1), Channel(2), 
-                                                     HTTP.ServerOptions(; sslconfig=HTTP.MbedTLS.SSLConfig(cert, key), 
-                                                                          ratelimit = ratelimit, 
+        serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler,
+                                                     logger, Channel(1), Channel(2),
+                                                     HTTP.ServerOptions(; sslconfig=HTTP.MbedTLS.SSLConfig(cert, key),
+                                                                          ratelimit = ratelimit,
                                                                           args...))
     else
-        serverws = ServerWS{HTTP.Servers.http, H, W}(handler, wshandler, 
-                                                     logger, Channel(1), Channel(2), 
-                                                     HTTP.ServerOptions(;ratelimit = ratelimit, 
+        serverws = ServerWS{HTTP.Servers.http, H, W}(handler, wshandler,
+                                                     logger, Channel(1), Channel(2),
+                                                     HTTP.ServerOptions(;ratelimit = ratelimit,
                                                                          args...))
     end
     return serverws
@@ -332,3 +334,12 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
 end
 serve(server::WebSockets.ServerWS, host, port) =  serve(server, host, port, false)
 serve(server::WebSockets.ServerWS, port) =  serve(server, "127.0.0.1", port, false)
+
+#to fix issue #114
+function Base.write(t::HTTP.ConnectionPool.Transaction, x::UInt8)
+    write(t.c.io, x)
+end
+
+function Base.write(t::HTTP.ConnectionPool.Transaction, x::Vector{UInt8})
+    write(t.c.io, x)
+end

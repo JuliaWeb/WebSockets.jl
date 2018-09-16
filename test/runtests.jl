@@ -30,4 +30,6 @@ end
     include("error_test.jl");sleep(1)
 end
 
+include("issue114_test.jl")
+
 end
