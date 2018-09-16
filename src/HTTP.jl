@@ -72,7 +72,13 @@ function _openstream(f::Function, http::HTTP.Streams.Stream, key::String)
     #to fix issue #114
     # io = HTTP.ConnectionPool.getrawstream(http)
     # ws = WebSocket(io,false)
-    ws = WebSocket(http.stream, false)
+    c = http.stream.c
+    if isempty(c.excess) # make most use cases unaffected
+       ws = WebSocket(c.io, false)
+    else
+        ws = WebSocket(PatchedIO(c.excess, c.io), false)
+    end
+
     try
         f(ws)
     finally
@@ -336,10 +342,40 @@ serve(server::WebSockets.ServerWS, host, port) =  serve(server, host, port, fals
 serve(server::WebSockets.ServerWS, port) =  serve(server, "127.0.0.1", port, false)
 
 #to fix issue #114
-function Base.write(t::HTTP.ConnectionPool.Transaction, x::UInt8)
-    write(t.c.io, x)
+mutable struct PatchedIO{T <: IO} <: IO
+    excess::typeof(view(UInt8[], 1:0))
+    io::T
 end
 
-function Base.write(t::HTTP.ConnectionPool.Transaction, x::Vector{UInt8})
-    write(t.c.io, x)
+
+function Base.read(p::PatchedIO, nb::Integer)
+    if isempty(p.excess)
+        return read(p.io, nb)
+    end
+
+    l = length(p.excess)
+    if nb <= l
+        rt = @view p.excess[1:nb];
+        p.excess = @view p.excess[nb+1:end]
+        return rt
+    end
+
+    buffer = IOBuffer()
+    write(buffer, p.excess)
+    p.excess=HTTP.ConnectionPool.nobytes;
+    write(buffer, read(p.io, nb - l))
+    return take!(buffer)
 end
+
+
+Base.close(p::PatchedIO) = close(p.io)
+Base.isopen(p::PatchedIO) = isopen(p.io)
+Base.eof(p::PatchedIO) = isempty(p.excess) && eof(p.io)
+function Base.read(p::PatchedIO, ::Type{T} ) where T <: Integer
+    if isempty(p.excess)
+        return read(p.io, T)
+    end
+    buffer = IOBuffer(read(p, sizeof(T)))
+    return read(buffer, T)
+end
+locked_write(p::PatchedIO, islast::Bool, opcode, hasmask::Bool, data::Union{Base.CodeUnits{UInt8,String}, Array{UInt8,1}}) = locked_write(p.io, islast, opcode, hasmask, data)
