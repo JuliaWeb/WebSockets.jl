@@ -30,4 +30,8 @@ end
     include("error_test.jl");sleep(1)
 end
 
+@info("\n tests for server message comes first\n")
+@testset "tests for server message comes first" begin
+    include("serverfirst_test.jl")
+end
 end

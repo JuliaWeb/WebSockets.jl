@@ -69,8 +69,16 @@ function _openstream(f::Function, http::HTTP.Streams.Stream, key::String)
                                 "$(http.message)"))
     end
 
-    io = HTTP.ConnectionPool.getrawstream(http)
-    ws = WebSocket(io,false)
+    #to fix issue #114
+    # io = HTTP.ConnectionPool.getrawstream(http)
+    # ws = WebSocket(io,false)
+    c = http.stream.c
+    if isempty(c.excess) # make most use cases unaffected
+       ws = WebSocket(c.io, false)
+    else
+        ws = WebSocket(PatchedIO(c.excess, c.io), false)
+    end
+
     try
         f(ws)
     finally
@@ -215,7 +223,7 @@ end
 # Inline docs in 'WebSockets.jl'
 target(req::HTTP.Messages.Request) = req.target
 subprotocol(req::HTTP.Messages.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
-origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")  
+origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")
 
 """
 WebsocketHandler(f::Function) <: HTTP.Handler
@@ -263,15 +271,15 @@ function ServerWS(handler::H,
                 ratelimit = 1//0,
                 args...) where {H <: HTTP.Handler, W <: WebsocketHandler}
     if cert != "" && key != ""
-        serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler, 
-                                                     logger, Channel(1), Channel(2), 
-                                                     HTTP.ServerOptions(; sslconfig=HTTP.MbedTLS.SSLConfig(cert, key), 
-                                                                          ratelimit = ratelimit, 
+        serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler,
+                                                     logger, Channel(1), Channel(2),
+                                                     HTTP.ServerOptions(; sslconfig=HTTP.MbedTLS.SSLConfig(cert, key),
+                                                                          ratelimit = ratelimit,
                                                                           args...))
     else
-        serverws = ServerWS{HTTP.Servers.http, H, W}(handler, wshandler, 
-                                                     logger, Channel(1), Channel(2), 
-                                                     HTTP.ServerOptions(;ratelimit = ratelimit, 
+        serverws = ServerWS{HTTP.Servers.http, H, W}(handler, wshandler,
+                                                     logger, Channel(1), Channel(2),
+                                                     HTTP.ServerOptions(;ratelimit = ratelimit,
                                                                          args...))
     end
     return serverws
@@ -332,3 +340,42 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
 end
 serve(server::WebSockets.ServerWS, host, port) =  serve(server, host, port, false)
 serve(server::WebSockets.ServerWS, port) =  serve(server, "127.0.0.1", port, false)
+
+#to fix issue #114
+mutable struct PatchedIO{T <: IO} <: IO
+    excess::typeof(view(UInt8[], 1:0))
+    io::T
+end
+
+
+function Base.read(p::PatchedIO, nb::Integer)
+    if isempty(p.excess)
+        return read(p.io, nb)
+    end
+
+    l = length(p.excess)
+    if nb <= l
+        rt = @view p.excess[1:nb];
+        p.excess = @view p.excess[nb+1:end]
+        return rt
+    end
+
+    buffer = IOBuffer()
+    write(buffer, p.excess)
+    p.excess=HTTP.ConnectionPool.nobytes;
+    write(buffer, read(p.io, nb - l))
+    return take!(buffer)
+end
+
+
+Base.close(p::PatchedIO) = close(p.io)
+Base.isopen(p::PatchedIO) = isopen(p.io)
+Base.eof(p::PatchedIO) = isempty(p.excess) && eof(p.io)
+function Base.read(p::PatchedIO, ::Type{T} ) where T <: Integer
+    if isempty(p.excess)
+        return read(p.io, T)
+    end
+    buffer = IOBuffer(read(p, sizeof(T)))
+    return read(buffer, T)
+end
+locked_write(p::PatchedIO, islast::Bool, opcode, hasmask::Bool, data::Union{Base.CodeUnits{UInt8,String}, Array{UInt8,1}}) = locked_write(p.io, islast, opcode, hasmask, data)

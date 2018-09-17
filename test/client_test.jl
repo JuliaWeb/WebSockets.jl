@@ -11,7 +11,7 @@ import WebSockets:  is_upgrade,
 import HTTP.Header
 using Sockets
 using Base64
-import Base.BufferStream
+import Base: BufferStream, convert
 convert(::Type{Header}, pa::Pair{String,String}) = Pair(SubString(pa[1]), SubString(pa[2]))
 sethd(r::HTTP.Messages.Response, pa::Pair) = sethd(r, convert(Header, pa))
 sethd(r::HTTP.Messages.Response, pa::Header) = HTTP.Messages.setheader(r, pa)
