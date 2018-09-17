@@ -24,7 +24,6 @@ function main()
         wsuri = readline(stdin)
         wsuri == "" && break
         res = WebSockets.open(client_one_message, wsuri)
-        !isa(res, Response) && println(res)
     end
     println("Have a nice day")
 end

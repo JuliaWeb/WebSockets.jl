@@ -20,7 +20,7 @@ includes another Julia session, parallel process or task.
 3. Check rsv1 to rsv3 values. This will reduce bandwidth.
 4. Optimize maskswitch!, possibly threaded above a certain limit.
 5. Split messages over several frames.
-6. Allow customizable console output (e.g. 'ping'). See HttpServer listen.
+6. Allow customizable console output (e.g. 'ping').
 """
 module WebSockets
 using Sockets: TCPSocket, IPAddr
@@ -694,8 +694,4 @@ function readguarded(ws)
     end
 end
 
-#function __init__()
-#    @require HTTP="cd3eb016-35fb-5094-929b-558a96fad6f3" include("HTTP.jl")
-#    @require HttpServer="58cfbd8c-6b7d-5447-85c1-563540e28d27" include("HttpServer.jl")
-#end
 end # module WebSockets

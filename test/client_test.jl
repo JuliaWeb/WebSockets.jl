@@ -1,14 +1,13 @@
 # included in runtests.jl
 # focus on HTTP.jl
 using Test
-using HTTP
-using WebSockets
+import WebSockets
 import WebSockets:  is_upgrade,
                     upgrade,
                     _openstream,
                     addsubproto,
                     generate_websocket_key
-import HTTP.Header
+import HTTP, HTTP.Header
 using Sockets
 using Base64
 import Base: BufferStream, convert

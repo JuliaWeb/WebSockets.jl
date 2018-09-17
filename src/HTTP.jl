@@ -205,7 +205,6 @@ end
 
 """
 Fast checking for websockets vs http requests, performed on all new HTTP requests.
-Similar to HttpServer.is_websocket_handshake
 """
 function is_upgrade(r::HTTP.Message)
     if (r isa HTTP.Request && r.method == "GET")  || (r isa HTTP.Response && r.status == 101)

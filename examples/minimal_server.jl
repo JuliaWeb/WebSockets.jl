@@ -9,6 +9,7 @@ const BODY =  "<body><p>Press F12
                 <p>ws.onmessage = function(e){console.log(e.data)}
                 <p>ws.send(\"Browser console says hello!\")
                 </body>"
+
 function coroutine(ws)
     while isopen(ws)
         data, = readguarded(ws)
@@ -27,7 +28,7 @@ function gatekeeper(req, ws)
     println("\nOrigin:", orig, "    Target:", target(req), "    subprotocol:", subprotocol(req))
     if occursin(LOCALIP, orig)
         coroutine(ws)
-    elseif orig == "" 
+    elseif orig == ""
         @info "Non-browser clients don't send Origin. We liberally accept the update request in this case."
         coroutine(ws)
     else
@@ -35,9 +36,9 @@ function gatekeeper(req, ws)
     end
 end
 
-global handle(req) = replace(BAREHTML, "<body></body>" => BODY) |> WebSockets.Response
+const handle(req) = replace(BAREHTML, "<body></body>" => BODY) |> WebSockets.Response
 
-global server = WebSockets.ServerWS(handle, 
+const server = WebSockets.ServerWS(handle,
                                     gatekeeper)
 
 @info("Browser > $LOCALIP:$PORT , F12> console > ws = new WebSocket(\"ws://$LOCALIP:$PORT\") ")
