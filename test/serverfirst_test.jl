@@ -19,7 +19,8 @@ convert(::Type{Header}, pa::Pair{String,String}) = Pair(SubString(pa[1]), SubStr
 sethd(r::HTTP.Messages.Response, pa::Pair) = sethd(r, convert(Header, pa))
 sethd(r::HTTP.Messages.Response, pa::Header) = HTTP.Messages.setheader(r, pa)
 
-@info "tests for #114"
+#tests for #114
+@info "Server send message first"
 
 req = HTTP.Messages.Request()
 req.method = "GET"
@@ -30,27 +31,26 @@ sethd(resp,   "Sec-WebSocket-Version" => "13")
 sethd(resp, "Upgrade" => "websocket")
 sethd(resp, "Sec-WebSocket-Accept" => generate_websocket_key(key))
 sethd(resp,   "Connection" => "Upgrade")
-fakesocket = PipeBuffer()
-s = HTTP.Streams.Stream(resp, HTTP.Transaction(HTTP.Connection(fakesocket)))
-write(fakesocket, resp)
 
-firstmsg = Vector{UInt8}("HI.")
-locked_write(fakesocket, true, OPCODE_BINARY, false, firstmsg)
-emptymsg = Vector{UInt8}("")
-locked_write(fakesocket, true, OPCODE_BINARY, false, emptymsg)
-str1k=randstring(1024) |> Vector{UInt8}
-locked_write(fakesocket, true, OPCODE_BINARY, false, str1k)
-str100k=randstring(102400) |> Vector{UInt8}
-locked_write(fakesocket, true, OPCODE_BINARY, false, str100k)
+for excesslen in 0:11, msglen in [0, 1, 2, 126, 65536]
+    @info "test server first msg. -- max excess length($excesslen) message length($msglen)"
+    fakesocket = BufferStream()
+    s = HTTP.Streams.Stream(HTTP.Response(), HTTP.Transaction(HTTP.Connection(fakesocket)))
+    write(fakesocket, resp)
+    buffer = IOBuffer()
+    mark(buffer)
+    msg = randstring(msglen) |> Vector{UInt8}
+    locked_write(buffer, true, OPCODE_BINARY, false, msg)
+    reset(buffer)
+    write(fakesocket, read(buffer, min(excesslen, msglen)))
 
-@testset "tests for #114" begin
-@test _openstream(s, key) do ws
-  @test s.stream.c.io === ws.socket.io
-  @test firstmsg == read(ws)
-  @test emptymsg == read(ws)
-  @test str1k == read(ws)
-  @test str100k == read(ws)
-  close(fakesocket)
-  return true
-end
-end
+    @test _openstream(s, key) do ws
+        @sync begin
+            @async @test msg == read(ws)
+            write(fakesocket, readavailable(buffer))
+        end
+        close(fakesocket)
+        return true
+    end
+end;
+

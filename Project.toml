@@ -8,11 +8,14 @@ HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 MbedTLS = "739be429-bea8-5141-9913-cc70e7f3736d"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 
+[compat]
+HTTP = "^0.6.14"
+
 [extras]
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 BufferedStreams = "e1450e63-4bb3-523b-b2a4-4ffa8c0fd77d"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["Test", "Base64", "BufferedStreams", "Pkg"]
