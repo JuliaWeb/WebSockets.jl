@@ -254,17 +254,17 @@ mutable struct ServerWS{T <: HTTP.Servers.Scheme, H <: HTTP.Handler, W <: Websoc
     out::Channel{Any}
     options::HTTP.ServerOptions
 
-    ServerWS{T, H, W}(handler::H, wshandler::W, logger::IO = HTTP.compat_stdout(), ch=Channel(1), ch2=Channel(2),
+    ServerWS{T, H, W}(handler::H, wshandler::W, logger::IO = stdout, ch=Channel(1), ch2=Channel(2),
                  options=HTTP.ServerOptions()) where {T, H, W} =
         new{T, H, W}(handler, wshandler, logger, ch, ch2, options)
 end
 
-ServerWS(h::Function, w::Function, l::IO=HTTP.compat_stdout();
+ServerWS(h::Function, w::Function, l::IO=stdout;
             cert::String="", key::String="", args...) = ServerWS(HTTP.HandlerFunction(h), WebsocketHandler(w), l;
                                                          cert=cert, key=key, ratelimit = 1//0, args...)
 function ServerWS(handler::H,
                 wshandler::W,
-                logger::IO = HTTP.compat_stdout();
+                logger::IO = stdout;
                 cert::String = "",
                 key::String = "",
                 ratelimit = 1//0,
