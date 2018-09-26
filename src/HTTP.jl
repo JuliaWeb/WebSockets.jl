@@ -261,13 +261,13 @@ end
 
 ServerWS(h::Function, w::Function, l::IO=stdout;
             cert::String="", key::String="", args...) = ServerWS(HTTP.HandlerFunction(h), WebsocketHandler(w), l;
-                                                         cert=cert, key=key, ratelimit = 1//0, args...)
+                                                         cert=cert, key=key, ratelimit = 1000//1, args...)
 function ServerWS(handler::H,
                 wshandler::W,
                 logger::IO = stdout;
                 cert::String = "",
                 key::String = "",
-                ratelimit = 1//0,
+                ratelimit = 1000//1,
                 args...) where {H <: HTTP.Handler, W <: WebsocketHandler}
     if cert != "" && key != ""
         serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler,

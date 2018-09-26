@@ -2,7 +2,11 @@ using Test
 using Pkg
 #cd(Pkg.dir("WebSockets", "test"))
 
-#@sync yield() # avoid mixing of  output with possible deprecation warnings from .juliarc
+# Store the current logger for resetting afterwards.
+using Logging # stdlib, no declared dependecy
+const OLDLOGGER = Logging.global_logger
+# Info suffix to include location info and time since start
+include("logformat.jl")
 
 @testset "WebSockets" begin
 @info("\nFragment and unit tests\n")
@@ -10,7 +14,7 @@ using Pkg
     include("frametest.jl");sleep(1)
 end
 
-@info("\nHttpServer and HTTP handshake\n")
+@info("\nHTTP handshake\n")
 @testset "HttpServer and HTTP handshake" begin
     include("handshaketest.jl");sleep(1)
 end
@@ -34,4 +38,5 @@ end
 @testset "tests for server message comes first" begin
     include("serverfirst_test.jl")
 end
+Logging.global_logger(OLDLOGGER)
 end
