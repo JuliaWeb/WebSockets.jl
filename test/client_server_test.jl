@@ -1,6 +1,5 @@
 # included in runtests.jl
 using Test
-using HTTP
 using Sockets
 using WebSockets
 import WebSockets:  is_upgrade,
@@ -22,12 +21,11 @@ const port_HTTP_ServeWS = 8001
 const TCPREF = Ref{Sockets.TCPServer}()
 
 # Start HTTP listen server on port $port_HTTP"
-
-tas = @async HTTP.listen("127.0.0.1", port_HTTP, tcpref = TCPREF, 
-    tcpisvalid = (tcp;kw) -> HTTP.Servers.check_rate_limit(tcp, ratelimit = 1000//1; kw) do s
-        if WebSockets.is_upgrade(s.message)
-            WebSockets.upgrade(echows, s)
-        end
+tas = @async HTTP.listen("127.0.0.1", port_HTTP, tcpref = TCPREF,
+        ratelimit = 1000//1; kw) do s
+            if WebSockets.is_upgrade(s.message)
+                WebSockets.upgrade(echows, s)
+            end
 end
 while !istaskstarted(tas);yield();end
 

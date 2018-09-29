@@ -261,13 +261,13 @@ end
 
 ServerWS(h::Function, w::Function, l::IO=stdout;
             cert::String="", key::String="", args...) = ServerWS(HTTP.HandlerFunction(h), WebsocketHandler(w), l;
-                                                         cert=cert, key=key, ratelimit = 1000//1, args...)
+                                                         cert=cert, key=key, ratelimit = 10//1, args...)
 function ServerWS(handler::H,
                 wshandler::W,
                 logger::IO = stdout;
                 cert::String = "",
                 key::String = "",
-                ratelimit = 1000//1,
+                ratelimit = 10//1,
                 args...) where {H <: HTTP.Handler, W <: WebsocketHandler}
     if cert != "" && key != ""
         serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler,
@@ -303,32 +303,33 @@ After a suspected connection task failure:
 """
 function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
 
-    tcpserver = Ref{HTTP.Sockets.TCPServer}()
-
+    tcpserver = Ref{TCPServer}()
+    # Start a couroutine that sleeps until tcpserver is assigned,
+    # ie. the reference is established further down.
+    # It then enters the while loop, where it
+    # waits for put! to channel .in. The value does not matter.
+    # The coroutine then closes the server and finishes its run.
     @async begin
         while !isassigned(tcpserver)
             sleep(1)
         end
-        while true
-            val = take!(server.in)
-            val == HTTP.Servers.KILL && close(tcpserver[])
-        end
+        take!(server.in) && close(tcpserver[])
     end
 
     HTTP.listen(host, port;
            tcpref=tcpserver,
-           ssl=(T == HTTP.Servers.https),
+           ssl=(T == Servers.https),
            sslconfig = server.options.sslconfig,
            verbose = verbose,
-           tcpisvalid = server.options.ratelimit > 0 ? HTTP.Servers.check_rate_limit :
+           tcpisvalid = server.options.ratelimit > 0 ? checkratelimit :
                                                      (tcp; kw...) -> true,
-           ratelimits = Dict{IPAddr, HTTP.Servers.RateLimit}(),
+           ratelimits = Dict{IPAddr, RateLimit}(),
            ratelimit = server.options.ratelimit) do stream::HTTP.Stream
                             try
                                 if is_upgrade(stream.message)
                                     upgrade(server.wshandler.func, stream)
                                 else
-                                    HTTP.Servers.handle_request(server.handler.func, stream)
+                                    Servers.handle_request(server.handler.func, stream)
                                 end
                             catch err
                                 put!(server.out, err)
@@ -378,3 +379,32 @@ function Base.read(p::PatchedIO, ::Type{T} ) where T <: Integer
     return read(buffer, T)
 end
 locked_write(p::PatchedIO, islast::Bool, opcode, hasmask::Bool, data::Union{Base.CodeUnits{UInt8,String}, Array{UInt8,1}}) = locked_write(p.io, islast, opcode, hasmask, data)
+
+"""
+An implementation of HTTP.Servers.check_rate_limit. Most likely not needed
+with later versions.
+It modifies the mutable dictionary ratelimits with every incoming connection.
+"""
+checkratelimit(tcp::Base.PipeEndpoint; kw...) = true
+function checkratelimit(tcp;
+                          ratelimits = nothing,
+                          ratelimit::Rational{Int}=Int(10)//Int(1), kw...)
+    if ratelimits == nothing
+        throw(ArgumentError(" checkratelimit called without keyword argument ratelimits::Dict{IPAddr, RateLimit}()"))
+    end
+    ip = Sockets.getsockname(tcp)[1]
+    rate = Float64(ratelimit.num)
+    rl = get!(ratelimits, ip, RateLimit(rate, Dates.now()))
+    update!(rl, ratelimit)
+    if rl.allowance > rate
+        @debug "throttling $ip"
+        rl.allowance = rate
+    end
+    if rl.allowance < 1.0
+        @debug "discarding connection from $ip due to rate limiting"
+        return false
+    else
+        rl.allowance -= 1.0
+    end
+    return true
+end

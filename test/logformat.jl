@@ -5,7 +5,8 @@ import Logging:default_logcolor,
                 Warn,
                 Error
 using Dates
-const t0_tests = now()
+const OLDLOGGER = Logging.global_logger()
+const T0_TESTS = now()
 "Return file, location and time since start of test in info messages"
 function custom_metafmt(level, _module, group, id, file, line)
     color = default_logcolor(level)
@@ -21,11 +22,27 @@ function custom_metafmt(level, _module, group, id, file, line)
         if line !== nothing
             suffix *= ":$(isa(line, UnitRange) ? "$(first(line))-$(last(line))" : line)"
         end
-        suffix *= " $(Int(round((now() - t0_tests).value / 1000))) s"
+        suffix *= " $(Int(round((now() - T0_TESTS).value / 1000))) s"
     end
     !isempty(suffix) && (suffix = "@ " * suffix)
     return color, prefix, suffix
 end
-const LOGR = Logging.ConsoleLogger(meta_formatter = custom_metafmt)
-Logging.global_logger(LOGR)
+const TESTLOGR = Logging.ConsoleLogger(meta_formatter = custom_metafmt)
+if @isdefined Atom
+    Logging.global_logger(Atom.Progress.JunoProgressLogger(TESTLOGR))
+    @info """
+        @info messages now have a suffix.
+              Presumably, the Atom log pane works as normal.
+              To reinstate the original logger:
+                  julia> Logging.global_logger(OLDLOGGER)
+    """
+else
+    Logging.global_logger(TESTLOGR)
+    @info """
+        @info messages now have a suffix.
+              Presumably, the Atom log pane works as normal.
+              To reinstate the original logger:
+                  julia> Logging.global_logger(OLDLOGGER)
+    """
+end
 nothing

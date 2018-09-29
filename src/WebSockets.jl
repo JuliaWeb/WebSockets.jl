@@ -23,14 +23,19 @@ includes another Julia session, parallel process or task.
 6. Allow customizable console output (e.g. 'ping').
 """
 module WebSockets
-using Sockets: TCPSocket, IPAddr
 import MbedTLS: digest, MD_SHA1
 import Base64: base64encode, base64decode
-using HTTP
+import HTTP
 import HTTP:Response,
             Request,
-            HandlerFunction
-
+            HandlerFunction,
+            Sockets,
+            Servers
+import HTTP.Servers:RateLimit,
+               update!
+import      Sockets: TCPSocket,
+                     IPAddr,
+                     TCPServer
 include("HTTP.jl")
 export WebSocket,
        serve,

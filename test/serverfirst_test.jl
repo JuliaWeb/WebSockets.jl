@@ -21,7 +21,6 @@ sethd(r::HTTP.Messages.Response, pa::Header) = HTTP.Messages.setheader(r, pa)
 
 #tests for #114
 @info "Server send message first"
-
 req = HTTP.Messages.Request()
 req.method = "GET"
 key = base64encode(rand(UInt8, 16))
@@ -35,22 +34,23 @@ sethd(resp,   "Connection" => "Upgrade")
 for excesslen in 0:11, msglen in [0, 1, 2, 126, 65536]
     @info "test server first msg. -- max excess length($excesslen) message length($msglen)"
     fakesocket = BufferStream()
-    s = HTTP.Streams.Stream(HTTP.Response(), HTTP.Transaction(HTTP.Connection(fakesocket)))
-    write(fakesocket, resp)
-    buffer = IOBuffer()
-    mark(buffer)
-    msg = randstring(msglen) |> Vector{UInt8}
-    locked_write(buffer, true, OPCODE_BINARY, false, msg)
-    reset(buffer)
-    write(fakesocket, read(buffer, min(excesslen, msglen)))
+    let s  = HTTP.Streams.Stream(HTTP.Response(), HTTP.Transaction(HTTP.Connection(fakesocket)))
+        @show s
+        write(fakesocket, resp)
+        buffer = IOBuffer()
+        mark(buffer)
+        msg = randstring(msglen) |> Vector{UInt8}
+        locked_write(buffer, true, OPCODE_BINARY, false, msg)
+        reset(buffer)
+        write(fakesocket, read(buffer, min(excesslen, msglen)))
 
-    @test _openstream(s, key) do ws
-        @sync begin
-            @async @test msg == read(ws)
-            write(fakesocket, readavailable(buffer))
+        @test _openstream(s, key) do ws
+            @sync begin
+                @async @test msg == read(ws)
+                write(fakesocket, readavailable(buffer))
+            end
+            close(fakesocket)
+            return true
         end
-        close(fakesocket)
-        return true
-    end
-end;
-
+    end #let
+end
