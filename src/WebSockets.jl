@@ -30,12 +30,19 @@ import HTTP:Response,
             Request,
             HandlerFunction,
             Sockets,
-            Servers
+            Servers,
+            Streams
 import HTTP.Servers:RateLimit,
                update!
+import HTTP.Streams.Stream
 import      Sockets: TCPSocket,
                      IPAddr,
                      TCPServer
+using Dates
+# importing Logging seems to be necessary to get
+# output from coroutines through macros like @info.
+# This on Julia 0.7.0
+import Logging
 include("HTTP.jl")
 export WebSocket,
        serve,
@@ -49,7 +56,8 @@ export WebSocket,
        origin,
        send_ping,
        send_pong,
-       WebSocketClosedError
+       WebSocketClosedError,
+       checkratelimit
 
 # revisit the need for defining this union type for method definitions. The functions would
 # probably work just as fine with duck typing.

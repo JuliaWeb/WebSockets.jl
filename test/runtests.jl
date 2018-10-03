@@ -1,9 +1,6 @@
 using Test
-using Pkg
+#using Pkg
 #cd(Pkg.dir("WebSockets", "test"))
-
-# Store the current logger for resetting afterwards.
-using Logging # stdlib, no declared dependecy
 
 # Info suffix to include location info and time since start
 include("logformat.jl")

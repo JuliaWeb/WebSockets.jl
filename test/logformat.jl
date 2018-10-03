@@ -1,12 +1,14 @@
-import Logging
+using Logging
 import Logging:default_logcolor,
-                LogLevel,
                 Info,
                 Warn,
-                Error
+                Error,
+                Debug,
+                BelowMinLevel
 using Dates
 const OLDLOGGER = Logging.global_logger()
 const T0_TESTS = now()
+
 "Return file, location and time since start of test in info messages"
 function custom_metafmt(level, _module, group, id, file, line)
     color = default_logcolor(level)
@@ -27,22 +29,12 @@ function custom_metafmt(level, _module, group, id, file, line)
     !isempty(suffix) && (suffix = "@ " * suffix)
     return color, prefix, suffix
 end
-const TESTLOGR = Logging.ConsoleLogger(meta_formatter = custom_metafmt)
-if @isdefined Atom
-    Logging.global_logger(Atom.Progress.JunoProgressLogger(TESTLOGR))
-    @info """
-        @info messages now have a suffix.
-              Presumably, the Atom log pane works as normal.
-              To reinstate the original logger:
-                  julia> Logging.global_logger(OLDLOGGER)
-    """
-else
-    Logging.global_logger(TESTLOGR)
-    @info """
-        @info messages now have a suffix.
-              Presumably, the Atom log pane works as normal.
-              To reinstate the original logger:
-                  julia> Logging.global_logger(OLDLOGGER)
-    """
-end
+const TESTLOGR = ConsoleLogger(stderr, Debug, meta_formatter = custom_metafmt)
+global_logger(TESTLOGR)
+@info """
+    @info messages from now get a suffix.
+          Presumably, the Atom log pane works as normal.
+          To reinstate the original logger:
+              julia> Logging.global_logger(OLDLOGGER)
+"""
 nothing

@@ -17,6 +17,7 @@ On exit, a closing handshake is started. If the server is not currently reading
 after a reasonable amount of time and continue execution.
 """
 function open(f::Function, url; verbose=false, subprotocol = "", kw...)
+    @debug "open"
     key = base64encode(rand(UInt8, 16))
     headers = [
         "Upgrade" => "websocket",
@@ -31,18 +32,21 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
     if in('#', url)
         throw(ArgumentError(" replace '#' with %23 in url: $url"))
     end
-
+    @debug "In open"
     uri = HTTP.URIs.URI(url)
+    @debug uri
     if uri.scheme != "ws" && uri.scheme != "wss"
         throw(ArgumentError(" bad argument url: Scheme not ws or wss. Input scheme: $(uri.scheme)"))
     end
-
+    @debug "Will try  open."
     try
         HTTP.open("GET", uri, headers;
                 reuse_limit=0, verbose=verbose ? 2 : 0, kw...) do http
+
                     _openstream(f, http, key)
                 end
     catch err
+        @error err
         if typeof(err) <: Base.IOError
             throw(WebSocketClosedError(" while open ws|client: $(string(err))"))
         elseif typeof(err) <: HTTP.ExceptionRequest.StatusError
@@ -53,15 +57,16 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
     end
 end
 "Called by open with a stream connected to a server, after handshake is initiated"
-function _openstream(f::Function, http::HTTP.Streams.Stream, key::String)
-
+function _openstream(f::Function, http::Stream, key::String)
+    @debug "_openstream"
+    @debug "argument http was ::HTTP.Streams.Stream but is now $(typeof(http))"
     HTTP.startread(http)
-
+    @debug "_openstream startread"
     status = http.message.status
     if status != 101
         return
     end
-
+    @debug "_openstream, now check_upgrade"
     check_upgrade(http)
 
     if HTTP.header(http, "Sec-WebSocket-Accept") != generate_websocket_key(key)
@@ -70,14 +75,14 @@ function _openstream(f::Function, http::HTTP.Streams.Stream, key::String)
     end
 
     #to fix issue #114
-    # io = HTTP.ConnectionPool.getrawstream(http)
-    # ws = WebSocket(io,false)
-    c = http.stream.c
-    if isempty(c.excess) # make most use cases unaffected
-       ws = WebSocket(c.io, false)
-    else
-        ws = WebSocket(PatchedIO(c.excess, c.io), false)
-    end
+    io = HTTP.ConnectionPool.getrawstream(http)
+    ws = WebSocket(io,false)
+    #c = http.stream.c
+    #if isempty(c.excess) # make most use cases unaffected
+    #   ws = WebSocket(c.io, false)
+    #else
+    #    ws = WebSocket(PatchedIO(c.excess, c.io), false)
+    #end
 
     try
         f(ws)
@@ -114,7 +119,7 @@ import HTTP
 using WebSockets
 
 badgatekeeper(reqdict, ws) = sqrt(-2)
-handlerequest(req) = HTTP.Response(501)
+handlerequest(req) = Response(501)
 
 try
     HTTP.listen("127.0.0.1", UInt16(8000)) do http
@@ -195,6 +200,7 @@ end
 "It is up to the user to call 'is_upgrade' on received messages.
 This provides double checking from within the 'upgrade' function."
 function check_upgrade(http)
+    @debug "check_upgrade, type of http is $(typeof(http))"
     if !HTTP.hasheader(http, "Upgrade", "websocket")
         throw(WebSocketError(0, "Check upgrade: Expected \"Upgrade => websocket\"!\n$(http.message)"))
     end
@@ -207,16 +213,22 @@ end
 Fast checking for websockets vs http requests, performed on all new HTTP requests.
 """
 function is_upgrade(r::HTTP.Message)
-    if (r isa HTTP.Request && r.method == "GET")  || (r isa HTTP.Response && r.status == 101)
+    @debug "is_upgrade enter"
+    if (r isa Request && r.method == "GET")  || (r isa Response && r.status == 101)
+        @debug "is_upgrade 1"
         if HTTP.header(r, "Connection", "") != "keep-alive"
+            @debug "is_upgrade 2"
             # "Connection => upgrade" for most and "Connection => keep-alive, upgrade" for Firefox.
             if HTTP.hasheader(r, "Connection", "upgrade") || HTTP.hasheader(r, "Connection", "keep-alive, upgrade")
+                @debug "is_upgrade 3"
                 if lowercase(HTTP.header(r, "Upgrade", "")) == "websocket"
+                    @debug "is_upgrade true"
                     return true
                 end
             end
         end
     end
+    @debug "is_upgrade false"
     return false
 end
 # Inline docs in 'WebSockets.jl'
@@ -230,7 +242,7 @@ WebsocketHandler(f::Function) <: HTTP.Handler
 A simple function wrapper for HTTP.
 The provided argument should be one of the forms
     `f(WebSocket) => nothing`
-    `f(HTTP.Request, WebSocket) => nothing`
+    `f(Request, WebSocket) => nothing`
 The latter form is intended for gatekeeping, ref. RFC 6455 section 10.1
 
 f accepts a `WebSocket` and does interesting things with it, like reading, writing and exiting when finished.
@@ -342,43 +354,43 @@ serve(server::WebSockets.ServerWS, host, port) =  serve(server, host, port, fals
 serve(server::WebSockets.ServerWS, port) =  serve(server, "127.0.0.1", port, false)
 
 #to fix issue #114
-mutable struct PatchedIO{T <: IO} <: IO
-    excess::typeof(view(UInt8[], 1:0))
-    io::T
-end
+##mutable struct PatchedIO{T <: IO} <: IO
+#    excess::typeof(view(UInt8[], 1:0))
+#    io::T
+#end
 
 
-function Base.read(p::PatchedIO, nb::Integer)
-    if isempty(p.excess)
-        return read(p.io, nb)
-    end
+#function Base.read(p::PatchedIO, nb::Integer)
+#    if isempty(p.excess)
+#        return read(p.io, nb)
+#    end
 
-    l = length(p.excess)
-    if nb <= l
-        rt = @view p.excess[1:nb];
-        p.excess = @view p.excess[nb+1:end]
-        return rt
-    end
+#    l = length(p.excess)
+#    if nb <= l
+#        rt = @view p.excess[1:nb];
+#        p.excess = @view p.excess[nb+1:end]
+#        return rt
+#    end
 
-    buffer = IOBuffer()
-    write(buffer, p.excess)
-    p.excess=HTTP.ConnectionPool.nobytes;
-    write(buffer, read(p.io, nb - l))
-    return take!(buffer)
-end
+#    buffer = IOBuffer()
+#    write(buffer, p.excess)
+#    p.excess=HTTP.ConnectionPool.nobytes;
+#    write(buffer, read(p.io, nb - l))
+#    return take!(buffer)
+#end
 
 
-Base.close(p::PatchedIO) = close(p.io)
-Base.isopen(p::PatchedIO) = isopen(p.io)
-Base.eof(p::PatchedIO) = isempty(p.excess) && eof(p.io)
-function Base.read(p::PatchedIO, ::Type{T} ) where T <: Integer
-    if isempty(p.excess)
-        return read(p.io, T)
-    end
-    buffer = IOBuffer(read(p, sizeof(T)))
-    return read(buffer, T)
-end
-locked_write(p::PatchedIO, islast::Bool, opcode, hasmask::Bool, data::Union{Base.CodeUnits{UInt8,String}, Array{UInt8,1}}) = locked_write(p.io, islast, opcode, hasmask, data)
+#Base.close(p::PatchedIO) = close(p.io)
+#Base.isopen(p::PatchedIO) = isopen(p.io)
+#Base.eof(p::PatchedIO) = isempty(p.excess) && eof(p.io)
+#function Base.read(p::PatchedIO, ::Type{T} ) where T <: Integer
+#    if isempty(p.excess)
+#        return read(p.io, T)
+#    end
+#    buffer = IOBuffer(read(p, sizeof(T)))
+#    return read(buffer, T)
+#end
+#locked_write(p::PatchedIO, islast::Bool, opcode, hasmask::Bool, data::Union{Base.CodeUnits{UInt8,String}, Array{UInt8,1}}) = locked_write(p.io, islast, opcode, hasmask, data)
 
 """
 An implementation of HTTP.Servers.check_rate_limit. Most likely not needed
@@ -389,16 +401,19 @@ checkratelimit(tcp::Base.PipeEndpoint; kw...) = true
 function checkratelimit(tcp;
                           ratelimits = nothing,
                           ratelimit::Rational{Int}=Int(10)//Int(1), kw...)
+    @debug "checkratelimit"
+    sleep(1)
     if ratelimits == nothing
-        throw(ArgumentError(" checkratelimit called without keyword argument ratelimits::Dict{IPAddr, RateLimit}()"))
+        @debug Logging.current_logger()
+        throw(ArgumentError(" checkratelimit called without keyword argument ratelimits::Dict{IPAddr, RateLimit}(). "))
     end
     ip = Sockets.getsockname(tcp)[1]
     rate = Float64(ratelimit.num)
     rl = get!(ratelimits, ip, RateLimit(rate, Dates.now()))
     update!(rl, ratelimit)
     if rl.allowance > rate
-        @debug "throttling $ip"
         rl.allowance = rate
+        @debug "allow connection from $ip"
     end
     if rl.allowance < 1.0
         @debug "discarding connection from $ip due to rate limiting"
