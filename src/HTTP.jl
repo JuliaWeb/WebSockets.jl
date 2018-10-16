@@ -1,3 +1,4 @@
+import Sockets
 """
 Initiate a websocket|client connection to server defined by url. If the server accepts
 the connection and the upgrade to websocket, f is called with an open websocket|client
@@ -239,7 +240,7 @@ struct WebsocketHandler{F <: Function} <: HTTP.Handler
     func::F # func(ws) or func(request, ws)
 end
 struct ServerOptions
-    sslconfig::HTTP.MbedTLS.SSLConfig
+    sslconfig::Union{HTTP.MbedTLS.SSLConfig, Nothing}
     readtimeout::Float64
     ratelimit::Rational{Int}
     support100continue::Bool
@@ -247,7 +248,7 @@ struct ServerOptions
     logbody::Bool
 end
 function ServerOptions(;
-        sslconfig::HTTP.MbedTLS.SSLConfig=HTTP.MbedTLS.SSLConfig(true),
+        sslconfig::Union{HTTP.MbedTLS.SSLConfig, Nothing} = nothing,
         readtimeout::Float64=180.0,
         ratelimit::Rational{Int}=Int(5)//Int(1),
         support100continue::Bool=true,
@@ -290,13 +291,10 @@ function ServerWS(
         handler::H, wshandler::W, logger::IO = stdout;
         cert::String = "", key::String = "", ratelimit = 1//0, args...
     ) where {H, W <: WebsocketHandler}
-
+    sslconfig = nothing; scheme = :http
     if cert != "" && key != ""
         sslconfig = HTTP.MbedTLS.SSLConfig(cert, key)
         scheme = :https
-    else
-        scheme = :http
-        sslconfig = HTTP.MbedTLS.SSLConfig(true)
     end
     serverws = ServerWS{scheme, H, W}(
         handler, wshandler, logger, Channel(1), Channel(2),
@@ -323,30 +321,13 @@ After a suspected connection task failure:
 ```
 """
 function serve(server::ServerWS{T, H, W}, host, port, verbose, sleeptime = 0.01) where {T, H, W}
-    tcpserver = Ref{HTTP.Sockets.TCPServer}()
-    @async begin
-        while !isassigned(tcpserver)
-            sleep(sleeptime)
-        end
-        while true
-            val = take!(server.in)
-            val == HTTP.Servers.KILL && close(tcpserver[])
-        end
-    end
-    tcpisvalid = if server.options.ratelimit > 0
-        HTTP.Servers.check_rate_limit
-    else
-        (tcp; kw...) -> true
-    end
+    tcpserver = Sockets.listen(HTTP.Servers.getinet(host, port))
+    @show server.options.sslconfig
     HTTP.listen(
-        host, port;
         server = tcpserver,
-        ssl = (T == :https),
         sslconfig = server.options.sslconfig,
         verbose = verbose,
-        tcpisvalid = tcpisvalid,
-        ratelimits = Dict{IPAddr, HTTP.Servers.RateLimit}(),
-        ratelimit = server.options.ratelimit
+        rate_limit = server.options.ratelimit
     ) do stream::HTTP.Stream
         try
             if is_upgrade(stream.message)
