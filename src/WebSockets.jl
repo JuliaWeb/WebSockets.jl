@@ -1,4 +1,3 @@
-__precompile__()
 """
     WebSockets
 This module implements the WebSockets protocol.

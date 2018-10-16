@@ -238,7 +238,24 @@ f accepts a `WebSocket` and does interesting things with it, like reading, writi
 struct WebsocketHandler{F <: Function} <: HTTP.Handler
     func::F # func(ws) or func(request, ws)
 end
-
+struct ServerOptions
+    sslconfig::HTTP.MbedTLS.SSLConfig
+    readtimeout::Float64
+    ratelimit::Rational{Int}
+    support100continue::Bool
+    chunksize::Union{Nothing, Int}
+    logbody::Bool
+end
+function ServerOptions(;
+        sslconfig::HTTP.MbedTLS.SSLConfig=HTTP.MbedTLS.SSLConfig(true),
+        readtimeout::Float64=180.0,
+        ratelimit::Rational{Int}=Int(5)//Int(1),
+        support100continue::Bool=true,
+        chunksize::Union{Nothing, Int}=nothing,
+        logbody::Bool=true
+    )
+    ServerOptions(sslconfig, readtimeout, ratelimit, support100continue, chunksize, logbody)
+end
 
 """
     WebSockets.ServerWS(::HTTP.HandlerFunction, ::WebSockets.WebsocketHandler)
@@ -246,41 +263,45 @@ end
 WebSockets.ServerWS is an argument type for WebSockets.serve. Instances
 include .in  and .out channels, see WebSockets.serve.
 """
-mutable struct ServerWS{T <: HTTP.Servers.Scheme, H <: HTTP.Handler, W <: WebsocketHandler}
+mutable struct ServerWS{T, H, W <: WebsocketHandler}
     handler::H
     wshandler::W
     logger::IO
     in::Channel{Any}
     out::Channel{Any}
-    options::HTTP.ServerOptions
+    options::ServerOptions
 
     ServerWS{T, H, W}(handler::H, wshandler::W, logger::IO = stdout, ch=Channel(1), ch2=Channel(2),
-                 options=HTTP.ServerOptions()) where {T, H, W} =
+                 options=ServerOptions()) where {T, H, W} =
         new{T, H, W}(handler, wshandler, logger, ch, ch2, options)
 end
 
-ServerWS(h::Function, w::Function, l::IO=stdout;
-            cert::String="", key::String="", args...) = ServerWS(HTTP.HandlerFunction(h), WebsocketHandler(w), l;
-                                                         cert=cert, key=key, ratelimit = 1//0, args...)
-function ServerWS(handler::H,
-                wshandler::W,
-                logger::IO = stdout;
-                cert::String = "",
-                key::String = "",
-                ratelimit = 1//0,
-                args...) where {H <: HTTP.Handler, W <: WebsocketHandler}
+function ServerWS(
+        h::Function, w::Function, l::IO=stdout;
+        cert::String="", key::String="", args...
+    )
+    ServerWS(
+        HTTP.RequestHandlerFunction(h), WebsocketHandler(w), l;
+        cert = cert, key = key, ratelimit = 1//0, args...
+    )
+end
+
+function ServerWS(
+        handler::H, wshandler::W, logger::IO = stdout;
+        cert::String = "", key::String = "", ratelimit = 1//0, args...
+    ) where {H, W <: WebsocketHandler}
+
     if cert != "" && key != ""
-        serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler,
-                                                     logger, Channel(1), Channel(2),
-                                                     HTTP.ServerOptions(; sslconfig=HTTP.MbedTLS.SSLConfig(cert, key),
-                                                                          ratelimit = ratelimit,
-                                                                          args...))
+        sslconfig = HTTP.MbedTLS.SSLConfig(cert, key)
+        scheme = :https
     else
-        serverws = ServerWS{HTTP.Servers.http, H, W}(handler, wshandler,
-                                                     logger, Channel(1), Channel(2),
-                                                     HTTP.ServerOptions(;ratelimit = ratelimit,
-                                                                         args...))
+        scheme = :http
+        sslconfig = HTTP.MbedTLS.SSLConfig(true)
     end
+    serverws = ServerWS{scheme, H, W}(
+        handler, wshandler, logger, Channel(1), Channel(2),
+        ServerOptions(; sslconfig = sslconfig, ratelimit = ratelimit, args...)
+    )
     return serverws
 end
 """
@@ -301,42 +322,46 @@ After a suspected connection task failure:
     end
 ```
 """
-function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
-
+function serve(server::ServerWS{T, H, W}, host, port, verbose, sleeptime = 0.01) where {T, H, W}
     tcpserver = Ref{HTTP.Sockets.TCPServer}()
-
     @async begin
         while !isassigned(tcpserver)
-            sleep(1)
+            sleep(sleeptime)
         end
         while true
             val = take!(server.in)
             val == HTTP.Servers.KILL && close(tcpserver[])
         end
     end
-
-    HTTP.listen(host, port;
-           tcpref=tcpserver,
-           ssl=(T == HTTP.Servers.https),
-           sslconfig = server.options.sslconfig,
-           verbose = verbose,
-           tcpisvalid = server.options.ratelimit > 0 ? HTTP.Servers.check_rate_limit :
-                                                     (tcp; kw...) -> true,
-           ratelimits = Dict{IPAddr, HTTP.Servers.RateLimit}(),
-           ratelimit = server.options.ratelimit) do stream::HTTP.Stream
-                            try
-                                if is_upgrade(stream.message)
-                                    upgrade(server.wshandler.func, stream)
-                                else
-                                    HTTP.Servers.handle_request(server.handler.func, stream)
-                                end
-                            catch err
-                                put!(server.out, err)
-                                put!(server.out, stacktrace(catch_backtrace()))
-                            end
+    tcpisvalid = if server.options.ratelimit > 0
+        HTTP.Servers.check_rate_limit
+    else
+        (tcp; kw...) -> true
+    end
+    HTTP.listen(
+        host, port;
+        server = tcpserver,
+        ssl = (T == :https),
+        sslconfig = server.options.sslconfig,
+        verbose = verbose,
+        tcpisvalid = tcpisvalid,
+        ratelimits = Dict{IPAddr, HTTP.Servers.RateLimit}(),
+        ratelimit = server.options.ratelimit
+    ) do stream::HTTP.Stream
+        try
+            if is_upgrade(stream.message)
+                upgrade(server.wshandler.func, stream)
+            else
+                HTTP.handle(server.handler.func, stream)
             end
+        catch err
+            put!(server.out, err)
+            put!(server.out, stacktrace(catch_backtrace()))
+        end
+    end
     return
 end
+
 serve(server::WebSockets.ServerWS, host, port) =  serve(server, host, port, false)
 serve(server::WebSockets.ServerWS, port) =  serve(server, "127.0.0.1", port, false)
 
