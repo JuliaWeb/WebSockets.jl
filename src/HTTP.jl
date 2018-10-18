@@ -322,7 +322,6 @@ After a suspected connection task failure:
 """
 function serve(server::ServerWS{T, H, W}, host, port, verbose, sleeptime = 0.01) where {T, H, W}
     tcpserver = Sockets.listen(HTTP.Servers.getinet(host, port))
-    @show server.options.sslconfig
     HTTP.listen(
         server = tcpserver,
         sslconfig = server.options.sslconfig,
