@@ -280,7 +280,7 @@ function ServerWS(handler::H,
                 cert::String = "",
                 key::String = "",
                 ratelimit = 10//1,
-                args...) where {H <: HTTP.Handler, W <: WebsocketHandler}
+                args...) where {H <: HTTP.Handlers.HandlerFunction, W <: WebsocketHandler}
     if cert != "" && key != ""
         serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler,
                                                      logger, Channel(1), Channel(2),
@@ -302,9 +302,9 @@ end
 
 A wrapper for HTTP.listen.
 Puts any caught error and stacktrace on the server.out channel.
-To stop a running server, put HTTP.Servers.KILL on the .in channel.
+To stop a running server, put a byte on the server.in channel.
 ```julia
-    @shedule WebSockets.serve(server, "127.0.0.1", 8080)
+    @async WebSockets.serve(server, "127.0.0.1", 8080)
 ```
 After a suspected connection task failure:
 ```julia
@@ -314,13 +314,14 @@ After a suspected connection task failure:
 ```
 """
 function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
-
     tcpserver = Ref{TCPServer}()
     # Start a couroutine that sleeps until tcpserver is assigned,
     # ie. the reference is established further down.
     # It then enters the while loop, where it
     # waits for put! to channel .in. The value does not matter.
     # The coroutine then closes the server and finishes its run.
+    # Note that WebSockets v1.0.3 required the channel input to be HTTP.KILL,
+    # but will now kill the server regardless of what is sent.
     @async begin
         while !isassigned(tcpserver)
             sleep(1)
@@ -421,5 +422,6 @@ function checkratelimit(tcp;
     else
         rl.allowance -= 1.0
     end
+    @debug "checkratelimit OK"
     return true
 end

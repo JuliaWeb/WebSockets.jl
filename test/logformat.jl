@@ -33,7 +33,6 @@ const TESTLOGR = ConsoleLogger(stderr, Debug, meta_formatter = custom_metafmt)
 global_logger(TESTLOGR)
 @info """
     @info messages from now get a suffix.
-          Presumably, the Atom log pane works as normal.
           To reinstate the original logger:
               julia> Logging.global_logger(OLDLOGGER)
 """

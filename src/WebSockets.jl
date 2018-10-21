@@ -57,7 +57,8 @@ export WebSocket,
        send_ping,
        send_pong,
        WebSocketClosedError,
-       checkratelimit
+       checkratelimit,
+       addsubproto
 
 # revisit the need for defining this union type for method definitions. The functions would
 # probably work just as fine with duck typing.
@@ -154,7 +155,7 @@ const OPCODE_PONG = 0xA
 Handshakes with subprotocols are rejected by default.
 Add to acceptable SUBProtocols through e.g.
 ```julia
-   WebSockets.addsubproto("json")
+   addsubproto("json")
 ```
 Also see function subprotocol
 """
