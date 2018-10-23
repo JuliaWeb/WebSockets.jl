@@ -314,6 +314,7 @@ After a suspected connection task failure:
 ```
 """
 function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
+    # An internal reference used for closing.
     tcpserver = Ref{TCPServer}()
     # Start a couroutine that sleeps until tcpserver is assigned,
     # ie. the reference is established further down.
@@ -328,27 +329,43 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
         end
         take!(server.in) && close(tcpserver[])
     end
-
-    HTTP.listen(host, port;
-           tcpref=tcpserver,
-           ssl=(T == Servers.https),
-           sslconfig = server.options.sslconfig,
-           verbose = verbose,
-           tcpisvalid = server.options.ratelimit > 0 ? checkratelimit :
-                                                     (tcp; kw...) -> true,
-           ratelimits = Dict{IPAddr, RateLimit}(),
-           ratelimit = server.options.ratelimit) do stream::HTTP.Stream
-                            try
-                                if is_upgrade(stream.message)
-                                    upgrade(server.wshandler.func, stream)
-                                else
-                                    Servers.handle_request(server.handler.func, stream)
-                                end
-                            catch err
-                                put!(server.out, err)
-                                put!(server.out, stacktrace(catch_backtrace()))
-                            end
+    # We capture some variables in this inner function, which takes just one-argument.
+    # The inner function will be called in a new task for every incoming connection.
+    function _servercoroutine(stream::HTTP.Stream)
+        try
+            @debug "We received a request"
+            if is_upgrade(stream.message)
+                @debug "...which is an upgrade"
+                upgrade(server.wshandler.func, stream)
+            else
+                @debug "...which is not an upgrade"
+                Servers.handle_request(server.handler.func)
             end
+        catch err
+            put!(server.out, err)
+            put!(server.out, stacktrace(catch_backtrace()))
+        end
+    end
+    #
+    # Call the listen loop, which
+    # 1) Checks if we are ready to accept a new task yet. It does
+    #    so using the function given as a keyword argument, tcpisvalid.
+    #    The default tcpvalid function is defined in this module.
+    # 2) If we are ready, it spawns a new task or coroutine _servercoroutine.
+    #
+    HTTP.listen(_servercoroutine,
+            host, port;
+            tcpref=tcpserver,
+            ssl=(T == Servers.https),
+            sslconfig = server.options.sslconfig,
+            verbose = verbose,
+            tcpisvalid = server.options.ratelimit > 0 ? checkratelimit :
+                                                     (tcp; kw...) -> true,
+            ratelimits = Dict{IPAddr, RateLimit}(),
+            ratelimit = server.options.ratelimit)
+    # We will only get to this point if the server is closed.
+    # If this serve function is running as a coroutine, the server is closed
+    # through the server.in channel, see above.
     return
 end
 serve(server::WebSockets.ServerWS, host, port) =  serve(server, host, port, false)
