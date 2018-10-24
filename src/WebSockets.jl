@@ -1,4 +1,3 @@
-__precompile__()
 """
     WebSockets
 This module implements the WebSockets protocol.
@@ -35,6 +34,7 @@ import HTTP:Response,
 import HTTP.Servers:RateLimit,
                update!
 import HTTP.Streams.Stream
+import HTTP.startread
 import      Sockets: TCPSocket,
                      IPAddr,
                      TCPServer

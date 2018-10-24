@@ -57,17 +57,18 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
     end
 end
 "Called by open with a stream connected to a server, after handshake is initiated"
-function _openstream(f::Function, http::Stream, key::String)
+function _openstream(f::Function, stream::Stream, key::String)
     @debug "_openstream"
-    @debug "argument http was ::HTTP.Streams.Stream but is now $(typeof(http))"
-    HTTP.startread(http)
+    @debug "argument stream is more specifically $(typeof(stream))"
+    # TODO the next line crashes things on the other side.
+    startread(stream)
     @debug "_openstream startread"
-    status = http.message.status
+    status = stream.message.status
     if status != 101
         return
     end
     @debug "_openstream, now check_upgrade"
-    check_upgrade(http)
+    check_upgrade(stream)
 
     if HTTP.header(http, "Sec-WebSocket-Accept") != generate_websocket_key(key)
         throw(WebSocketError(0, "Invalid Sec-WebSocket-Accept\n" *
@@ -199,20 +200,20 @@ end
 
 "It is up to the user to call 'is_upgrade' on received messages.
 This provides double checking from within the 'upgrade' function."
-function check_upgrade(http)
-    @debug "check_upgrade, type of http is $(typeof(http))"
-    if !HTTP.hasheader(http, "Upgrade", "websocket")
-        throw(WebSocketError(0, "Check upgrade: Expected \"Upgrade => websocket\"!\n$(http.message)"))
+function check_upgrade(r::Request)
+    @debug "check_upgrade, type of r is $(typeof(r))"
+    if !HTTP.hasheader(r, "Upgrade", "websocket")
+        throw(WebSocketError(0, "Check upgrade: Expected \"Upgrade => websocket\"!\n$(r)"))
     end
-    if !(HTTP.hasheader(http, "Connection", "upgrade") || HTTP.hasheader(http, "Connection", "keep-alive, upgrade"))
-        throw(WebSocketError(0, "Check upgrade: Expected \"Connection => upgrade or Connection => keep alive, upgrade\"!\n$(http.message)"))
+    if !(HTTP.hasheader(r, "Connection", "upgrade") || HTTP.hasheader(r, "Connection", "keep-alive, upgrade"))
+        throw(WebSocketError(0, "Check upgrade: Expected \"Connection => upgrade or Connection => keep alive, upgrade\"!\n$(r)"))
     end
 end
 
 """
 Fast checking for websockets vs http requests, performed on all new HTTP requests.
 """
-function is_upgrade(r::HTTP.Message)
+function is_upgrade(r::Request)
     @debug "is_upgrade enter"
     if (r isa Request && r.method == "GET")  || (r isa Response && r.status == 101)
         @debug "is_upgrade 1"
@@ -232,9 +233,9 @@ function is_upgrade(r::HTTP.Message)
     return false
 end
 # Inline docs in 'WebSockets.jl'
-target(req::HTTP.Messages.Request) = req.target
-subprotocol(req::HTTP.Messages.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
-origin(req::HTTP.Messages.Request) = HTTP.header(req, "Origin")
+target(req::Request) = req.target
+subprotocol(req::Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
+origin(req::Request) = HTTP.header(req, "Origin")
 
 """
 WebsocketHandler(f::Function) <: HTTP.Handler

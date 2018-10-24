@@ -4,300 +4,52 @@
 using Test
 include("logformat.jl")
 using WebSockets
-import Random.randstring
-const PORT = 8000
-const SURL = "127.0.0.1"
+using Suppressor
 # Tell WebSockets we want to accept this subprotocol, as well as no subprotocol
 addsubproto("Server start the conversation")
+const PORT = 8000
+const SURL = "127.0.0.1"
+const MSGLENGTHS = [0 , 125, 126, 127, 2000]
+include("client_server_functions.jl")
 
+@info "Test the test method, external server request"
+@test 200 == @suppress WebSockets.HTTP.request("GET", "http://httpbin.org/ip").status
 
-"""
-`servercoroutine`is called by the listen loop (`starserver`) for each accepted http request.
-A near identical server coroutine is implemented as an inner function in WebSockets.serve.
-The 'function arguments' `server_gatekeeper` and `httphandler` are defined below.
-"""
-function servercoroutine(stream::WebSockets.Stream)
-    @debug "We received a request"
-    if WebSockets.is_upgrade(stream.message)
-        @debug "...which is an upgrade"
-        WebSockets.upgrade(server_gatekeeper, stream)
-    else
-        @debug "...which is not an upgrade"
-        WebSockets.Servers.handle_request(httphandler,
-                                        stream)
-    end
-end
-
-"""
-`httphandler` is called by `servercoroutine` for all accepted http requests
-that are not upgrades. We don't check what's actually requested.
-"""
-httphandler(req::WebSockets.Request) = WebSockets.Response(200, "OK")
-
-"""
-`server_gatekeeper` is called by `servercouroutine` or WebSockets inner function
-`_servercoroutine` for all http requests that
-    1) qualify as an upgrade,
-    2) request a subprotocol we claim to support
-Based on the requested subprotocol, server_gatekeeper calls
-    `initiatingws`
-        or
-    `echows`
-"""
-function server_gatekeeper(req::WebSockets.Request, ws::WebSocket)
-    @debug "server_gatekeeper"
-    origin(req) != "" && @error "server_gatekeeper, got origin header as from a browser."
-    target(req) != "/" && @error "server_gatekeeper, got origin header as in a POST request."
-    if subprotocol(req) == "Server start the conversation"
-        initiatingws(ws, 10, false)
-    else
-        echows(ws)
-    end
-    @debug "exiting server_gatekeeper"
-end
-
-
-
-"""
-`echows` is called by
-    - `server_gatekeeper` (in which case ws will be a server side websocket)
-    or
-    - 'WebSockets.open' (in which case ws will be a client side websocket)
-
-Takes an open websocket.
-Reads a message, echoes it, closes by exiting.
-The tests will be captured if the function is run on client side.
-If started by the server side, this is called as part of a coroutine.
-Therefore, test results will not propagate to the enclosing test scope.
-"""
-function echows(ws::WebSocket)
-    @debug "echows ", ws
-    data, ok = readguarded(ws)
-    if ok
-        if writeguarded(ws, data)
-            @test true
-        else
-            @test false
-            @error "echows, couldn't write data ", ws
-        end
-    else
-        @test false
-        @error "echows, couldn't read ", ws
-    end
-end
-
-"""
-`initiatingws` is called by
-    - `server_gatekeeper` (in which case ws will be a server side websocket)
-    or
-    - 'WebSockets.open' (in which case ws will be a client side websocket)
-
-Takes
-    - an open websocket
-    - a vector of message lengths
-    - and whether or not to close actively or leave that up to the Websockets
-      package to do by its own.
-
-1) Pings, but does not check for received pong. There will be console output from the pong side.
-2) Send a message of specified length
-3) Checks for an exact echo
-4) Repeats 2-4 until no more message lenghts are specified.
-"""
-function initiatingws(ws::WebSocket, slens::Vector{Int}, closebeforeexit::Bool)
-    @debug "initiatews ", ws, "\n\t-String length $slen bytes\n"
-    send_ping(ws, data = UInt8[1,2,3])
-    # No ping check made, the above will just output some info message.
-
-    # We need to yield since we are sharing the same process as the task on the
-    # other side of the connection.
-    # The other side must be reading in order to process the ping-pong.
-    yield()
-    for slen in slens
-        test_str = randstring(slen)
-        forcecopy_str = test_str |> collect |> copy |> join
-        if writeguarded(ws, test_str)
-            yield()
-            readback, ok = readguarded(ws)
-            if ok
-                # if run by the server side, this test won't be captured.
-                if String(readback) == forcecopy_str
-                    @test true
-                else
-                    if ws.server == true
-                        @error "initatews, echoed string of length ", slen, " differs from sent "
-                    else
-                        @test false
-                    end
-                end
-            else
-                # if run by the server side, this test won't be captured.
-                if ws.server == true
-                    @error "initatews, couldn't read ", ws, " length sent is ", slen
-                else
-                    @test false
-                end
-            end
-            closebeforeexit && close(ws, statusnumber = 1000)
-        else
-            @test false
-            @error "initatews, couldn't write to ", ws, " length ", slen
-        end
-    end
-end
-
-
-closeserver(ref::Ref{WebSockets.TCPServer}) = close(ref[]);yield
-closeserver(ref::WebSockets.ServerWS) =  put!(ref.in, "Bugger off!");yield
-
-
-"""
-`startserver` is called from tests.
-Keyword argument
-    - usinglisten   defines which syntax to use internally. The resulting server
-     task should act identical with the exception of catching some errors.
-
-Returns
-    1) a task where a server is running
-    2) a reference which can be used for closing the server or checking trapped errors.
-        The type of reference depends on argument usinglisten.
-For usinglisten = true, error messages can sometimes be inspected through opening
-a web server.
-For usinglisten = false, error messages can sometimes be inspected through take!(reference.out)
-
-To close the server, call
-    closeserver(reference)
-"""
-function startserver(;surl = SURL, port = PORT, usinglisten = false)
-    if usinglisten
-        reference = Ref{WebSockets.TCPServer}()
-        servertask = @async WebSockets.HTTP.listen(servercoroutine,
-                                            SURL,
-                                            PORT,
-                                            tcpref = reference,
-                                            tcpisvalid = checkratelimit,
-                                            ratelimits = Dict{IPAddr, WebSockets.RateLimit}()
-                                            )
-        while !istaskstarted(servertask);yield();end
-    else
-        # Start HTTP ServerWS on port $port_HTTP_ServeWS
-        #    const server_WS = WebSockets.ServerWS(
-        #        HTTP.HandlerFunction(req-> WebSockets.Response(200)),
-        #        server_gatekeeper)
-        @debug "Here we are, in startserver."
-        @debug typeof(server_gatekeeper)
-        reference =  WebSockets.ServerWS(   WebSockets.HTTP.Handlers.HandlerFunction(httphandler),
-                                            WebSockets.WebsocketHandler(server_gatekeeper)
-                                        )
-        servertask = @async WebSockets.serve(reference, SURL, PORT)
-        while !istaskstarted(servertask);yield();end
-        if isready(reference.out)
-            # capture errors, if any were made during the definition.
-            @error take!(myserver_WS.out)
-        end
-    end
-    servertask, reference
-end
-
-
-function client_initiate((servername, wsuri), stringlength, closebeforeexit)
-    # the external websocket test server does not follow our interpretation of
-    # RFC 6455 the protocol for length zero messages. Skip such tests.
-    stringlength == 0 && occursin("echo.websocket.org", wsuri) && return
-    @info("Testing client -> server at $(wsuri), message length $len")
-    test_str = randstring(len)
-    forcecopy_str = test_str |> collect |> copy |> join
-    @debug TCPREF[]
-    WebSockets.open(wsuri)
-end
-
-
-# Start a server with the listen method, check that it responds to an HTTP request, close it
+@info "Check server response, server started with the listen method"
 let
     servertask, serverref = startserver(usinglisten = true)
-    @debug "serverref: ", serverref
-    @debug "http://$SURL:$PORT"
-
-    @debug "Waiting for 30 seconds "
-    sleep(30)
-    @debug "Finished waiting"
-
-    # make a very simple http request for the servers with defined http handlers
-    resp = WebSockets.HTTP.request("GET", "http://httpbin.org/ip")
-    yield()
-    @debug "httpbin Status is ", resp.status
-    atask = @async WebSockets.HTTP.request("GET", "http://$SURL:$PORT"; verbose=3, retry = false)
-    @debug "sleep 3s"
-    sleep(3)
-    #@test RESP.status == 200
-    @debug "That test did not go so well"
-    @debug "The task making the request: ", atask
-#    @debug "We interrupt the requesting task now "
-#    @async Base.throwto(atask, InterruptException())
-#    @debug "See what we can find by fetching "
-#    @debug fetch(atask)
-    sleep(3)
-    @debug "Now close the server "
-    closeserver(serverref)
-    yield()
-    @debug "Closed server"
-    @debug "The task making the request: ", atask
-    if !istaskdone(atask)
-        @debug "Since it's still running, we'll interrupt the task."
-        @async Base.throwto(atask, InterruptException())
-    end
-    yield()
-    sleep(2)
-    @debug "Now fetching the task", atask
-    @debug fetch(atask)
+    @test 200 == WebSockets.HTTP.request("GET", "http://$SURL:$PORT").status
+    # A warning message is normally output when closing this kind of server
+    @suppress closeserver(serverref)
 end
-sleep(10)
-# Start a WebSockets.ServerWS, check that it responds to an HTTP request, close it
+
+@info "Check server response, ServerWS"
 let
     servertask, serverref = startserver()
-    @debug "serverref: ", serverref
-    @debug "http://$SURL:$PORT"
-
-    @debug "Waiting for 30 seconds "
-    sleep(30)
-    @debug "Finished waiting"
-
-    # make a very simple http request for the servers with defined http handlers
-    resp = WebSockets.HTTP.request("GET", "http://httpbin.org/ip")
-    yield()
-    @debug "httpbin Status is ", resp.status
-    atask = @async WebSockets.HTTP.request("GET", "http://$SURL:$PORT"; verbose=3, retry = false)
-    @debug "sleep 3s"
-    sleep(3)
-    #@test RESP.status == 200
-    @debug "That test did not go so well"
-    @debug typeof(serverref)
-    stack_trace = ""
-    if isready(serverref.out)
-        stack_trace = take!(serverref.out)
-        @debug "Took stack trace"
-    else
-        @debug "There is no output to be had yet from the server reference."
-    end
-    @debug stack_trace
-    @debug "The task making the request: ", atask
-#    @debug "We interrupt the requesting task now "
-#    Base.throwto(atask, InterruptException())
-#    @debug "See what we can find by fetching "
-#    @debug fetch(atask)
-    sleep(3)
-    @debug "Now close the server "
+    @test 200 == WebSockets.HTTP.request("GET", "http://$SURL:$PORT").status
     closeserver(serverref)
-    @debug "Closed server"
-    if isready(serverref.out)
-        stack_trace = take!(serverref.out)
-        @debug "Took stack trace"
-    else
-        @debug "There is no output to be had yet from the server reference."
-    end
 end
 
-
-
+@info "Starting a server.
+        Initiate a client side websocket test"
+let
+    servertask, serverref = startserver(usinglisten = true)
+    wsuri = "ws://$SURL:$PORT"
+    @debug "We will sleep for 30 s before opening ", wsuri
+    sleep(30)
+    WebSockets.open(initiatingws, wsuri)
+    # A warning message is normally output when closing this kind of server
+    @debug "Now the test is finished, we will sleep for 10 s more"
+    sleep(10)
+    if isready(serverref.out)
+    # capture errors, if any were made during the definition.
+        @debug take!(serverref.out)
+    else
+        @debug "No error was trapped by server reference"
+    end
+    sleep(1)
+    @suppress closeserver(serverref)
+end
 
 
 #TEMP
@@ -306,9 +58,6 @@ end
 #wsuri = "ws://127.0.0.1:$(port_HTTP)"
 #len = 125
 #closebeforeexit = false
-
-
-
 
 
 #=const servers = [
@@ -325,7 +74,7 @@ end
 
 #=
 
-const stringlengths = [125] #, 125, 126, 127, 2000]
+
 
 for (servername, wsuri) in servers, closebeforeexit in [false, true]
     closurews(ws) = initiatingws(ws::WebSocket, stringlengths, closebeforeexit::Bool)
