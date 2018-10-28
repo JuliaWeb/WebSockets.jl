@@ -36,6 +36,10 @@ import HTTP.Servers:RateLimit,
                update!
 import HTTP.Streams.Stream
 import HTTP.startread
+import HTTP.Servers:    Scheme,
+                        http,
+                        https
+import Sockets
 import      Sockets: TCPSocket,
                      IPAddr,
                      TCPServer

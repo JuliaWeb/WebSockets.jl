@@ -14,8 +14,7 @@ function servercoroutine(stream::WebSockets.Stream)
         WebSockets.upgrade(server_gatekeeper, stream)
     else
         @debug "...which is not an upgrade"
-        WebSockets.Servers.handle_request(httphandler,
-                                        stream)
+        WebSockets.Servers.handle_request(httphandler, stream)
     end
 end
 

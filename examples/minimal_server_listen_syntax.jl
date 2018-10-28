@@ -3,8 +3,8 @@ const BAREHTML = "<head><meta http-equiv=\"Content-Type\" content=\"text/html; c
  <title>Empty.html</title></head><body></body></html>"
 import Sockets
 using WebSockets
-import HTTP.listen
-import HTTP.Servers.handle_request
+import WebSockets.HTTP.listen
+import WebSockets.HTTP.Servers.handle_request
 const LOCALIP = string(Sockets.getipaddr())
 const PORT = 8080
 const BODY =  "<body><p>Press F12
@@ -12,6 +12,8 @@ const BODY =  "<body><p>Press F12
                 <p>ws.onmessage = function(e){console.log(e.data)}
                 <p>ws.send(\"Browser console says hello!\")
                 </body>"
+const TCPREF = Ref{Base.IOServer}()
+@info("Browser > $LOCALIP:$PORT , F12> console > ws = new WebSocket(\"ws://$LOCALIP:$PORT\") ")
 function coroutine(ws)
     while isopen(ws)
         data, = readguarded(ws)

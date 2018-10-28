@@ -115,18 +115,17 @@ If the upgrade is not accepted, responds to client with '400'.
 
 e.g. server with local error handling. Combine with WebSocket.open example.
 ```julia
-import HTTP
 using WebSockets
 
 badgatekeeper(reqdict, ws) = sqrt(-2)
-handlerequest(req) = Response(501)
-
+handlerequest(req) = WebSockets.Response(501)
+const SERVERREF = Ref{Base.IOServer}()
 try
-    HTTP.listen("127.0.0.1", UInt16(8000)) do stream
+    WebSockets.HTTP.listen("127.0.0.1", UInt16(8000), tcpref = SERVERREF) do stream
         if WebSockets.is_upgrade(stream.message)
             WebSockets.upgrade(badgatekeeper, stream)
         else
-            HTTP.Servers.handle_request(handlerequest, stream)
+            WebSockets.HTTP.Servers.handle_request(handlerequest, stream)
         end
     end
 catch err
@@ -188,11 +187,14 @@ function upgrade(f::Function, stream)
             f(ws)
         end
     catch err
+        # These errors will not reliably propagate to 'serve' (?).
+        # TODO reconsider rethrowing.
         @warn("WebSockets.upgrade: Caught unhandled error while calling argument function f, the handler / gatekeeper:\n\t")
         mt = typeof(f).name.mt
         fnam = splitdir(string(mt.defs.func.file))[2]
         printstyled(stderr, color= :yellow,"f = ", string(f) * " at " * fnam * ":" * string(mt.defs.func.line) * "\nERROR:\t")
         showerror(stderr, err, stacktrace(catch_backtrace()))
+        rethrow(err)
     finally
         close(ws)
     end
@@ -202,6 +204,7 @@ end
 Throws WebSocketError if the upgrade message is not basically valid.
 Called from 'upgrade' for potential server side websockets,
 and from `_openstream' for potential client side websockets.
+Not normally called from user code.
 """
 function check_upgrade(r)
     @debug "check_upgrade, type of r is $(typeof(r))"
@@ -215,7 +218,8 @@ function check_upgrade(r)
 end
 
 """
-Fast checking for websocket upgrade request vs http requests, performed on all new HTTP requests.
+Fast checking for websocket upgrade request vs content requests.
+Called on all new connections in '_servercoroutine'.
 """
 function is_upgrade(r::Request)
     @debug "is_upgrade enter"
@@ -236,6 +240,9 @@ function is_upgrade(r::Request)
     @debug "is_upgrade false"
     return false
 end
+
+is_upgrade(stream::Stream) = is_upgrade(stream.message)
+
 # Inline docs in 'WebSockets.jl'
 target(req::Request) = req.target
 subprotocol(req::Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
@@ -256,7 +263,24 @@ struct WebsocketHandler{F <: Function} <: HTTP.Handler
     func::F # func(ws) or func(request, ws)
 end
 
-
+struct ServerOptions
+    sslconfig::Union{HTTP.MbedTLS.SSLConfig, Nothing}
+    readtimeout::Float64
+    ratelimit::Rational{Int}
+    support100continue::Bool
+    chunksize::Union{Nothing, Int}
+    logbody::Bool
+end
+function ServerOptions(;
+        sslconfig::Union{HTTP.MbedTLS.SSLConfig, Nothing} = nothing,
+        readtimeout::Float64=180.0,
+        ratelimit::Rational{Int}=Int(5)//Int(1),
+        support100continue::Bool=true,
+        chunksize::Union{Nothing, Int}=nothing,
+        logbody::Bool=true
+    )
+    ServerOptions(sslconfig, readtimeout, ratelimit, support100continue, chunksize, logbody)
+end
 """
     WebSockets.ServerWS(::HTTP.HandlerFunction, ::WebSockets.WebsocketHandler)
 
@@ -269,16 +293,21 @@ mutable struct ServerWS{T <: HTTP.Servers.Scheme, H <: HTTP.Handler, W <: Websoc
     logger::IO
     in::Channel{Any}
     out::Channel{Any}
-    options::HTTP.ServerOptions
+    options::ServerOptions
 
     ServerWS{T, H, W}(handler::H, wshandler::W, logger::IO = stdout, ch=Channel(1), ch2=Channel(2),
                  options=HTTP.ServerOptions()) where {T, H, W} =
         new{T, H, W}(handler, wshandler, logger, ch, ch2, options)
 end
 
-ServerWS(h::Function, w::Function, l::IO=stdout;
-            cert::String="", key::String="", args...) = ServerWS(HTTP.HandlerFunction(h), WebsocketHandler(w), l;
-                                                         cert=cert, key=key, ratelimit = 10//1, args...)
+# Define ServerWS without wrapping the functions first. Rely on argument sequence.
+function ServerWS(h::Function, w::Function, l::IO=stdout;
+            cert::String="", key::String="", args...)
+        ServerWS(HTTP.Handlers.HandlerFunction(h),
+                WebsocketHandler(w), l;
+                cert=cert, key=key, ratelimit = 10//1, args...)
+end
+# Define ServerWS with function wrappers
 function ServerWS(handler::H,
                 wshandler::W,
                 logger::IO = stdout;
@@ -286,18 +315,17 @@ function ServerWS(handler::H,
                 key::String = "",
                 ratelimit = 10//1,
                 args...) where {H <: HTTP.Handlers.HandlerFunction, W <: WebsocketHandler}
+    sslconfig = nothing;
+    scheme = http # Imported structure from HTTP.Servers
     if cert != "" && key != ""
-        serverws = ServerWS{HTTP.Servers.https, H, W}(handler, wshandler,
-                                                     logger, Channel(1), Channel(2),
-                                                     HTTP.ServerOptions(; sslconfig=HTTP.MbedTLS.SSLConfig(cert, key),
-                                                                          ratelimit = ratelimit,
-                                                                          args...))
-    else
-        serverws = ServerWS{HTTP.Servers.http, H, W}(handler, wshandler,
-                                                     logger, Channel(1), Channel(2),
-                                                     HTTP.ServerOptions(;ratelimit = ratelimit,
-                                                                         args...))
+        sslconfig = HTTP.MbedTLS.SSLConfig(cert, key)
+        scheme = https # Imported structure for HTTP.Servers.https
     end
+    serverws = ServerWS{scheme, H, W}(  handler,
+                                        wshandler,
+                                        logger, Channel(1), Channel(2),
+                                        ServerOptions(;ratelimit = ratelimit,
+                                                                     args...))
     return serverws
 end
 """
@@ -336,7 +364,7 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
     end
     # We capture some variables in this inner function, which takes just one-argument.
     # The inner function will be called in a new task for every incoming connection.
-    function _servercoroutine(stream::HTTP.Stream)
+    function _servercoroutine(stream::Stream)
         try
             @debug "We received a request"
             if is_upgrade(stream.message)
@@ -344,11 +372,12 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
                 upgrade(server.wshandler.func, stream)
             else
                 @debug "...which is not an upgrade"
-                Servers.handle_request(server.handler.func)
+                Servers.handle_request(server.handler.func, stream)
             end
         catch err
             put!(server.out, err)
             put!(server.out, stacktrace(catch_backtrace()))
+            @error err
         end
     end
     #
@@ -425,7 +454,6 @@ function checkratelimit(tcp;
                           ratelimits = nothing,
                           ratelimit::Rational{Int}=Int(10)//Int(1), kw...)
     @debug "checkratelimit", tcp
-    sleep(1)
     if ratelimits == nothing
         @debug Logging.current_logger()
         throw(ArgumentError(" checkratelimit called without keyword argument ratelimits::Dict{IPAddr, RateLimit}(). "))
