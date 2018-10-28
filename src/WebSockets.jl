@@ -27,6 +27,7 @@ import Base64: base64encode, base64decode
 import HTTP
 import HTTP:Response,
             Request,
+            Message,
             HandlerFunction,
             Sockets,
             Servers,

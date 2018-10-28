@@ -95,8 +95,9 @@ Takes
 4) Repeats 2-4 until no more message lenghts are specified.
 """
 function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = false)
-    @debug "initiatews ", ws, "\n\t-String length $slen bytes\n"
-    send_ping(ws, data = UInt8[1,2,3])
+    @debug "initiatews ", ws
+    @debug "String lengths $msglengths bytes"
+    send_ping(ws)
     # No ping check made, the above will just output some info message.
 
     # We need to yield since we are sharing the same process as the task on the
@@ -134,6 +135,7 @@ function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = 
             @error "initatews, couldn't write to ", ws, " length ", slen
         end
     end
+    @debug "initiatews exiting"
 end
 
 closeserver(ref::Ref{WebSockets.TCPServer}) = close(ref[])

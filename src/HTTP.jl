@@ -39,12 +39,11 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
         throw(ArgumentError(" bad argument url: Scheme not ws or wss. Input scheme: $(uri.scheme)"))
     end
     @debug "Will try  open."
+    openstream(stream) = _openstream(f, stream, key)
     try
-        HTTP.open("GET", uri, headers;
-                reuse_limit=0, verbose=verbose ? 2 : 0, kw...) do http
-
-                    _openstream(f, http, key)
-                end
+        HTTP.open(openstream,
+                "GET", uri, headers;
+                reuse_limit=0, verbose=verbose ? 2 : 0, kw...)
     catch err
         @error err
         if typeof(err) <: Base.IOError
@@ -57,27 +56,27 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
     end
 end
 "Called by open with a stream connected to a server, after handshake is initiated"
-function _openstream(f::Function, stream::Stream, key::String)
+function _openstream(f::Function, stream, key::String)
     @debug "_openstream"
     @debug "argument stream is more specifically $(typeof(stream))"
-    # TODO the next line crashes things on the other side.
+    @debug "_startread"
     startread(stream)
-    @debug "_openstream startread"
-    status = stream.message.status
-    if status != 101
+    response = stream.message
+    @debug "_openstream got the response"
+    if response.status != 101
         return
     end
-    @debug "_openstream, now check_upgrade"
+    @debug "status 101"
+    @debug "_openstream, now check if the response is valid"
     check_upgrade(stream)
-
-    if HTTP.header(http, "Sec-WebSocket-Accept") != generate_websocket_key(key)
+    if HTTP.header(response, "Sec-WebSocket-Accept") != generate_websocket_key(key)
         throw(WebSocketError(0, "Invalid Sec-WebSocket-Accept\n" *
-                                "$(http.message)"))
+                                "$response"))
     end
-
-    #to fix issue #114
-    io = HTTP.ConnectionPool.getrawstream(http)
-    ws = WebSocket(io,false)
+    # unwrap the stream
+    io = HTTP.ConnectionPool.getrawstream(stream)
+    @debug io
+    ws = WebSocket(io, false)
     #c = http.stream.c
     #if isempty(c.excess) # make most use cases unaffected
     #   ws = WebSocket(c.io, false)
@@ -96,7 +95,7 @@ end
 
 """
 Used as part of a server definition. Call this if
-is_upgrade(http.message) returns true.
+is_upgrade(stream.message) returns true.
 
 Responds to a WebSocket handshake request.
 If the connection is acceptable, sends status code 101
@@ -123,11 +122,11 @@ badgatekeeper(reqdict, ws) = sqrt(-2)
 handlerequest(req) = Response(501)
 
 try
-    HTTP.listen("127.0.0.1", UInt16(8000)) do http
-        if WebSockets.is_upgrade(http.message)
-            WebSockets.upgrade(badgatekeeper, http)
+    HTTP.listen("127.0.0.1", UInt16(8000)) do stream
+        if WebSockets.is_upgrade(stream.message)
+            WebSockets.upgrade(badgatekeeper, stream)
         else
-            HTTP.Servers.handle_request(handlerequest, http)
+            HTTP.Servers.handle_request(handlerequest, stream)
         end
     end
 catch err
@@ -136,71 +135,75 @@ catch err
 end
 ```
 """
-function upgrade(f::Function, http::HTTP.Stream)
-    # Double check the request. is_upgrade should already have been called by user.
-    check_upgrade(http)
-    if !HTTP.hasheader(http, "Sec-WebSocket-Version", "13")
-        HTTP.setheader(http, "Sec-WebSocket-Version" => "13")
-        HTTP.setstatus(http, 400)
-        HTTP.startwrite(http)
+function upgrade(f::Function, stream)
+    @debug "upgrade"
+    check_upgrade(stream)
+    @debug "upgrade - check that protocol is followed"
+    if !HTTP.hasheader(stream, "Sec-WebSocket-Version", "13")
+        HTTP.setheader(stream, "Sec-WebSocket-Version" => "13")
+        HTTP.setstatus(stream, 400)
+        HTTP.startwrite(stream)
         return
     end
-    if HTTP.hasheader(http, "Sec-WebSocket-Protocol")
-        requestedprotocol = HTTP.header(http, "Sec-WebSocket-Protocol")
+    if HTTP.hasheader(stream, "Sec-WebSocket-Protocol")
+        requestedprotocol = HTTP.header(stream, "Sec-WebSocket-Protocol")
         if !hasprotocol(requestedprotocol)
-            HTTP.setheader(http, "Sec-WebSocket-Protocol" => requestedprotocol)
-            HTTP.setstatus(http, 400)
-            HTTP.startwrite(http)
+            HTTP.setheader(stream, "Sec-WebSocket-Protocol" => requestedprotocol)
+            HTTP.setstatus(stream, 400)
+            HTTP.startwrite(stream)
             return
         else
-            HTTP.setheader(http, "Sec-WebSocket-Protocol" => requestedprotocol)
+            HTTP.setheader(stream, "Sec-WebSocket-Protocol" => requestedprotocol)
         end
     end
-    key = HTTP.header(http, "Sec-WebSocket-Key")
+    key = HTTP.header(stream, "Sec-WebSocket-Key")
     decoded = UInt8[]
     try
         decoded = base64decode(key)
     catch
-        HTTP.setstatus(http, 400)
-        HTTP.startwrite(http)
+        HTTP.setstatus(stream, 400)
+        HTTP.startwrite(stream)
         return
     end
     if length(decoded) != 16 # Key must be 16 bytes
-        HTTP.setstatus(http, 400)
-        HTTP.startwrite(http)
+        HTTP.setstatus(stream, 400)
+        HTTP.startwrite(stream)
         return
     end
     # This upgrade is acceptable. Send the response.
-    HTTP.setheader(http, "Sec-WebSocket-Accept" => generate_websocket_key(key))
-    HTTP.setheader(http, "Upgrade" => "websocket")
-    HTTP.setheader(http, "Connection" => "Upgrade")
-    HTTP.setstatus(http, 101)
-    HTTP.startwrite(http)
+    HTTP.setheader(stream, "Sec-WebSocket-Accept" => generate_websocket_key(key))
+    HTTP.setheader(stream, "Upgrade" => "websocket")
+    HTTP.setheader(stream, "Connection" => "Upgrade")
+    HTTP.setstatus(stream, 101)
+    HTTP.startwrite(stream)
     # Pass the connection on as a WebSocket.
-    io = HTTP.ConnectionPool.getrawstream(http)
+    io = HTTP.ConnectionPool.getrawstream(stream)
     ws = WebSocket(io, true)
     # If the callback function f has two methods,
     # prefer the more secure one which takes (request, websocket)
     try
-        if applicable(f, http.message, ws)
-            f(http.message, ws)
+        if applicable(f, stream.message, ws)
+            f(stream.message, ws)
         else
             f(ws)
         end
-#    catch err
-#        @warn("WebSockets.HTTP.upgrade: Caught unhandled error while calling argument function f, the handler / gatekeeper:\n\t")
-#        mt = typeof(f).name.mt
-#        fnam = splitdir(string(mt.defs.func.file))[2]
-#        print_with_color(:yellow, STDERR, "f = ", string(f) * " at " * fnam * ":" * string(mt.defs.func.line) * "\nERROR:\t")
-#        showerror(STDERR, err, stacktrace(catch_backtrace()))
+    catch err
+        @warn("WebSockets.upgrade: Caught unhandled error while calling argument function f, the handler / gatekeeper:\n\t")
+        mt = typeof(f).name.mt
+        fnam = splitdir(string(mt.defs.func.file))[2]
+        printstyled(stderr, color= :yellow,"f = ", string(f) * " at " * fnam * ":" * string(mt.defs.func.line) * "\nERROR:\t")
+        showerror(stderr, err, stacktrace(catch_backtrace()))
     finally
         close(ws)
     end
 end
 
-"It is up to the user to call 'is_upgrade' on received messages.
-This provides double checking from within the 'upgrade' function."
-function check_upgrade(r::Request)
+"""
+Throws WebSocketError if the upgrade message is not basically valid.
+Called from 'upgrade' for potential server side websockets,
+and from `_openstream' for potential client side websockets.
+"""
+function check_upgrade(r)
     @debug "check_upgrade, type of r is $(typeof(r))"
     if !HTTP.hasheader(r, "Upgrade", "websocket")
         throw(WebSocketError(0, "Check upgrade: Expected \"Upgrade => websocket\"!\n$(r)"))
@@ -208,10 +211,11 @@ function check_upgrade(r::Request)
     if !(HTTP.hasheader(r, "Connection", "upgrade") || HTTP.hasheader(r, "Connection", "keep-alive, upgrade"))
         throw(WebSocketError(0, "Check upgrade: Expected \"Connection => upgrade or Connection => keep alive, upgrade\"!\n$(r)"))
     end
+    @debug "Upgrade checked"
 end
 
 """
-Fast checking for websockets vs http requests, performed on all new HTTP requests.
+Fast checking for websocket upgrade request vs http requests, performed on all new HTTP requests.
 """
 function is_upgrade(r::Request)
     @debug "is_upgrade enter"
@@ -420,7 +424,7 @@ checkratelimit(tcp::Base.PipeEndpoint; kw...) = true
 function checkratelimit(tcp;
                           ratelimits = nothing,
                           ratelimit::Rational{Int}=Int(10)//Int(1), kw...)
-    @debug "checkratelimit"
+    @debug "checkratelimit", tcp
     sleep(1)
     if ratelimits == nothing
         @debug Logging.current_logger()
