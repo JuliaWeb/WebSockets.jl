@@ -348,7 +348,7 @@ After a suspected connection task failure:
 """
 function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
     # An internal reference used for closing.
-    tcpserver = Ref{TCPServer}()
+    tcpserver = Ref{Base.IOServer}()
     # Start a couroutine that sleeps until tcpserver is assigned,
     # ie. the reference is established further down.
     # It then enters the while loop, where it

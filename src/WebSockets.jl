@@ -41,8 +41,7 @@ import HTTP.Servers:    Scheme,
                         https
 import Sockets
 import      Sockets: TCPSocket,
-                     IPAddr,
-                     TCPServer
+                     IPAddr
 using Dates
 # importing Logging seems to be necessary to get
 # output from coroutines through macros like @info.

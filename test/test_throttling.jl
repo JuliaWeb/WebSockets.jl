@@ -110,7 +110,7 @@ acceptthisrequest(tcp, kw...) = HTTP.Servers.check_rate_limit(tcp, kw...)
 
 
 function serve2(reqfreq)
-    serverref = Ref{Sockets.TCPServer}()
+    serverref = Ref{Base.IOServer}()
     tas = @async HTTP.listen(IP, PORT2, tcpref = serverref, isvalid = acceptthisrequest) do s
         if is_upgrade(s.message)
             upgrade((_)->nothing, s)

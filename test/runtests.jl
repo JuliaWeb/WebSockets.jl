@@ -17,8 +17,8 @@ end
     include("handshaketest.jl");sleep(1)
 end
 
-@info("\nClient-server test, HTTP client\n")
-@testset "Client-server test, HTTP client" begin
+@info("\nClient-server test\n")
+@testset "Client-server test" begin
     include("client_server_test.jl");sleep(1)
 end
 

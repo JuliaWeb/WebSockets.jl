@@ -18,7 +18,7 @@ sethd(r::HTTP.Messages.Response, pa::Header) = HTTP.Messages.setheader(r, pa)
 #sethd(r::HTTP.Messages.Response, pa::Pair) = HTTP.Messages.setheader(r, HTTP.Header(pa))
 
 const NEWPORT = 8091
-const TCPREF2 = Ref{Sockets.TCPServer}()
+const TCPREF2 = Ref{Base.IOServer}()
 
 @info("start HTTP server\n")
 sleep(1)

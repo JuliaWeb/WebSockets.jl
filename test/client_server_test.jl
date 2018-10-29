@@ -31,35 +31,27 @@ let
     @test 200 == WebSockets.HTTP.request("GET", "http://$SURL:$PORT").status
     closeserver(serverref)
 end
-
-#@info "Open external server websocket, send messages"
-#WebSockets.open(initiatingws, EXTERNALWSURI)
-
-
-
-@info "Starting a server.
-        Initiate a client side websocket test"
+@info "Start a ServerWS with an ecoing websocket.
+        Open a client side initating websocket.
+        Run test sequence and close."
 let
-    servertask, serverref = startserver(usinglisten = false)
-    wsuri = "ws://$SURL:$PORT"
-    @debug "We will sleep for 60 s before opening ", wsuri
-    sleep(60)
-    WebSockets.open(initiatingws, wsuri)
-    # A warning message is normally output when closing this kind of server
-    @debug "Now the test is finished, we will sleep for 10 s more"
-    sleep(10)
-    if isready(serverref.out)
-    # capture errors, if any were made during the definition.
-        @debug take!(serverref.out)
-    else
-        @debug "No error was trapped by server reference"
-    end
-    sleep(1)
+    servertask, serverref = startserver()
+    WebSockets.open(initiatingws, "ws://$SURL:$PORT")
+    closeserver(serverref)
+end
+
+sleep(3)
+@info "Start a 'listen' server with an ecoing websocket.
+        Open a client side initating websocket.
+        Run test sequence and close."
+let
+    servertask, serverref = startserver(usinglisten = true)
+    WebSockets.open(initiatingws, "ws://$SURL:$PORT")
     @suppress closeserver(serverref)
 end
 
 
-#TEMP
+
 #const servers = [("HTTP",        "ws://127.0.0.1:$(port_HTTP)")]
 #s = "HTTP"
 #wsuri = "ws://127.0.0.1:$(port_HTTP)"
@@ -91,7 +83,7 @@ end
 
 
 
-const TCPREF = Ref{WebSockets.TCPServer}()
+const TCPREF = Ref{Base.IOServer}()
 const server_WS = WebSockets.ServerWS(
     req-> HTTP.Response(200),
     server_gatekeeper)

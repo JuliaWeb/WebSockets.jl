@@ -55,25 +55,34 @@ end
     - 'WebSockets.open' (in which case ws will be a client side websocket)
 
 Takes an open websocket.
-Reads a message, echoes it, closes by exiting.
+    1)  Reads a message
+    2)  Echoes it
+    3)  Repeats until the websocket closes, or a read fails.
 The tests will be captured if the function is run on client side.
 If started by the server side, this is called as part of a coroutine.
 Therefore, test results will not propagate to the enclosing test scope.
 """
 function echows(ws::WebSocket)
     @debug "echows ", ws
-    data, ok = readguarded(ws)
-    if ok
-        if writeguarded(ws, data)
-            @test true
+    while isopen(ws)
+        data, ok = readguarded(ws)
+        if ok
+            @debug "echows received ", length(data)
+            if writeguarded(ws, data)
+                @test true
+            else
+                break
+            end
         else
-            @test false
-            @error "echows, couldn't write data ", ws
+            if !isopen(ws)
+                break
+            else
+                @error "echows, read failed"
+                break
+            end
         end
-    else
-        @test false
-        @error "echows, couldn't read ", ws
     end
+    @debug "echows, websocket was closed"
 end
 
 """
@@ -104,6 +113,7 @@ function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = 
     # The other side must be reading in order to process the ping-pong.
     yield()
     for slen in msglengths
+        @debug slen
         test_str = randstring(slen)
         forcecopy_str = test_str |> collect |> copy |> join
         if writeguarded(ws, test_str)
@@ -128,17 +138,17 @@ function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = 
                     @test false
                 end
             end
-            closebeforeexit && close(ws, statusnumber = 1000)
         else
             @test false
             @error "initatews, couldn't write to ", ws, " length ", slen
         end
     end
+    closebeforeexit && close(ws, statusnumber = 1000)
     @debug "initiatews exiting"
 end
 
-closeserver(ref::Ref{WebSockets.TCPServer}) = close(ref[])
-closeserver(ref::WebSockets.ServerWS) =  put!(ref.in, "Any message means close!")
+closeserver(ref::Ref{Base.IOServer}) = close(ref[]);yield;nothing
+closeserver(ref::WebSockets.ServerWS) =  put!(ref.in, "Any message means close!");yield;nothing
 
 
 """
@@ -159,23 +169,26 @@ To close the server, call
     closeserver(reference)
 """
 function startserver(;surl = SURL, port = PORT, usinglisten = false)
+
     if usinglisten
-        reference = Ref{WebSockets.TCPServer}()
+        reference = Ref{Base.IOServer}()
         servertask = @async WebSockets.HTTP.listen(servercoroutine,
-                                            SURL,
-                                            PORT,
+                                            surl,
+                                            port,
                                             tcpref = reference,
                                             tcpisvalid = checkratelimit,
                                             ratelimits = Dict{IPAddr, WebSockets.RateLimit}()
                                             )
         while !istaskstarted(servertask);yield();end
+        @debug "Task started. But depending on state, the server is not always actually started."
+        @debug "Why??"
+        while !isassigned(reference);yield;end
+        @debug "Reference assigned"
     else
-        @debug "Here we are, in startserver."
-        @debug typeof(server_gatekeeper)
         reference =  WebSockets.ServerWS(   WebSockets.HTTP.Handlers.HandlerFunction(httphandler),
                                             WebSockets.WebsocketHandler(server_gatekeeper)
                                         )
-        servertask = @async WebSockets.serve(reference, SURL, PORT)
+        servertask = @async WebSockets.serve(reference, surl, port)
         while !istaskstarted(servertask);yield();end
         if isready(reference.out)
             # capture errors, if any were made during the definition.
