@@ -1,4 +1,5 @@
-# included in client_server_test.jl
+# included in client_serverWS_test.jl
+# and in client_listen_test.jl
 using WebSockets
 import Random.randstring
 
@@ -8,12 +9,9 @@ A near identical server coroutine is implemented as an inner function in WebSock
 The 'function arguments' `server_gatekeeper` and `httphandler` are defined below.
 """
 function servercoroutine(stream::WebSockets.Stream)
-    @debug "We received a request"
     if WebSockets.is_upgrade(stream.message)
-        @debug "...which is an upgrade"
         WebSockets.upgrade(server_gatekeeper, stream)
     else
-        @debug "...which is not an upgrade"
         WebSockets.Servers.handle_request(httphandler, stream)
     end
 end
@@ -35,15 +33,15 @@ Based on the requested subprotocol, server_gatekeeper calls
     `echows`
 """
 function server_gatekeeper(req::WebSockets.Request, ws::WebSocket)
-    @debug "server_gatekeeper"
     origin(req) != "" && @error "server_gatekeeper, got origin header as from a browser."
     target(req) != "/" && @error "server_gatekeeper, got origin header as in a POST request."
-    if subprotocol(req) == "Server start the conversation"
-        initiatingws(ws, 10, false)
+    if subprotocol(req) == SUBPROTOCOL
+        initiatingws(ws, msglengths = MSGLENGTHS)
+    elseif subprotocol(req) == SUBPROTOCOL_CLOSE
+        initiatingws(ws, msglengths = MSGLENGTHS,  closebeforeexit = true)
     else
         echows(ws)
     end
-    @debug "exiting server_gatekeeper"
 end
 
 
@@ -63,11 +61,9 @@ If started by the server side, this is called as part of a coroutine.
 Therefore, test results will not propagate to the enclosing test scope.
 """
 function echows(ws::WebSocket)
-    @debug "echows ", ws
     while isopen(ws)
         data, ok = readguarded(ws)
         if ok
-            @debug "echows received ", length(data)
             if writeguarded(ws, data)
                 @test true
             else
@@ -77,12 +73,10 @@ function echows(ws::WebSocket)
             if !isopen(ws)
                 break
             else
-                @error "echows, read failed"
                 break
             end
         end
     end
-    @debug "echows, websocket was closed"
 end
 
 """
@@ -103,8 +97,6 @@ Takes
 4) Repeats 2-4 until no more message lenghts are specified.
 """
 function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = false)
-    @debug "initiatews ", ws
-    @debug "String lengths $msglengths bytes"
     send_ping(ws)
     # No ping check made, the above will just output some info message.
 
@@ -113,7 +105,6 @@ function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = 
     # The other side must be reading in order to process the ping-pong.
     yield()
     for slen in msglengths
-        @debug slen
         test_str = randstring(slen)
         forcecopy_str = test_str |> collect |> copy |> join
         if writeguarded(ws, test_str)
@@ -140,15 +131,22 @@ function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = 
             end
         else
             @test false
-            @error "initatews, couldn't write to ", ws, " length ", slen
         end
     end
     closebeforeexit && close(ws, statusnumber = 1000)
-    @debug "initiatews exiting"
 end
 
-closeserver(ref::Ref{Base.IOServer}) = close(ref[]);yield;nothing
-closeserver(ref::WebSockets.ServerWS) =  put!(ref.in, "Any message means close!");yield;nothing
+function closeserver(ref::Ref)
+    close(ref[])
+    ref[] = nothing
+    GC.gc()
+    yield()
+    nothing
+end
+function closeserver(ref::WebSockets.ServerWS)
+    put!(ref.in, "Any message means close!")
+    nothing
+end
 
 
 """
@@ -169,9 +167,9 @@ To close the server, call
     closeserver(reference)
 """
 function startserver(;surl = SURL, port = PORT, usinglisten = false)
-
     if usinglisten
-        reference = Ref{Base.IOServer}()
+        #reference = Ref{Base.IOServer}()
+        reference = Ref{Union{Base.IOServer, Nothing}}()
         servertask = @async WebSockets.HTTP.listen(servercoroutine,
                                             surl,
                                             port,
@@ -179,11 +177,15 @@ function startserver(;surl = SURL, port = PORT, usinglisten = false)
                                             tcpisvalid = checkratelimit,
                                             ratelimits = Dict{IPAddr, WebSockets.RateLimit}()
                                             )
-        while !istaskstarted(servertask);yield();end
-        @debug "Task started. But depending on state, the server is not always actually started."
-        @debug "Why??"
-        while !isassigned(reference);yield;end
-        @debug "Reference assigned"
+        while !istaskstarted(servertask);sleep(1);end
+        while !isassigned(reference)
+            if istaskdone(servertask)
+                ff = fetch(servertask)
+                @debug "servertask fetch", typeof(ff)
+                @debug "servertask fetch", ff
+                break
+            end
+        end
     else
         reference =  WebSockets.ServerWS(   WebSockets.HTTP.Handlers.HandlerFunction(httphandler),
                                             WebSockets.WebsocketHandler(server_gatekeeper)
@@ -197,18 +199,3 @@ function startserver(;surl = SURL, port = PORT, usinglisten = false)
     end
     servertask, reference
 end
-
-"""
-`startclient` is called from tests. TODO consider replacing.
-"""
-function startclient((servername, wsuri), stringlength, closebeforeexit)
-    # the external websocket test server does not follow our interpretation of
-    # RFC 6455 the protocol for length zero messages. Skip such tests.
-    stringlength == 0 && occursin("echo.websocket.org", wsuri) && return
-    @info("Testing client -> server at $(wsuri), message length $len")
-    test_str = randstring(len)
-    forcecopy_str = test_str |> collect |> copy |> join
-    @debug TCPREF[]
-    WebSockets.open(wsuri)
-end
-true
