@@ -4,7 +4,7 @@ const BAREHTML = "<head><meta http-equiv=\"Content-Type\" content=\"text/html; c
 import Sockets
 using WebSockets
 import WebSockets.HTTP.listen
-import WebSockets.HTTP.Servers.handle_request
+import WebSockets.handle_request
 const LOCALIP = string(Sockets.getipaddr())
 const PORT = 8080
 const BODY =  "<body><p>Press F12

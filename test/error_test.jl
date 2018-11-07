@@ -1,26 +1,15 @@
 # included in runtests.jl
-
 using Test
 using Base64
-import HTTP
 using WebSockets
-import WebSockets: ServerWS,
-        serve,
-        open,
-        readguarded,
-        writeguarded,
-        WebsocketHandler,
-        WebSocketClosedError,
-        close
 
 
 const THISPORT = 8092
-URL = "ws://127.0.0.1:$THISPORT"
+const URL = "ws://127.0.0.1:$THISPORT"
+include("logformat.jl")
 
-
-@info("Start a HTTP server with a ws handler that is unresponsive. Close from client side. The " *
-      " close handshake aborts after $(WebSockets.TIMEOUT_CLOSEHANDSHAKE) seconds...\n")
-sleep(1)
+@info "Start a HTTP server with a ws handler that is unresponsive. Close from client side. The " *
+      " close handshake aborts after $(WebSockets.TIMEOUT_CLOSEHANDSHAKE) seconds..."
 server_WS = ServerWS(   HTTP.HandlerFunction(req-> HTTP.Response(200)),
                         WebSockets.WebsocketHandler(ws-> sleep(16)))
 tas = @async WebSockets.serve(server_WS, THISPORT)

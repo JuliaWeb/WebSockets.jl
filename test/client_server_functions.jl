@@ -12,7 +12,7 @@ function servercoroutine(stream::WebSockets.Stream)
     if WebSockets.is_upgrade(stream.message)
         WebSockets.upgrade(server_gatekeeper, stream)
     else
-        WebSockets.Servers.handle_request(httphandler, stream)
+        WebSockets.handle_request(httphandler, stream)
     end
 end
 

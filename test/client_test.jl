@@ -23,7 +23,7 @@ const TCPREF2 = Ref{Base.IOServer}()
 @info("start HTTP server\n")
 sleep(1)
 addsubproto("xml")
-tas = @async HTTP.listen("127.0.0.1", NEWPORT, tcpref = TCPREF2) do s
+tas = @async WebSockets.HTTP.listen("127.0.0.1", NEWPORT, tcpref = TCPREF2) do s
     if WebSockets.is_upgrade(s.message)
         WebSockets.upgrade((_)->nothing, s)
     end

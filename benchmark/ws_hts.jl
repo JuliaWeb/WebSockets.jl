@@ -29,7 +29,7 @@ function listen_hts()
                 acceptholdws(http)
                 clog(id, "Websocket closed, server stays open until ws_hts.close_hts()")
             else
-                HTTP.Servers.handle_request(handlerequest, http)
+                WebSockets.handle_request(handlerequest, http)
             end
         end
     catch err

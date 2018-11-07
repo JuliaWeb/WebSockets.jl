@@ -24,22 +24,6 @@ includes another Julia session, parallel process or task.
 module WebSockets
 import MbedTLS: digest, MD_SHA1
 import Base64: base64encode, base64decode
-import HTTP
-import HTTP:Response,
-            Request,
-            Message,
-            HandlerFunction,
-            Sockets,
-            Servers,
-            Streams
-
-import HTTP.Servers:RateLimit,
-                    update!
-import HTTP.Streams.Stream
-import HTTP.startread
-import HTTP.Servers:    Scheme,
-                        http,
-                        https
 import Sockets
 import      Sockets: TCPSocket,
                      IPAddr
@@ -48,6 +32,7 @@ using Dates
 # output from coroutines through macros like @info.
 # This on Julia 0.7.0
 import Logging
+# imports from HTTP in this file
 include("HTTP.jl")
 export WebSocket,
        serve,

@@ -3,8 +3,7 @@ const BAREHTML = "<head><meta http-equiv=\"Content-Type\" content=\"text/html; c
  <title>Empty.html</title></head><body></body></html>"
 import Sockets
 using WebSockets
-import HTTP.listen
-import HTTP.Servers.handle_request
+import WebSockets.handle_request
 const LOCALIP = string(Sockets.getipaddr())
 const PORT = 8080
 const BODY =  "<body><p>Press F12
@@ -16,7 +15,7 @@ const BODY =  "<body><p>Press F12
 const SERVERREF = Ref{Base.IOServer}()
 @info("Browser > $LOCALIP:$PORT , F12> console > ws = new WebSocket(\"ws://$LOCALIP:$PORT\") ")
 try
-    listen(LOCALIP, UInt16(PORT), tcpref = SERVERREF) do stream
+    WebSockets.HTTP.listen(LOCALIP, UInt16(PORT), tcpref = SERVERREF) do stream
         if WebSockets.is_upgrade(stream.message)
             WebSockets.upgrade(stream) do req, ws
                 orig = WebSockets.origin(req)
