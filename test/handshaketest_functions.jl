@@ -1,17 +1,16 @@
 # included in handshaketests.jl
-
 function templaterequests()
     chromeheaders = Dict{String, String}( "Connection"=>"Upgrade",
                                             "Upgrade"=>"websocket")
     firefoxheaders = Dict{String, String}("Connection"=>"keep-alive, Upgrade",
                                             "Upgrade"=>"websocket")
-    chromerequest_HTTP = Request("GET", "/", collect(chromeheaders))
-    firefoxrequest_HTTP = Request("GET", "/", collect(firefoxheaders))
-    return [chromerequest_HTTP, firefoxrequest_HTTP]
+    chromerequest = Request("GET", "/", collect(chromeheaders))
+    firefoxrequest = Request("GET", "/", collect(firefoxheaders))
+    return [chromerequest, firefoxrequest]
 end
 convert(::Type{Header}, pa::Pair{String,String}) = Pair(SubString(pa[1]), SubString(pa[2]))
 sethd(r::Request, pa::Pair) = sethd(r, convert(Header, pa))
-sethd(r::Request, pa::Header) = WebSockets.HTTP.Messages.setheader(r, pa)
+sethd(r::Request, pa::Header) = WebSockets.setheader(r, pa)
 
 takefirstline(buf::IOBuffer) = strip(split(buf |> take! |> String, "\r\n")[1])
 takefirstline(buf::BufferStream) = strip(split(buf |> read |> String, "\r\n")[1])

@@ -2,16 +2,14 @@
 using Test
 import Sockets: TCPSocket
 import Random: randstring
+using WebSockets
 import WebSockets: maskswitch!,
     write_fragment,
     read_frame,
     is_control_frame,
     handle_control_frame,
-    WebSocket,
-    WebSocketClosedError,
     locked_write,
-    WebSockets.codeDesc,
-    WebSockets
+    codeDesc
 
 """
 The dummy websocket don't use TCP. Close won't work, but we can manipulate the contents
@@ -346,4 +344,3 @@ end
 
 
 close(io)
-

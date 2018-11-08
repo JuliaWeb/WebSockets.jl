@@ -1,18 +1,16 @@
 # included in runtests.jl
 using Test
-using WebSockets
 using BufferedStreams
 import Base: convert, BufferStream
+using WebSockets
 import WebSockets:  generate_websocket_key,
                     upgrade,
                     Request,
                     Stream,
-                    Response
-import WebSockets.HTTP
-import WebSockets.HTTP: Header,
-                        Transaction
-import WebSockets.HTTP.ConnectionPool.Connection
-
+                    Response,
+                    Header,
+                    Connection,
+                    Transaction
 include("logformat.jl")
 include("handshaketest_functions.jl")
 
@@ -25,7 +23,7 @@ io = IOBuffer()
 const REJECT = "HTTP/1.1 400 Bad Request"
 Base.write(io, Response(400))
 @test takefirstline(io) == REJECT
-Base.write(io, HTTP.Messages.Response(400))
+Base.write(io, Response(400))
 @test takefirstline(io) == REJECT
 
 const SWITCH = "HTTP/1.1 101 Switching Protocols"

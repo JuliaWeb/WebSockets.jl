@@ -2,33 +2,33 @@
 using Test
 using Base64
 using WebSockets
-
-
+import WebSockets:  HandlerFunction,
+                    WebsocketHandler,
+                    Response
 const THISPORT = 8092
 const URL = "ws://127.0.0.1:$THISPORT"
 include("logformat.jl")
 
-@info "Start a HTTP server with a ws handler that is unresponsive. Close from client side. The " *
+@info "Start a server with a ws handler that is unresponsive. Close from client side. The " *
       " close handshake aborts after $(WebSockets.TIMEOUT_CLOSEHANDSHAKE) seconds..."
-server_WS = ServerWS(   HTTP.HandlerFunction(req-> HTTP.Response(200)),
-                        WebSockets.WebsocketHandler(ws-> sleep(16)))
-tas = @async WebSockets.serve(server_WS, THISPORT)
+server_WS = ServerWS(   HandlerFunction(req-> HTTP.Response(200)),
+                        WebsocketHandler(ws-> sleep(16)))
+tas = @async serve(server_WS, THISPORT)
 while !istaskstarted(tas); yield(); end
 sleep(1)
-res = WebSockets.open((_)->nothing, URL);
+res = WebSockets.open((_) -> nothing, URL);
 @test res.status == 101
-put!(server_WS.in, HTTP.Servers.KILL)
+put!(server_WS.in, "x")
 
-
-@info("Start a HTTP server with a ws handler that always reads guarded.\n")
+@info("Start a server with a ws handler that always reads guarded.\n")
 sleep(1)
-server_WS = ServerWS(   HTTP.HandlerFunction(req-> HTTP.Response(200)),
+server_WS = ServerWS(   HandlerFunction(req -> HResponse(200)),
                         WebSockets.WebsocketHandler() do req, ws_serv
                                                 while isopen(ws_serv)
                                                     readguarded(ws_serv)
                                                 end
                                             end);
-tas = @async WebSockets.serve(server_WS, "127.0.0.1", THISPORT)
+tas = @async serve(server_WS, "127.0.0.1", THISPORT)
 while !istaskstarted(tas); yield(); end
 sleep(1)
 
@@ -73,17 +73,17 @@ try
         write(ws_client, "writethis")
     end
 catch err
-     @test typeof(err) <: HTTP.IOExtras.IOError
+     @test typeof(err) <: WebSockets.HTTP.IOExtras.IOError
 end
 
-put!(server_WS.in, HTTP.Servers.KILL)
+put!(server_WS.in, "x")
 
 
-@info("\nStart an async HTTP server. The wshandler use global channels for inspecting caught errors.\n")
+@info("\nStart a server. The wshandler use global channels for inspecting caught errors.\n")
 sleep(1)
 chfromserv=Channel(2)
-server_WS = ServerWS(   HTTP.HandlerFunction(req-> HTTP.Response(200)),
-                        WebSockets.WebsocketHandler() do ws_serv
+server_WS = ServerWS(   HandlerFunction(req-> HTTP.Response(200)),
+                        WebsocketHandler() do ws_serv
                                                 while isopen(ws_serv)
                                                     try
                                                         read(ws_serv)
@@ -93,7 +93,7 @@ server_WS = ServerWS(   HTTP.HandlerFunction(req-> HTTP.Response(200)),
                                                     end
                                                 end
                                             end);
-tas = @async WebSockets.serve(server_WS, "127.0.0.1", THISPORT)
+tas = @async serve(server_WS, "127.0.0.1", THISPORT)
 while !istaskstarted(tas); yield(); end
 sleep(3)
 
@@ -106,18 +106,18 @@ global err = take!(chfromserv)
 @test err.message == " while read(ws|server) BoundsError(UInt8[], (1,))"
 global stack_trace = take!(chfromserv)
 @test length(stack_trace) == 2
-put!(server_WS.in, HTTP.Servers.KILL)
+put!(server_WS.in, "x")
 sleep(1)
 
-@info("\nStart an async HTTP server. Errors are output on built-in channel\n")
+@info("\nStart a server. Errors are output on built-in channel\n")
 sleep(1)
-global server_WS = ServerWS(   HTTP.HandlerFunction(req-> HTTP.Response(200)),
-                        WebSockets.WebsocketHandler() do ws_serv
+global server_WS = ServerWS(   HandlerFunction(req-> HTTP.Response(200)),
+                               WebsocketHandler() do ws_serv
                                                 while isopen(ws_serv)
                                                         read(ws_serv)
                                                 end
                                             end);
-global tas = @async WebSockets.serve(server_WS, "127.0.0.1", THISPORT, false)
+global tas = @async serve(server_WS, "127.0.0.1", THISPORT, false)
 while !istaskstarted(tas); yield(); end
 sleep(3)
 
@@ -127,6 +127,7 @@ WebSockets.open((ws)-> close(ws.socket), URL);
 global err = take!(server_WS.out)
 @test typeof(err) <: WebSocketClosedError
 @test err.message == " while read(ws|server) BoundsError(UInt8[], (1,))"
+sleep(1)
 global stack_trace = take!(server_WS.out);
 @test length(stack_trace) in [5, 6]
 
@@ -188,5 +189,5 @@ global err = take!(server_WS.out)
 @test typeof(err) <: WebSocketClosedError
 @test err.message == "ws|server respond to OPCODE_CLOSE 1006: while read(ws|client received InterruptException."
 global stack_trace = take!(server_WS.out)
-put!(server_WS.in, HTTP.Servers.KILL)
+put!(server_WS.in, "close server")
 sleep(2)

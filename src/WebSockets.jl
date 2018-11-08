@@ -48,7 +48,8 @@ export WebSocket,
        send_pong,
        WebSocketClosedError,
        checkratelimit,
-       addsubproto
+       addsubproto,
+       ServerWS
 
 # revisit the need for defining this union type for method definitions. The functions would
 # probably work just as fine with duck typing.

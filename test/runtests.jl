@@ -7,7 +7,7 @@ include("logformat.jl")
 printstyled(color=:blue, "\nFragment and unit\n")
 @testset "Fragment and unit" begin
     @test true
-   #include("frametest.jl");sleep(1)
+   include("frametest.jl");sleep(1)
 end
 printstyled(color=:blue, "\nHandshake\n")
 @testset "HTTP handshake" begin
@@ -31,7 +31,7 @@ end
 
 printstyled(color=:blue, "\nAbrupt close & error handling\n")
 @testset "Abrupt close & error handling" begin
-#    include("error_test.jl");sleep(1)
+   include("error_test.jl");sleep(1)
 end
 if !@isdefined(OLDLOGGER)
     Logging.global_logger(OLDLOGGER)
