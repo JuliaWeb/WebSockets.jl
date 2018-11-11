@@ -47,7 +47,7 @@ countconnections(1//1, Millisecond(500))
 @test countconnections(1//1, Millisecond(1900)) == 2
 @test countconnections(1//1, Millisecond(2900)) == 3
 @test countconnections(10//1, Millisecond(10)) == 10
-@test countconnections(10//1, Millisecond(100)) == 11
+@test countconnections(10//1, Millisecond(200)) == 11
 @test countconnections(10//1, Millisecond(1000)) in [19, 20]
 close(tcpserver)
 
