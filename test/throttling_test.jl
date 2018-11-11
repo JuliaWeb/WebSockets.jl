@@ -73,7 +73,7 @@ function countresponses(timeinterval)
     counter
 end
 countresponses(Millisecond(500))
-@test countresponses(Millisecond(3500)) == 4
+@test countresponses(Millisecond(3500)) in [3, 4]
 put!(serverWS.in, "closeit")
 
 @info "Set up a secure server, missing local certificates. Http request should throw error (15s). "

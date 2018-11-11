@@ -1,37 +1,32 @@
-#=
+using WebSockets
+import WebSockets:Response,
+                  Request
+using Dates
+using Sockets
 
-A chat server application. Starts a new task for each browser (tab) that connects.
-
-To use:
-    - include("chat_explore.jl") in REPL
-    - start a browser on the local ip address, e.g.: http://192.168.0.4:8080
-    - inspect global variables starting with 'last' while the chat is running asyncronously
-
-To call in from other devices, figure out your IP address on the network and change the 'gatekeeper' code.
-
-Functions used as arguments are explicitly defined with names instead of anonymous functions (do..end constructs).
-This may improve debugging readability at the cost of increased verbosity.
-
-=#
 global lastreq = 0
 global lastws = 0
 global lastmsg = 0
 global lastws = 0
 global lastserver = 0
 
-using WebSockets
-import WebSockets:Response,
-                  Request,
-                  HandlerFunction,
-                  WebsocketHandler
-using Dates
-import Sockets
 const CLOSEAFTER = Dates.Second(1800)
 const HTTPPORT = 8080
 const LOCALIP = string(Sockets.getipaddr())
 const USERNAMES = Dict{String, WebSocket}()
 const HTMLSTRING = read(joinpath(@__DIR__, "chat_explore.html"), String)
 
+
+@info """
+A chat server application. For each browser (tab) that connects,
+an 'asyncronous function' aka 'coroutine' aka 'task' is started.
+
+To use:
+    - include("chat_explore.jl") in REPL
+    - start a browser on the local ip address, e.g.: http://192.168.0.4:8080
+    - inspect global variables starting with 'last' while the chat is running asyncronously
+
+"""
 
 # Since we are to access a websocket from outside
 # it's own websocket handler coroutine, we need some kind of
@@ -137,18 +132,36 @@ end
 "Request to response. Response is the predefined HTML page with some javascript"
 req2resp(req::Request) = HTMLSTRING |> Response
 
-# The server takes two function wrappers; one handler function for page requests,
-# one for opening websockets (which the javascript in the HTML page will try to do)
-global lastserver = WebSockets.ServerWS(HandlerFunction(req2resp), WebsocketHandler(gatekeeper))
+
+# The following lines disblle detail messages from spilling into the
+# REPL. Remove the it to gain insight.
+using Logging
+import Logging.shouldlog
+function shouldlog(::ConsoleLogger, level, _module, group, id)
+    if _module == WebSockets.HTTP.Servers
+        if level == Logging.Warn || level == Logging.Info
+            return false
+        else
+            return true
+        end
+    else
+        return true
+    end
+end
+
+
+# ServerWS takes two functions; the first a http request handler function for page requests,
+# one for opening websockets (which javascript in the HTML page will try to do)
+global lastserver = WebSockets.ServerWS(req2resp, gatekeeper)
 
 # Start the server asyncronously, and stop it later
-global litas = @async WebSockets.serve(lastserver, LOCALIP, HTTPPORT)
+@async WebSockets.serve(lastserver, LOCALIP, HTTPPORT)
 @async begin
     println("HTTP server listening on $LOCALIP:$HTTPPORT for $CLOSEAFTER")
     sleep(CLOSEAFTER.value)
     println("Time out, closing down $HTTPPORT")
-    Base.throwto(litas, InterruptException())
-    # Alternative close method: see ?WebSockets.serve
+    put!(lastserver.in, "I can send anything, you close")
+    nothing
 end
 
 

@@ -193,17 +193,21 @@ function upgrade(f::Function, stream)
             f(ws)
         end
     catch err
-        # These errors will not reliably propagate when rethrown, because
-        # on the server side, this function is running in a new task for every connection made
+        # Some errors will not reliably propagate when rethrown,
+        # especially compile time errors.
+        # On the server side, this function is running in a new task for every connection made
         # from outside. The rethrown errors might get lost or caught elsewhere, so we also
         # duplicate them to stderr here.
         # For working examples of error catching and reading them on the .out channel, see 'error_test.jl'.
         # If for some reason, the error messages from your 'f' cannot be read properly, here are
         # three alternative ways of finding them so you can correct:
-        # 1) Turn the connection direction around, i.e. try to
-        # provoke the error on the client side. 2) Connect through a browser if that is not
-        # already what you are doing. Some error messages may currently be shown there. 3)
-        # modify the global logger to take control.
+        # 1) Include try..catch in your 'f', and print the errors to stderr.
+        # 2) Turn the connection direction around, i.e. try to
+        # provoke the error on the client side.
+        # 3) Connect through a browser if that is not already what you are doing.
+        # Some error messages may currently be shown there.
+        # 4) use keyword argument loglevel = 3.
+        # 5) modify the global logger to take control.
 #        @warn("WebSockets.upgrade: Caught unhandled error while calling argument function f, the handler / gatekeeper:\n\t")
 #        mt = typeof(f).name.mt
 #        fnam = splitdir(string(mt.defs.func.file))[2]
