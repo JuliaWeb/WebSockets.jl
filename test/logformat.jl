@@ -61,8 +61,8 @@ if !@isdefined TESTLOGR
     global_logger(TESTLOGR)
     @info("""
         @info and @warn messages from now get a suffix, @debug
-        \t\tmessages are shown. Warning messages from HTTP.Servers
-        \t\tare down toned but still shown.
+        \t\tmessages are shown. Warning and info messages from HTTP.Servers
+        \t\tare suppressed.
     """)
 end
 nothing
