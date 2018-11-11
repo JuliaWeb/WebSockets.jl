@@ -39,10 +39,9 @@ const HTMLSTRING = read(joinpath(@__DIR__, "chat_explore.html"), String)
 const WEBSOCKETS = Dict{WebSocket, Int}()
 
 """
-Called by 'gatekeeper', this function stays active while the
+Called by 'gatekeeper', this function will be running in a task while the
 particular websocket is open. The argument is an open websocket.
-Other instances of the function run in other tasks. The tasks
-are started by HTTP.
+Other instances of the function run in other tasks.
 """
 function coroutine(thisws)
     global lastws = thisws

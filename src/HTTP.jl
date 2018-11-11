@@ -69,8 +69,8 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
                 "GET", uri, headers;
                 reuse_limit=0, verbose=verbose ? 2 : 0, kw...)
     catch err
-        if typeof(err) <: Base.IOError
-            throw(WebSocketClosedError(" while open ws|client: $(string(err))"))
+        if typeof(err) <: HTTP.IOExtras.IOError
+            throw(WebSocketClosedError(" while open ws|client: $(string(err.e.msg))"))
         elseif typeof(err) <: StatusError
             return err.response
         else
@@ -280,7 +280,7 @@ end
 function ServerOptions(;
         sslconfig::Union{SSLConfig, Nothing} = nothing,
         readtimeout::Float64=180.0,
-        ratelimit::Rational{Int}=Int(5)//Int(1),
+        ratelimit::Rational{Int}= 10 // 1,
         support100continue::Bool=true,
         chunksize::Union{Nothing, Int}=nothing,
         logbody::Bool=true
@@ -363,9 +363,7 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
     # Note that WebSockets v1.0.3 required the channel input to be HTTP.KILL,
     # but will now kill the server regardless of what is sent.
     @async begin
-        while !isassigned(tcpserver)
-            sleep(1)
-        end
+        # Next line will hold
         take!(server.in)
         close(tcpserver[])
         tcpserver[] = nothing
@@ -399,7 +397,7 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
             ssl=(T == Servers.https),
             sslconfig = server.options.sslconfig,
             verbose = verbose,
-            tcpisvalid = server.options.ratelimit > 0 ? checkratelimit :
+            tcpisvalid = server.options.ratelimit > 0 ? checkratelimit! :
                                                      (tcp; kw...) -> true,
             ratelimits = Dict{IPAddr, RateLimit}(),
             ratelimit = server.options.ratelimit)
@@ -412,18 +410,26 @@ serve(server::WebSockets.ServerWS, host, port) =  serve(server, host, port, fals
 serve(server::WebSockets.ServerWS, port) =  serve(server, "127.0.0.1", port, false)
 
 """
-An alternative to HTTP.Servers.check_rate_limit. Most likely not needed
-with later versions of HTTP.
-It modifies the mutable dictionary ratelimits with every incoming connection.
+'checkratelimit!' updates a dictionary of IP addresses which keeps track of their
+connection quota per time window.
+
+The allowed connections per time is given in keyword argument ratelimit.
+
+The actual ratelimit::Rational value, is normally given as a field value in ServerOpions.
+
+'checkratelimit!' is the default rate limiting function for ServerWS, which passes
+it as the 'tcpisvalid' argument to 'WebSockets.HTTP.listen'. Other functions can be given as a
+keyword argument, as long as they adhere to this form, which WebSockets.HTTP.listen
+expects.
 """
-checkratelimit(tcp::Base.PipeEndpoint; kw...) = true
-function checkratelimit(tcp;
+checkratelimit!(tcp::Base.PipeEndpoint; kw...) = true
+function checkratelimit!(tcp;
                           ratelimits = nothing,
                           ratelimit::Rational{Int}=Int(10)//Int(1), kw...)
     if ratelimits == nothing
-        throw(ArgumentError(" checkratelimit called without keyword argument ratelimits::Dict{IPAddr, RateLimit}(). "))
+        throw(ArgumentError(" checkratelimit! called without keyword argument ratelimits::Dict{IPAddr, RateLimit}(). "))
     end
-    ip = Sockets.getsockname(tcp)[1]
+    ip = getsockname(tcp)[1]
     rate = Float64(ratelimit.num)
     rl = get!(ratelimits, ip, RateLimit(rate, Dates.now()))
     update!(rl, ratelimit)
@@ -431,7 +437,7 @@ function checkratelimit(tcp;
         rl.allowance = rate
     end
     if rl.allowance < 1.0
-        @debug "discarding connection due to rate limiting"
+        #@debug "discarding connection due to rate limiting"
         return false
     else
         rl.allowance -= 1.0

@@ -1,7 +1,5 @@
 # included in client_serverWS_test.jl
 # and in client_listen_test.jl
-using WebSockets
-import Random.randstring
 
 """
 `servercoroutine`is called by the listen loop (`starserver`) for each accepted http request.
@@ -33,7 +31,7 @@ Based on the requested subprotocol, server_gatekeeper calls
     `echows`
 """
 function server_gatekeeper(req::WebSockets.Request, ws::WebSocket)
-    origin(req) != "" && @error "server_gatekeeper, got origin header as from a browser."
+    WebSockets.origin(req) != "" && @error "server_gatekeeper, got origin header as from a browser."
     target(req) != "/" && @error "server_gatekeeper, got origin header as in a POST request."
     if subprotocol(req) == SUBPROTOCOL
         initiatingws(ws, msglengths = MSGLENGTHS)
@@ -174,7 +172,7 @@ function startserver(;surl = SURL, port = PORT, usinglisten = false)
                                             surl,
                                             port,
                                             tcpref = reference,
-                                            tcpisvalid = checkratelimit,
+                                            tcpisvalid = checkratelimit!,
                                             ratelimits = Dict{IPAddr, WebSockets.RateLimit}()
                                             )
         while !istaskstarted(servertask);sleep(1);end
@@ -187,7 +185,8 @@ function startserver(;surl = SURL, port = PORT, usinglisten = false)
             end
         end
     else
-        reference =  WebSockets.ServerWS(   WebSockets.HTTP.Handlers.HandlerFunction(httphandler),
+        # It is not strictly necessary to wrap the argument functions in HandleFunctions.
+        reference =  WebSockets.ServerWS(   WebSockets.HandlerFunction(httphandler),
                                             WebSockets.WebsocketHandler(server_gatekeeper)
                                         )
         servertask = @async WebSockets.serve(reference, surl, port)

@@ -26,7 +26,8 @@ import MbedTLS: digest, MD_SHA1
 import Base64: base64encode, base64decode
 import Sockets
 import      Sockets: TCPSocket,
-                     IPAddr
+                     IPAddr,
+                     getsockname
 using Dates
 # importing Logging seems to be necessary to get
 # output from coroutines through macros like @info.
@@ -43,11 +44,10 @@ export WebSocket,
        close,
        subprotocol,
        target,
-       origin,
        send_ping,
        send_pong,
        WebSocketClosedError,
-       checkratelimit,
+       checkratelimit!,
        addsubproto,
        ServerWS
 
@@ -281,9 +281,11 @@ function Base.close(ws::WebSocket; statusnumber = 0, freereason = "")
             end
         catch err
             # Typical 'errors' received while closing down are neglected.
+            # Unknown errors are rethrown.
             errtyp = typeof(err)
             errtyp != InterruptException &&
                 errtyp != Base.IOError &&
+                errtyp != HTTP.IOExtras.IOError &&
                 errtyp != Base.BoundsError &&
                 errtyp != Base.EOFError &&
                 errtyp != Base.ArgumentError &&
