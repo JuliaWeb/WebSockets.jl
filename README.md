@@ -18,67 +18,73 @@
 Server and client side [Websockets](https://tools.ietf.org/html/rfc6455) protocol in Julia. WebSockets is a small overhead message protocol layered over [TCP](https://tools.ietf.org/html/rfc793). It uses HTTP(S) for establishing the connections.
 
 ## Getting started
-On Julia pre 0.7, see an earlier version of this repository.
+Copy this into Julia:
 
 ```julia
-(v0.7) pkg>add WebSockets
+(v1.0) pkg> add WebSockets
 julia> using WebSockets
-julia> varinfo(WebSockets)
-help?> serve
-help?> WebSockets.open
-julia> cd(joinpath((WebSockets |> Base.pathof |> splitdir)[1],  "..", "examples"))
-julia> readdir()
-julia> include("chat_explore.jl")
+julia> # define what to do with http requests, and with websocket upgrades.
+julia> serverWS =  ServerWS((r) -> WebSockets.Response(200, "OK"),
+                            (ws_server) -> (writeguarded(ws_server, "Hello");
+                                                readguarded(ws_server)));
+julia> # serve on socket 8000, but in a coroutine so we can do other things too.
+julia> @async WebSockets.serve(serverWS, 8000)
+julia> # We ask for a http response, now as our alter ego the client.
+julia> WebSockets.HTTP.get("http://127.0.0.1:8000")
+julia> # Talk to ourselves! Print the first response in blue, then hang up.
+julia> WebSockets.open("ws://127.0.0.1:8000") do ws_client
+           data, success = readguarded(ws_client)
+           if success
+               printstyled(color=:blue, String(data))
+           end
+       end
+julia> # Tell ourselves, the server in a different coroutine: we can stop listening now.
+julia> put!(serverWS.in, "x")
 ```
-### Open a client side connection
-Client side websockets are created by calling `WebSockets.open` (with a server running somewhere). Example (you can run this in a second REPL, or in the same):
-```julia
-julia> cd(joinpath((WebSockets |> Base.pathof |> splitdir)[1],  "..", "examples"))
-julia> include("client_repl_input.jl")
-```
-We recommend `readguarded` and `writeguarded` instead of `read`and `write` for more effective debugging.
+More things to do: Access inline documentation and have a look at the examples folder. The testing files demonstrate a variety of uses. Benchmarks show examples of websockets and servers running on separate processes, as oposed to asyncronous tasks.
 
-### Debugging server side connections
+### About this package
+Originally from 2013, this now depends on [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl) for establishing the http connections. That package is in ambitious development, and most functionality of this package is already implemented directly in HTTP.jl.
 
-Server side websockets are asyncronous [tasks](https://docs.julialang.org/en/stable/stdlib/parallel/#Tasks-1), which makes debugging harder. The error messages may not spill into the REPL. There are two interfaces to starting a server which includes a websocket handling function:
+This package will not at all time import the latest version of HTTP.jl, and so doing perhaps avoid some borderline bugs. The examples do not import HTTP methods directly, but rely on the methods imported in this package, i.e. WebSockets.HTTP.listen.
 
-##### Using WebSockets.serve
-Error messages are directed to a channel. See inline docs: ?Websockets.serve.
-
-##### Using HTTP.listen
-Error messages are by default sent as messages to the client. This is not good practice if you're serving pages to the internet, but nice while developing locally.
-
-## What is nice with WebSockets.jl?
-Some packages rely on WebSockets for communication. You can also use it directly:
-
-- reading and writing between entities you can program or know about
-- low latency, high speed messaging
-- implementing your own 'if X send this, Y do that' subprotocols
-- registered [websocket subprotocols](https://www.iana.org/assignments/websocket/websocket.xml#version-number) for e.g. remote controlled hardware
-- heartbeating, relaying user interaction to backend simulations
+## What can you do with it?
+- read and write between entities you can program or know about
+- serve an svg file to the web browser, containing javascript for connecting back through a websocket and add interaction
+- enjoy very low latency and high speed with a minimum of edge case coding
+- implement your own 'if X send this, Y do that' subprotocols. Typically,
+  one subprotocol for sensor input, another for graphics or text to a display.
+- or use registered [websocket subprotocols](https://www.iana.org/assignments/websocket/websocket.xml#version-number) for e.g. remote controlled hardware
+- relay user interaction to backend simulations
 - build a network including browser clients
 - convenience functions for gatekeeping
 - putting http handlers and websocket coroutines ('handlers') in the same process can be a security advantage. It is good practice to modify web page responses to include time-limited tokens in the wsuri.
 
-WebSockets are well suited for user interactions via a browser or [cross-platform applications](https://electronjs.org/) like electron. Workload and development time can be moved off Julia resources, error checking code can be reduced. Use websockets to pass arguments between compiled functions on both sides; it has both speed and security advantages over passing code for evaluation.
+WebSockets are well suited for user interactions via a browser or [cross-platform applications](https://electronjs.org/) like electron. Workload and development time can be moved off Julia resources, error checking code can be reduced. Preferably use websockets for passing arguments, not code, between compiled functions on both sides; it has both speed and security advantages over passing code for evaluation.
 
-The /logutils folder contains some specialized logging functionality that is quite fast and can make working with multiple asyncronous tasks easier. See /benchmark code for how to use. Logging  may be moved entirely out of WebSockets.jl in the future.
+## Other tips
+- Since `read` is a blocking function, you can easily end up reading indefinitely from any side of the connection. See the `close` function code for an example of non-blocking read with a timeout.
+- Compression is not currenlty implemented, but easily adaptable. On local connections, there's probably not much to gain.
+- If you worry about milliseconds, TCP quirks like 'warm-up' time with low transmission speed after a pause can be avoided with heartbeats. High-performance examples are missing.
+- Garbage collection increases message latency at semi-random intervals, as is visible in  benchmark plots. Benchmarks should include non-memory-allocating examples.
 
-You can also have a look at alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) or the implementation currently part of [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl).
+##### Debugging with WebSockets.ServeWS servers
+Error messages from run-time are directed to a .out channel. See inline docs: ?Websockets.serve.
 
-## What are the main downsides to using WebSockets.jl directly?
+##### Debugging with WebSockets.HTTP.listen servers
+Error messages may be sent as messages to the client. This may not be good practice if you're serving pages to the internet, but nice while developing locally. There are some inline comments in the source code which may be of help.
 
-- Logging. We need customizable and very fast logging for building networked applications.
-- Compression is not implemented.
-- Possibly non-compliant proxies on the internet, company firewalls.
-- 'Warm-up', i.e. compilation when a method is first used. Warm-up is excluded from current benchmarks.
-- Garbage collection, which increases message latency at semi-random intervals. See benchmark plots.
-- If a connection is closed improperly, the connection task will throw uncaught ECONNRESET and similar messages.
-- TCP quirks, including 'warm-up' time with low transmission speed after a pause. Heartbeats can alleviate.
-- Since `read` is a blocking function, you can easily end up reading indefinitely from any side of the connection. See the `close function code for an example of non-blocking read with a timeout.
+## Further development and comments
+The issues section is used for planning development: Contributions are welcome.
+
+- The /logutils and /benchmark folders contain some features that are not currently fully implemented (or working?), namely a specialized logger. For application development, we generally require very fast logging and this approach may or may not be sufficiently fast.
+- Alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) and the direct implementation in [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl).
 
 ## Errors after updating?
+### To version 1.1.0
+This version is driven by large restructuring in HTTP.jl. We import more functions and types into WebSockets, e.g., WebSockets.Request. The main interface does not, intentionally, change, except for 'origin', which should now be qualified as WebSockets.origin.
 
+### To version 0.5.0
 The introduction of client side websockets to this package in version 0.5.0 may require changes in your code:
 - The `WebSocket.id` field is no longer supported. You can generate unique counters by code similar to 'bencmark/functions_open_browsers.jl' COUNTBROWSER.
 - You may want to modify you error handling code. Examine WebSocketsClosedError.message.
