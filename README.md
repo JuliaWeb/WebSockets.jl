@@ -44,26 +44,26 @@ julia> put!(serverWS.in, "x")
 More things to do: Access inline documentation and have a look at the examples folder. The testing files demonstrate a variety of uses. Benchmarks show examples of websockets and servers running on separate processes, as oposed to asyncronous tasks.
 
 ### About this package
-Originally from 2013, this now depends on [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl) for establishing the http connections. That package is in ambitious development, and most functionality of this package is already implemented directly in HTTP.jl.
+Originally from 2013 and Julia 0.2, the WebSockets API has remained largely unchanged. It now depends on [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl) for establishing the http connections. That package is in ambitious development, and most functionality of this package is already implemented directly in HTTP.jl.
 
-This package will not at all time import the latest version of HTTP.jl, and so doing perhaps avoid some borderline bugs. The examples do not import HTTP methods directly, but rely on the methods imported in this package, i.e. WebSockets.HTTP.listen.
+This more downstream package may lag behind the latest version of HTTP.jl, and in so doing perhaps avoid some borderline bugs. This is why the examples and tests do not import HTTP methods directly, but rely on the methods imported in this package. E.g. by using `WebSockets.HTTP.listen` instead of `HTTP.listen` you may possibly be using the previous release of package HTTP. The imported HTTP version is capped so as to avoid possible issues when new versions of HTTP are released. When excluding imported functions, test coverage is 96%.
 
 ## What can you do with it?
 - read and write between entities you can program or know about
-- serve an svg file to the web browser, containing javascript for connecting back through a websocket and add interaction
+- serve an svg file to the web browser, containing javascript for connecting back through a websocket, adding two-way interaction with graphics
 - enjoy very low latency and high speed with a minimum of edge case coding
 - implement your own 'if X send this, Y do that' subprotocols. Typically,
   one subprotocol for sensor input, another for graphics or text to a display.
-- or use registered [websocket subprotocols](https://www.iana.org/assignments/websocket/websocket.xml#version-number) for e.g. remote controlled hardware
+- use registered [websocket subprotocols](https://www.iana.org/assignments/websocket/websocket.xml#version-number) for e.g. remote controlled hardware
 - relay user interaction to backend simulations
-- build a network including browser clients
-- convenience functions for gatekeeping
-- putting http handlers and websocket coroutines ('handlers') in the same process can be a security advantage. It is good practice to modify web page responses to include time-limited tokens in the wsuri.
+- build a network including browser clients and long-running relay servers
+- use convenience functions for gatekeeping
 
 WebSockets are well suited for user interactions via a browser or [cross-platform applications](https://electronjs.org/) like electron. Workload and development time can be moved off Julia resources, error checking code can be reduced. Preferably use websockets for passing arguments, not code, between compiled functions on both sides; it has both speed and security advantages over passing code for evaluation.
 
 ## Other tips
-- Since `read` is a blocking function, you can easily end up reading indefinitely from any side of the connection. See the `close` function code for an example of non-blocking read with a timeout.
+- putting http handlers and websocket coroutines ('handlers') in the same process can be a security advantage. It is good practice to modify web page responses to include time-limited tokens in the address, the wsuri.
+- Since `read` and `readguared` are blocking functions, you can easily end up reading indefinitely from any side of the connection. See the `close` function code for an example of non-blocking read with a timeout.
 - Compression is not currenlty implemented, but easily adaptable. On local connections, there's probably not much to gain.
 - If you worry about milliseconds, TCP quirks like 'warm-up' time with low transmission speed after a pause can be avoided with heartbeats. High-performance examples are missing.
 - Garbage collection increases message latency at semi-random intervals, as is visible in  benchmark plots. Benchmarks should include non-memory-allocating examples.
