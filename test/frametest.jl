@@ -2,16 +2,15 @@
 using Test
 import Sockets: TCPSocket
 import Random: randstring
+using WebSockets
 import WebSockets: maskswitch!,
     write_fragment,
     read_frame,
     is_control_frame,
     handle_control_frame,
-    WebSocket,
-    WebSocketClosedError,
     locked_write,
-    WebSockets.codeDesc,
-    WebSockets
+    codeDesc
+include("logformat.jl")
 
 """
 The dummy websocket don't use TCP. Close won't work, but we can manipulate the contents
@@ -202,7 +201,7 @@ end
 
 # Test read(ws) bad mask error handling
 
-@info("Provoking close handshake from protocol error without a peer. Waits a reasonable time")
+@info "Provoking close handshake from protocol error without a peer. Waits 10s, 'a reasonable time'."
 for clientwriting in [false, true]
     op = WebSockets.OPCODE_TEXT
     test_str = "123456"
@@ -346,4 +345,3 @@ end
 
 
 close(io)
-

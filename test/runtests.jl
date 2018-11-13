@@ -1,37 +1,43 @@
 using Test
-using Pkg
-#cd(Pkg.dir("WebSockets", "test"))
-
-#@sync yield() # avoid mixing of  output with possible deprecation warnings from .juliarc
 
 @testset "WebSockets" begin
-@info("\nFragment and unit tests\n")
-@testset "Fragment and frame unit tests" begin
-    include("frametest.jl");sleep(1)
-end
+    include("logformat.jl")
+    printstyled(color=:blue, "\nFragment and unit\n")
+    @testset "Fragment and unit" begin
+        @test true
+       include("frametest.jl");sleep(1)
+    end
 
-@info("\nHttpServer and HTTP handshake\n")
-@testset "HttpServer and HTTP handshake" begin
-    include("handshaketest.jl");sleep(1)
-end
+    printstyled(color=:blue, "\nHandshake\n")
+    @testset "Handshake" begin
+        include("handshaketest.jl");sleep(1)
+    end
 
-@info("\nClient-server test, HTTP client\n")
-@testset "Client-server test, HTTP client" begin
-    include("client_server_test.jl");sleep(1)
-end
+    printstyled(color=:blue, "\nTest throttling\n")
+    @testset "Throttling" begin
+        include("throttling_test.jl");sleep(1)
+    end
 
-@info("\nClient test, HTTP client\n")
-@testset "Client test, HTTP client" begin
-    include("client_test.jl");sleep(1)
-end
+    printstyled(color=:blue, "\nClient test\n")
+    @testset "Client" begin
+        include("client_test.jl");sleep(1)
+    end
 
-@info("\nAbrupt close & error handling test\n")
-@testset "Abrupt close & error handling test" begin
-    include("error_test.jl");sleep(1)
-end
+    printstyled(color=:blue, "\nClient_listen\n")
+    @testset "Client_listen" begin
+        include("client_listen_test.jl");sleep(1)
+    end
 
-@info("\n tests for server message comes first\n")
-@testset "tests for server message comes first" begin
-    include("serverfirst_test.jl")
-end
+    printstyled(color=:blue, "\nClient_serverWS\n")
+    @testset "Client_serverWS" begin
+        include("client_serverWS_test.jl");sleep(1)
+    end
+
+    printstyled(color=:blue, "\nAbrupt close & error handling\n")
+    @testset "Abrupt close & error handling" begin
+       include("error_test.jl");sleep(1)
+    end
+    if !@isdefined(OLDLOGGER)
+        Logging.global_logger(OLDLOGGER)
+    end
 end

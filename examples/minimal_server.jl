@@ -36,7 +36,7 @@ function gatekeeper(req, ws)
     end
 end
 
-const handle(req) = replace(BAREHTML, "<body></body>" => BODY) |> WebSockets.Response
+handle(req) = replace(BAREHTML, "<body></body>" => BODY) |> WebSockets.Response
 
 const server = WebSockets.ServerWS(handle,
                                     gatekeeper)

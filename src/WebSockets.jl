@@ -1,4 +1,3 @@
-__precompile__()
 """
     WebSockets
 This module implements the WebSockets protocol.
@@ -23,14 +22,18 @@ includes another Julia session, parallel process or task.
 6. Allow customizable console output (e.g. 'ping').
 """
 module WebSockets
-using Sockets: TCPSocket, IPAddr
 import MbedTLS: digest, MD_SHA1
 import Base64: base64encode, base64decode
-using HTTP
-import HTTP:Response,
-            Request,
-            HandlerFunction
-
+import Sockets
+import      Sockets: TCPSocket,
+                     IPAddr,
+                     getsockname
+using Dates
+# importing Logging seems to be necessary to get
+# output from coroutines through macros like @info.
+# This on Julia 0.7.0
+import Logging
+# imports from HTTP in this file
 include("HTTP.jl")
 export WebSocket,
        serve,
@@ -41,10 +44,12 @@ export WebSocket,
        close,
        subprotocol,
        target,
-       origin,
        send_ping,
        send_pong,
-       WebSocketClosedError
+       WebSocketClosedError,
+       checkratelimit!,
+       addsubproto,
+       ServerWS
 
 # revisit the need for defining this union type for method definitions. The functions would
 # probably work just as fine with duck typing.
@@ -141,7 +146,7 @@ const OPCODE_PONG = 0xA
 Handshakes with subprotocols are rejected by default.
 Add to acceptable SUBProtocols through e.g.
 ```julia
-   WebSockets.addsubproto("json")
+   addsubproto("json")
 ```
 Also see function subprotocol
 """
@@ -276,9 +281,11 @@ function Base.close(ws::WebSocket; statusnumber = 0, freereason = "")
             end
         catch err
             # Typical 'errors' received while closing down are neglected.
+            # Unknown errors are rethrown.
             errtyp = typeof(err)
             errtyp != InterruptException &&
                 errtyp != Base.IOError &&
+                errtyp != HTTP.IOExtras.IOError &&
                 errtyp != Base.BoundsError &&
                 errtyp != Base.EOFError &&
                 errtyp != Base.ArgumentError &&

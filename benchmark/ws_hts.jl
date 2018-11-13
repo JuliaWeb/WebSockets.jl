@@ -17,7 +17,7 @@ const PORT = 8000
 const SERVER = "127.0.0.1"
 const WSMAXTIME = Base.Dates.Second(600)
 const WEBSOCKET = Vector{WebSockets.WebSocket}()
-const TCPREF = Ref{HTTP.Sockets.TCPServer}()
+const TCPREF = Ref{Base.IOServer}()
 "Run asyncronously or in separate process"
 function listen_hts()
     id = "listen_hts"
@@ -29,7 +29,7 @@ function listen_hts()
                 acceptholdws(http)
                 clog(id, "Websocket closed, server stays open until ws_hts.close_hts()")
             else
-                HTTP.Servers.handle_request(handlerequest, http)
+                WebSockets.handle_request(handlerequest, http)
             end
         end
     catch err
