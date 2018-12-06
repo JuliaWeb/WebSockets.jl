@@ -38,11 +38,7 @@ end
 
 handle(req) = replace(BAREHTML, "<body></body>" => BODY) |> WebSockets.Response
 
-<<<<<<< HEAD
 const server = WebSockets.ServerWS(handle,
-=======
-global server = WebSockets.ServerWS(handle,
->>>>>>> Switch IndexedTables -> Millboard, using -> import
                                     gatekeeper)
 
 @info("Browser > $LOCALIP:$PORT , F12> console > ws = new WebSocket(\"ws://$LOCALIP:$PORT\") ")

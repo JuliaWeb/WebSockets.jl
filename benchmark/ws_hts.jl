@@ -12,8 +12,10 @@ if !@isdefined LOGGINGPATH
     LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
 end
 
-# We import HTTP methods through WebSockets in case there
-# is an upper boundary on the HTTP version.
+using WebSockets
+import WebSockets: Stream,
+                Request
+#=
 import WebSockets.HTTP: Header,
              Sockets.TCPServer,
              listen,
@@ -26,6 +28,7 @@ import WebSockets: WebSocket,
             origin,
             is_upgrade,
 			upgrade
+=#
 using logutils_ws
 using Dates
 export listen_hts, getws_hts, close_hts
@@ -36,9 +39,19 @@ const SERVEFILE = "hts.html"
 const SRCPATH = @__DIR__
 const PORT = 8000
 const SERVER = "127.0.0.1"
-const WSMAXTIME = Base.Dates.Second(600)
+const WSMAXTIME = Second(600)
 const WEBSOCKET = Vector{WebSockets.WebSocket}()
 const TCPREF = Ref{Base.IOServer}()
+const LOGFILE = string(@__MODULE__)
+
+function __init__()
+    global LOGSTREAM = open(joinpath((@__DIR__), "logs", LOGFILE), "w")
+    global MODLOG = WebSocketLogger(LOGSTREAM)
+    global_logger(MODLOG)
+    nothing
+end
+
+
 "Run asyncronously or in separate process"
 function listen_hts()
     id = "listen_hts "
@@ -180,16 +193,16 @@ function close_hts()
 end
 
 end # module
-# TODO update README with Base.find_package.
-"""
-# For debugging in a separate console:
-joinpath("WebSockets" |> Base.find_package |> dirname, "..", "benchmark") |> cd
-pwd() ∉ LOAD_PATH && push!(LOAD_PATH, pwd())
-logpath = realpath(joinpath(pwd(), "..", "logutils"))
-logpath ∉ LOAD_PATH && push!(LOAD_PATH, logpath)
+#=
+For debugging in a separate console:
+
+using WebSockets
+wspath = realpath(joinpath(WebSockets |> pathof |> dirname, ".."))
+include(joinpath(wspath, "benchmark", "ws_hts.jl"))
+include(joinpath(wspath, "logutils", "logutils_ws.jl"))
 using ws_hts
 listen_hts()
 tas = @async listen_hts()
 sleep(7)
 hts = ws_hts.getws_hts()
-"""
+=#

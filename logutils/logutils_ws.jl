@@ -2,7 +2,7 @@
 Based directly on stdlib/ConsoleLogger, this defines a logger with
 special output formatting for some types (from this and other packages).
 
-It also adds macros based on @warn and @error in Base.CoreLogging
+TODO? add macros based on @warn and @error in Base.CoreLogging
     @clog Log to console and the given io.
     @zlog Log to the given io.
 
@@ -34,30 +34,30 @@ at. The default is zero (metadata goes on its own line).
 
 """
 module logutils_ws
+using Logging
+# Imports for adding methods and building types
+import WebSockets
+import WebSockets: WebSocket,
+                   TCPSocket
 import Logging
 import Logging: AbstractLogger,
-                        handle_message,
-                        shouldlog,
-                        min_enabled_level,
-                        catch_exceptions,
-                        LogLevel,
-                        Info,
-                        Warn,
-                        Error,
-                        global_logger,
-                        with_logger
-using Base
-import Base: text_colors,
-            BufferStream,
-            print,
-            show
-using Sockets
-import Sockets: LibuvStream,
-                LibuvServer,
-                TCPSocket
-import WebSockets
-import WebSockets: WebSocket
-export WebSocketLogger, shouldlog, current_logger_root, global_logger, with_logger
+                handle_message,
+                shouldlog,
+                min_enabled_level,
+                catch_exceptions,
+                LogLevel,
+                Info,
+                Warn,
+                Error
+# Imports for reexport
+import Logging: global_logger,
+                with_logger,
+                current_logger,
+                current_task
+# Other imports for other use
+import Base: LibuvStream
+
+export WebSocketLogger, shouldlog, global_logger, with_logger, current_logger, current_task
 
 struct WebSocketLogger <: AbstractLogger
     stream::IO
@@ -83,18 +83,70 @@ shouldlog(logger::WebSocketLogger, level, _module, group, id) =
 min_enabled_level(logger::WebSocketLogger) = logger.min_level
 "Catch exceptions during event evaluation"
 catch_exceptions(logger::WebSocketLogger) = false
-"Return the current logger. If stacked, find the root."
-current_logger_root() =  _logger_root(Logging.current_logger())
-function _logger_root(cl)
-    if :previous_logger ∈ fieldnames(typeof(cl))
-        return _logger_root(cl.previous_logger)
-    else
-        return cl
-    end
+
+
+# Formatting of values in key value pairs
+# todo: reexport
+showvalue(io, msg) = show(io, "text/plain", msg)
+function showvalue(io, e::Tuple{Exception,Any})
+    ex,bt = e
+    showerror(io, ex, bt; backtrace = bt!=nothing)
+end
+showvalue(io, ex::Exception) = showerror(io, ex)
+
+# todo: reexport
+function default_logcolor(level)
+    level < Info  ? Base.debug_color() :
+    level < Warn  ? Base.info_color()  :
+    level < Error ? Base.warn_color()  :
+                    Base.error_color()
 end
 
+# todo: Rewrite maybe, own name maybe
+function default_metafmt(level, _module, group, id, file, line)
+    color = default_logcolor(level)
+    prefix = (level == Warn ? "WARNING" : string(level))*':'
+    suffix = ""
+    Info <= level < Warn && return color, prefix, suffix
+    _module !== nothing && (suffix *= "$(_module)")
+    if file !== nothing
+        _module !== nothing && (suffix *= " ")
+        suffix *= Base.contractuser(file)
+        if line !== nothing
+            suffix *= ":$(isa(line, UnitRange) ? "$(first(line))-$(last(line))" : line)"
+        end
+    end
+    !isempty(suffix) && (suffix = "@ " * suffix)
+    return color, prefix, suffix
+end
+
+"""
+Length of a string as it will appear in the terminal (after ANSI color codes
+are removed)
+"""
+function termlength(str)
+    N = 0
+    in_esc = false
+    for c in str
+        if in_esc
+            if c == 'm'
+                in_esc = false
+            end
+        else
+            if c == '\e'
+                in_esc = true
+            else
+                N += 1
+            end
+        end
+    end
+    return N
+end
+# Todo: Stash, copy new version from 1.0.2, consider functionality again.
+# Conform to IOContext approach with regards to colors,
+# Use the NullLogger. devnull still exists.
 "Handle a log event.
-If the logger stream is a Base.DevNullStream, exit immediately.
+If the logger stream is a Base.DevNull, exit immediately.
 Note that the appropriate use is to use Logging.DevNullLogger.
 Also exit immediately if the max log limit for this id is reached."
 function handle_message(logger::WebSocketLogger, level, messageargs::T, _module, group, id,
@@ -104,7 +156,8 @@ function handle_message(logger::WebSocketLogger, level, messageargs::T, _module,
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return
     end
-    if logger.stream isa  Base.DevNullStream
+    # Base.DevNullStream in Julia 0.7, Base.DevNull in Julia 1.0. Dropping Julia 0.7 here.
+    if logger.stream isa  Base.DevNull
         return
     end
     #println("Level:", level, " filepath:", filepath, " line:", line)
@@ -176,61 +229,7 @@ function handle_message(logger::WebSocketLogger, level, messageargs::T, _module,
     nothing
 end
 
-# Formatting of values in key value pairs
-showvalue(io, msg) = show(io, "text/plain", msg)
-function showvalue(io, e::Tuple{Exception,Any})
-    ex,bt = e
-    showerror(io, ex, bt; backtrace = bt!=nothing)
-end
-showvalue(io, ex::Exception) = showerror(io, ex)
-
-function default_logcolor(level)
-    level < Info  ? Base.debug_color() :
-    level < Warn  ? Base.info_color()  :
-    level < Error ? Base.warn_color()  :
-                    Base.error_color()
-end
-
-function default_metafmt(level, _module, group, id, file, line)
-    color = default_logcolor(level)
-    prefix = (level == Warn ? "WARNING" : string(level))*':'
-    suffix = ""
-    Info <= level < Warn && return color, prefix, suffix
-    _module !== nothing && (suffix *= "$(_module)")
-    if file !== nothing
-        _module !== nothing && (suffix *= " ")
-        suffix *= Base.contractuser(file)
-        if line !== nothing
-            suffix *= ":$(isa(line, UnitRange) ? "$(first(line))-$(last(line))" : line)"
-        end
-    end
-    !isempty(suffix) && (suffix = "@ " * suffix)
-    return color, prefix, suffix
-end
-
-"""
-Length of a string as it will appear in the terminal (after ANSI color codes
-are removed)
-"""
-function termlength(str)
-    N = 0
-    in_esc = false
-    for c in str
-        if in_esc
-            if c == 'm'
-                in_esc = false
-            end
-        else
-            if c == '\e'
-                in_esc = true
-            else
-                N += 1
-            end
-        end
-    end
-    return N
-end
-
+# Todo consider implementing.
 """
 Return the log message body string, ending with :normal (following text)
 and newline.
@@ -243,6 +242,7 @@ function logbody_s(context::IO, args...)
     String(take!(ioc.io))
 end
 
+# Todo consider implementing
 """
 Log the arguments to buffer io, end with newline
 (and normal color if applicable).
@@ -267,97 +267,6 @@ function _log(io::IOContext, args...)
     end
 end
 
-"""
-Like 'print', avoids string
-decorations, but '_print' keeps general symbol decorations.
-"""
-_print
-"Fallback for unspecified types"
-_print(io::IO, arg::Symbol) = _show(io, arg)
-_print(io::IO, arg::WebSocket) = _show(io, arg)
-function _print(io::IO, arg::WebSockets.ReadyState)
-    arg == WebSockets.CONNECTED && _show(io, :green)
-    arg == WebSockets.CLOSING && _show(io, :yellow)
-    arg == WebSockets.CLOSED && _show(io, :red)
-    _log(io, String(Symbol(arg)), :normal)
-end
-"Type info assumed given by container subtype, excluded here"
-function _print(io::IO, stream::Base.LibuvStream)
-    # A TCPSocket and a BufferStream are examples of LibuvStream.
-    fina = fieldnames(typeof(stream))
-    if :status ∈ fina
-        _log(io, :bold, _uv_status(stream)..., :normal)
-    elseif :is_open ∈ fina
-        stream.is_open ? _log(io, :bold, :green, "✓", :normal) :  _log(io, :bold, :red, "✘", :normal)
-    else
-        _log(io, "status N/A")
-    end
-    if :buffer ∈ fina
-        nba = bytesavailable(stream.buffer)
-        nba > 0 && _log(io, ", in bytes: ", nba)
-    end
-    if :sendbuf ∈ fina
-        nba = bytesavailable(stream.sendbuf)
-        nba > 0 && _log(io, ", out bytes: ", nba)
-    end
-end
-function _print(io::IO, arg)
-    #println("_print fallback type ", typeof(arg), " ", arg)
-    print(io, arg)
-end
-# TODO check TCPServer, make ServerWS and other types.
 
-"""
-Unlike _print, includes Julia decorations like ':' and '""'.
-"""
-_show
-"If this is a color, switch, otherwise prefix by :"
-function _show(io::IO, sy::Symbol)
-    co =  get(text_colors, sy, "")
-    if co != ""
-        if get(io, :color, false)
-            write(io, co)
-        end
-    else
-        # The symbol is not a color code.
-        _log(io, ":",  String(sy))
-    end
-end
-
-"Fallback"
-_show(io::IO, arg) = _show(io, arg)
-
-
-"Return status as a tuple with color symbol and descriptive string"
-function _uv_status(x)
-    s = x.status
-    if x.handle == Base.C_NULL
-        if s == Base.StatusClosed
-            return :red, "✘" #"closed"
-        elseif s == Base.StatusUninit
-            return :red, "null"
-        end
-        return :red, "invalid status"
-    elseif s == Base.StatusUninit
-        return :yellow, "uninit"
-    elseif s == Base.StatusInit
-        return :yellow, "init"
-    elseif s == Base.StatusConnecting
-        return :yellow, "connecting"
-    elseif s == Base.StatusOpen
-        return :green, "✓"   # "open"
-    elseif s == Base.StatusActive
-        return :green, "active"
-    elseif s == Base.StatusPaused
-        return :red, "paused"
-    elseif s == Base.StatusClosing
-        return :red, "closing"
-    elseif s == Base.StatusClosed
-        return :red, "✘" #"closed"
-    elseif s == Base.StatusEOF
-        return :yellow, "eof"
-    end
-    return :red, "invalid status"
-end
 include("log_ws.jl")
 end
