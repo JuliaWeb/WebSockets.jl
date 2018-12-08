@@ -12,7 +12,7 @@ const BODY =  "<body><p>Press F12
                 <p>ws.onmessage = function(e){console.log(e.data)}
                 <p>ws.send(\"Browser console says hello!\")
                 </body>"
-const TCPREF = Ref{Base.IOServer}()
+const SERVERREF = Ref{Union{Base.IOServer, Nothing}}()
 @info("Browser > $LOCALIP:$PORT , F12> console > ws = new WebSocket(\"ws://$LOCALIP:$PORT\") ")
 function coroutine(ws)
     while isopen(ws)
@@ -41,10 +41,9 @@ function gatekeeper(req, ws)
 end
 
 handle(req) = replace(BAREHTML, "<body></body>" => BODY) |> WebSockets.Response
-global TCPREF = Ref{Base.IOServer}()
 @info("Browser > $LOCALIP:$PORT , F12> console > ws = new WebSocket(\"ws://$LOCALIP:$PORT\") ")
 try
-    listen(LOCALIP, UInt16(PORT), tcpref = TCPREF) do http
+    listen(LOCALIP, UInt16(PORT), tcpref = SERVERREF) do http
         if WebSockets.is_upgrade(http.message)
             WebSockets.upgrade(gatekeeper, http)
         else

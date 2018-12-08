@@ -4,11 +4,10 @@ import WebSockets:Response,
 using Dates
 using Sockets
 
-global lastreq = 0
-global lastws = 0
-global lastmsg = 0
-global lastws = 0
-global lastserver = 0
+global LASTREQ = 0
+global LASTWS = 0
+global LASTMSG = 0
+global LASTSERVER = 0
 
 const CLOSEAFTER = Dates.Second(1800)
 const HTTPPORT = 8080
@@ -24,7 +23,7 @@ an 'asyncronous function' aka 'coroutine' aka 'task' is started.
 To use:
     - include("chat_explore.jl") in REPL
     - start a browser on the local ip address, e.g.: http://192.168.0.4:8080
-    - inspect global variables starting with 'last' while the chat is running asyncronously
+    - inspect global variables starting with 'LAST' while the chat is running asyncronously 
 
 """
 
@@ -49,7 +48,7 @@ function coroutine(thisws)
         # this task yields to other tasks.
         data, success = readguarded(thisws)
         !success && break
-        global lastmsg = msg = String(data)
+        global LASTMSG = msg = String(data)
         print("Received: $msg ")
         if username == ""
             username = approvedusername(msg, thisws)
@@ -118,8 +117,8 @@ malicious code. It inspects the request that was upgraded
 to a a websocket.
 """
 function gatekeeper(req, ws)
-    global lastreq = req
-    global lastws = ws
+    global LASTREQ = req
+    global LASTWS = ws
     orig = WebSockets.origin(req)
     if occursin(LOCALIP, orig)
         coroutine(ws)
@@ -149,20 +148,22 @@ function shouldlog(::ConsoleLogger, level, _module, group, id)
     end
 end
 
-
 # ServerWS takes two functions; the first a http request handler function for page requests,
 # one for opening websockets (which javascript in the HTML page will try to do)
-global lastserver = WebSockets.ServerWS(req2resp, gatekeeper)
+global LASTSERVER = WebSockets.ServerWS(req2resp, gatekeeper)
 
 # Start the server asyncronously, and stop it later
-@async WebSockets.serve(lastserver, LOCALIP, HTTPPORT)
+@async WebSockets.serve(LASTSERVER, LOCALIP, HTTPPORT)
 @async begin
     println("HTTP server listening on $LOCALIP:$HTTPPORT for $CLOSEAFTER")
     sleep(CLOSEAFTER.value)
     println("Time out, closing down $HTTPPORT")
-    put!(lastserver.in, "I can send anything, you close")
+    put!(LASTSERVER.in, "I can send anything, you close")
     nothing
 end
-
-
+# for inspecting in REPL or Atom / Juno - update after starting some clients.
+LASTWS
+LASTSERVER.out
+WEBSOCKETS
+#take!(LASTSERVER.out)|>string
 nothing

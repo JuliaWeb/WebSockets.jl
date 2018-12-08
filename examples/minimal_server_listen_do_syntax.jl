@@ -12,7 +12,7 @@ const BODY =  "<body><p>Press F12
                 <p>ws.send(\"Browser console says hello!\")
                 </body>"
 
-const SERVERREF = Ref{Base.IOServer}()
+const SERVERREF = Ref{Union{Base.IOServer, Nothing}}()
 @info("Browser > $LOCALIP:$PORT , F12> console > ws = new WebSocket(\"ws://$LOCALIP:$PORT\") ")
 try
     WebSockets.HTTP.listen(LOCALIP, UInt16(PORT), tcpref = SERVERREF) do stream
