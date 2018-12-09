@@ -1,4 +1,5 @@
 # included in handshaketests.jl
+import Base.BufferStream
 function templaterequests()
     chromeheaders = Dict{String, String}( "Connection"=>"Upgrade",
                                             "Upgrade"=>"websocket")

@@ -60,7 +60,6 @@ const Dt = Union{Base.ReinterpretArray{UInt8,1,UInt16,Array{UInt16,1}},
 "A reasonable amount of time"
 const TIMEOUT_CLOSEHANDSHAKE = 10.0
 
-#TODO don't use the macro; it defines show methods.
 @enum ReadyState CONNECTED=0x1 CLOSING=0x2 CLOSED=0x3
 
 """ Buffer writes to socket till flush (sock)"""

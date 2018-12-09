@@ -1,5 +1,6 @@
 #=
-Included in logutils xxx.jl if HTTP is loaded
+Included in logutils_ws.jl
+See TODO there.
 =#
 
 "HTTP.Response already has a show method, we're not overwriting that.
@@ -39,4 +40,3 @@ function _show(d::AbstractDevice, request::HTTP.Messages.Request)
     end
     nothing
 end
-

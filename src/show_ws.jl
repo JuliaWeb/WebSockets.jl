@@ -3,7 +3,7 @@ import Base.show
 function Base.show(io::IO, ::MIME"text/plain", ws::WebSocket{T}) where T
     ioc = IOContext(io, :wslog => true)
     print(ioc, "WebSocket{", nameof(T), "}(", ws.server ? "server, " : "client, ")
-    show(ioc, ws.state)
+    _show(ioc, ws.state)
     print(ioc, "): ")
     _show(ioc, ws.socket)
     nothing
@@ -14,26 +14,28 @@ function Base.show(io::IO, ws::WebSocket{T}) where T
     if T == TCPSocket
         print(ioc, "WebSocket(")
     else
-        print(ioc, "WebSocket{", nameof(T), "}(", ws.server ? "server, " : "client, ")
+        print(ioc, "WebSocket{", nameof(T), "}(")
     end
     print(ioc, ws.server ? "server, " : "client, ")
-    show(ioc, ws.state)
+    _show(ioc, ws.state)
     print(ioc,  ")")
     nothing
 end
-# The following does not seem to get called by Atom. Fallback is the long form.
-# Base.show(io::IO, ws::WebSocket, ::MIME"application/prs.juno.inline") = print(io, "Juno! Atom!")
+
+# Short form, as in Juno / Atom
+# In documentation (and possible future version)::MIME"application/prs.juno.inline"
+Base.show(io::IO, ::MIME"application/prs.juno.inline", ws::WebSocket) = Base.show(io, ws)
+Base.show(io::IO, ::MIME"application/juno+inline", ws::WebSocket) = Base.show(io, ws)
 
 
-function Base.show(io::IO, state::ReadyState)
+
+# A Base.show method is already defined by @enum
+function _show(io::IO, state::ReadyState)
     kwargs, msg = _uv_status_tuple(state)
     printstyled(io, msg; kwargs...)
     nothing
 end
-function _show(io, stream)
-    @warn("_show fallback!")
-    show(io, stream)
-end
+
 function _show(io::IO, stream::Base.LibuvStream)
     # To avoid accidental type piracy, a double check:
     if !get(IOContext(io), :wslog, false)
@@ -41,15 +43,17 @@ function _show(io::IO, stream::Base.LibuvStream)
     else
         kwargs, msg = _uv_status_tuple(stream)
         printstyled(io, msg; kwargs...)
-        if !(typeof(stream) isa Sockets.UDPSocket)
+        if !(stream isa Servers.UDPSocket)
             nba = bytesavailable(stream.buffer)
-            nba > 0 && print(io, ", ", nba, " bytes waiting")
+            nba > 0 && print(io, ", ", nba, " bytes")
         end
     end
     nothing
 end
-# adaption of base/stream.jl_uv_status_string
+
+"For colorful printing"
 function _uv_status_tuple(x)
+    # adaption of base/stream.jl_uv_status_string
     s = x.status
     if x.handle == Base.C_NULL
         if s == Base.StatusClosed
@@ -60,7 +64,7 @@ function _uv_status_tuple(x)
             (color = :red,), "invalid status"
         end
     elseif s == Base.StatusUninit
-        (color = :yellow,), "uninit"
+        (color = :blue,), "uninit"
     elseif s == Base.StatusInit
         (color = :yellow,), "init"
     elseif s == Base.StatusConnecting
@@ -81,15 +85,19 @@ function _uv_status_tuple(x)
         (color = :red,), "invalid status"
     end
 end
-function _uv_status_tuple(status::ReadyState)
-    s = string(status)
-    if s == "CONNECTED"
-        (color = :green,), s
-    elseif s == "CLOSING"
-        (color = :blue,), s
-    elseif s == "CLOSED"
-        (color = :red,), s
+function _uv_status_tuple(bs::Base.BufferStream)
+    if bs.is_open
+        (color = :green,), "✓"   # "open"
     else
-        (color = :red,), "invalid status"
+        (color = :red,), "✘" #"closed"
+    end
+end
+function _uv_status_tuple(status::ReadyState)
+    if status == CONNECTED
+        (color = :green,), "CONNECTED"
+    elseif status == CLOSING
+        (color = :blue,), "CLOSING"
+    elseif status == CLOSED
+        (color = :red,), "CLOSED"
     end
 end
