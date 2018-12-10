@@ -35,6 +35,7 @@ using Dates
 import Logging
 # imports from HTTP in this file
 include("HTTP.jl")
+
 export WebSocket,
        serve,
        readguarded,
@@ -701,4 +702,6 @@ function readguarded(ws)
     end
 end
 
+# import Base.show and add methods in this file
+include("show_ws.jl")
 end # module WebSockets

@@ -2,9 +2,14 @@ using Test
 
 @testset "WebSockets" begin
     include("logformat.jl")
+
+    printstyled(color=:blue, "\nBase.Show\n")
+    @testset "Base.show" begin
+       include("show_test.jl");sleep(1)
+    end
+
     printstyled(color=:blue, "\nFragment and unit\n")
     @testset "Fragment and unit" begin
-        @test true
        include("frametest.jl");sleep(1)
     end
 

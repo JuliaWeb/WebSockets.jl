@@ -1,9 +1,9 @@
-__precompile__()
 #=
- TODO deal with Julia 0.7 warning: 
-    Warning: broadcast will default to iterating over its arguments in the future. Wrap arguments of
-     type `x::logutils_ws.ColorDevice{Base.GenericIOBuffer{Array{UInt8,1}}}` with `Ref(x)` to ensure they broadcast as "scalar" elements.
- TODO consider using Memento.jl in an example application, and to define show(IO, ::WebSocket)
+ TODO complete transition to using show and _show methods
+ together with IOContext.
+  Implement show(serverWS).
+ Drop special Devices.
+ Delete duplicate code.
 =#
 
 """
@@ -34,7 +34,6 @@ import Base.color_normal
 import Base.text_colors
 import Base.show
 include("log_http.jl")
-include("log_ws.jl")
 export clog
 export clog_notime
 export zlog
@@ -295,37 +294,6 @@ function _show(d::ColorDevice, stream::Base.LibuvStream)
     print(d.s, ")")
     nothing
 end
-function _uv_status(x)
-    s = x.status
-    if x.handle == Base.C_NULL
-        if s == Base.StatusClosed
-            return :red, "✘" #"closed"
-        elseif s == Base.StatusUninit
-            return :red, "null"
-        end
-        return :red, "invalid status"
-    elseif s == Base.StatusUninit
-        return :yellow, "uninit"
-    elseif s == Base.StatusInit
-        return :yellow, "init"
-    elseif s == Base.StatusConnecting
-        return :yellow, "connecting"
-    elseif s == Base.StatusOpen
-        return :green, "✓"   # "open"
-    elseif s == Base.StatusActive
-        return :green, "active"
-    elseif s == Base.StatusPaused
-        return :red, "paused"
-    elseif s == Base.StatusClosing
-        return :red, "closing"
-    elseif s == Base.StatusClosed
-        return :red, "✘" #"closed"
-    elseif s == Base.StatusEOF
-        return :yellow, "eof"
-    end
-    return :red, "invalid status"
-end
-
 
 function _show(d::AbstractDevice, serv::Base.LibuvServer)
     _log(d, typeof(serv), "(", :bold, _uv_status(serv)..., :normal, ")")

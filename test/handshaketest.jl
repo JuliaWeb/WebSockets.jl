@@ -1,12 +1,10 @@
 # included in runtests.jl
 using Test
-using BufferedStreams
 import Base: convert, BufferStream
 using WebSockets
 import WebSockets:  generate_websocket_key,
                     upgrade,
-                    Request,
-                    Stream,
+                    Request, Stream,
                     Response,
                     Header,
                     Connection,
