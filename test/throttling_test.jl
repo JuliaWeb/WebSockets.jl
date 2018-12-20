@@ -80,7 +80,8 @@ put!(serverWS.in, "closeit")
 serverWS =  ServerWS(  (r) -> WebSockets.Response(200, "OK"),
                        (r, ws) -> nothing,
                        sslconfig = SSLConfig())
-tas = @async WebSockets.serve(serverWS, IPA, THISPORT)
+
+tas = @async WebSockets.serve(serverWS, host = IPA, port =THISPORT)
 const URL10 = "https://$IPA:$THISPORT"
 @test_throws WebSockets.HTTP.IOExtras.IOError WebSockets.HTTP.request("GET", URL10)
 const WSSURI = "wss://$IPA:$THISPORT"
