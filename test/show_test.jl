@@ -226,8 +226,8 @@ sws = ServerWS(handler= h, wshandler= w, logger = stderr)
 io = IOBuffer()
 show(io, sws)
 output = String(take!(io))
-@test output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=TTY:✓)"
-
+@test output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=TTY:✓)" ||
+    "ServerWS(handler=h(r), wshandler=w(ws, r), logger=PipeEndpoint():✓)"
 fi = open("temptemp", "w+")
 sws = ServerWS(h, w, fi)
 io = IOBuffer()
