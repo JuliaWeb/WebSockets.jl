@@ -142,11 +142,10 @@ _show(io, iob)
 output = String(take!(io.io))
 @test output == "IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=Inf, ptr=1, mark=-1)"
 
-dnull = Base.DevNull()
 io = IOContext(IOBuffer())
-_show(io, dnull)
+_show(io, devnull)
 output = String(take!(io.io))
-@test output == "Base.DevNull()"
+@test output == "Base.DevNull()" || output == "Base.DevNullStream()"
 
 
 
@@ -242,11 +241,12 @@ output = String(take!(io))
 @test output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=<file temptemp>:✘)"
 
 
-sws = ServerWS(handler= h, wshandler= w, logger = Base.DevNull())
+sws = ServerWS(handler= h, wshandler= w, logger = devnull)
 io = IOBuffer()
 show(io, sws)
 output = String(take!(io))
-@test output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=Base.DevNull())"
+@test output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=Base.DevNull())" ||
+    output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=Base.DevNullStream())"
 
 sws = ServerWS(handler= h, wshandler= w, logger = IOBuffer())
 io = IOBuffer()

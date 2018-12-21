@@ -52,7 +52,9 @@ countconnections(1//1, Millisecond(500))
 close(tcpserver)
 
 @info "Make http request to a server with specified ratelimit 1 new connections // 1 second"
-const THISPORT = 8091
+if !@isdefined(THISPORT)
+    const THISPORT = 8091
+end
 const IPA = "127.0.0.1"
 const URL9 = "http://$IPA:$THISPORT"
 serverWS =  ServerWS(  (r) -> WebSockets.Response(200, "OK"),

@@ -130,7 +130,7 @@ function Base.show(io::IO, sws::ServerWS)
             print(io, "IOBuffer():")
         elseif sws.logger isa IOStream
             print(io, sws.logger.name, ":")
-        elseif sws.logger isa Base.DevNull
+        elseif sws.logger == devnull
         else
             print(io, nameof(typeof(sws.logger)), ":")
         end
