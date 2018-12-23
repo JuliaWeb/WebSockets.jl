@@ -52,7 +52,9 @@ countconnections(1//1, Millisecond(500))
 close(tcpserver)
 
 @info "Make http request to a server with specified ratelimit 1 new connections // 1 second"
-const THISPORT = 8091
+if !@isdefined(THISPORT)
+    const THISPORT = 8091
+end
 const IPA = "127.0.0.1"
 const URL9 = "http://$IPA:$THISPORT"
 serverWS =  ServerWS(  (r) -> WebSockets.Response(200, "OK"),
@@ -80,7 +82,8 @@ put!(serverWS.in, "closeit")
 serverWS =  ServerWS(  (r) -> WebSockets.Response(200, "OK"),
                        (r, ws) -> nothing,
                        sslconfig = SSLConfig())
-tas = @async WebSockets.serve(serverWS, IPA, THISPORT)
+
+tas = @async WebSockets.serve(serverWS, host = IPA, port =THISPORT)
 const URL10 = "https://$IPA:$THISPORT"
 @test_throws WebSockets.HTTP.IOExtras.IOError WebSockets.HTTP.request("GET", URL10)
 const WSSURI = "wss://$IPA:$THISPORT"

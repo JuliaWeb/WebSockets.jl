@@ -2,9 +2,9 @@
 
 *Release version*:
 
-[![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6) [![Build Status](https://travis-ci.org/JuliaWeb/WebSockets.jl.svg)](https://travis-ci.org/JuliaWeb/WebSockets.jl)<!---
+[![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6) [![Build Status](https://travis-ci.org/JuliaWeb/WebSockets.jl.svg)](https://travis-ci.org/JuliaWeb/WebSockets.jl)<!--
 Enable coverage when https://github.com/JuliaCI/Coverage.jl/issues/187 is resolved.
-[![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg)] (https://coveralls.io/r/JuliaWeb/WebSockets.jl)a --->
+[![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg)] (https://coveralls.io/r/JuliaWeb/WebSockets.jl)a -->
 
 Test coverage 96%
 
@@ -12,8 +12,8 @@ Test coverage 96%
 
 [![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg?branch?master)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6)
 [![Build Status](https://travis-ci.org/JuliaWeb/WebSockets.jl.svg?branch=master)](https://travis-ci.org/JuliaWeb/WebSockets.jl)
-<!---[![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg?branch=master)](https://coveralls.io/r/JuliaWeb/WebSockets.jl?branch=master)
-[![Appveyor](https://ci.appveyor.com/api/projects/status/github/JuliaWeb/WebSockets.jl?svg=true&branch=master)](https://ci.appveyor.com/project/JuliaWeb/WebSockets-jl)--->
+<!--[![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg?branch=master)](https://coveralls.io/r/JuliaWeb/WebSockets.jl?branch=master)
+[![Appveyor](https://ci.appveyor.com/api/projects/status/github/JuliaWeb/WebSockets.jl?svg=true&branch=master)](https://ci.appveyor.com/project/JuliaWeb/WebSockets-jl)-->
 
 Test coverage 96%
 
@@ -21,28 +21,46 @@ Test coverage 96%
 Server and client side [Websockets](https://tools.ietf.org/html/rfc6455) protocol in Julia. WebSockets is a small overhead message protocol layered over [TCP](https://tools.ietf.org/html/rfc793). It uses HTTP(S) for establishing the connections.
 
 ## Getting started
-Copy this into Julia:
+In the package manager, add WebSockets. Then [paste](https://docs.julialang.org/en/v1/stdlib/REPL/index.html#The-Julian-mode-1) this into a REPL:
 
 ```julia
-(v1.0) pkg> add WebSockets
-julia> using WebSockets
-julia> # define what to do with http requests, and with websocket upgrades.
-julia> serverWS =  ServerWS((r) -> WebSockets.Response(200, "OK"),
-                            (ws_server) -> (writeguarded(ws_server, "Hello");
-                                                readguarded(ws_server)));
-julia> # serve on socket 8000, but in a coroutine so we can do other things too.
-julia> @async WebSockets.serve(serverWS, 8000)
-julia> # We ask for a http response, now as our alter ego the client.
+julia> using WebSockets, Logging
+
+julia> serverWS = ServerWS(handler = (req) -> WebSockets.Response(200), wshandler = (ws_server) -> (writeguarded(ws_server, "Hello"); readguarded(ws_server)))
+ServerWS(handler=#3(req), wshandler=#4(ws_server), logger=Base.DevNull())
+
+julia> import Logging.shouldlog
+
+julia> shouldlog(::ConsoleLogger, level, _module, group, id) = _module != WebSockets.HTTP.Servers
+shouldlog (generic function with 4 methods)
+
+julia> ta = @async WebSockets.serve(serverWS, port = 8000)
+Task (runnable) @0x000000000fc91cd0
+
 julia> WebSockets.HTTP.get("http://127.0.0.1:8000")
-julia> # Talk to ourselves! Print the first response in blue, then hang up.
+HTTP.Messages.Response:
+"""
+HTTP/1.1 200 OK
+Transfer-Encoding: chunked
+
+"""
+
 julia> WebSockets.open("ws://127.0.0.1:8000") do ws_client
-           data, success = readguarded(ws_client)
-           if success
-               printstyled(color=:blue, String(data))
-           end
-       end
-julia> # Tell ourselves, the server in a different coroutine: we can stop listening now.
-julia> put!(serverWS.in, "x")
+                  data, success = readguarded(ws_client)
+                  if success
+                      println(stderr, ws_client, " received:", String(data))
+                  end
+              end;
+WebSocket(client, CONNECTED) received:Hello
+
+WARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued
+
+julia> put!(serverWS.in, "close!")
+"close!"
+
+julia> ta
+Task (done) @0x000000000fc91cd0
+
 ```
 More things to do: Access inline documentation and have a look at the examples folder. The testing files demonstrate a variety of uses. Benchmarks show examples of websockets and servers running on separate processes, as oposed to asyncronous tasks.
 

@@ -292,10 +292,12 @@ function ServerOptions(;
     ServerOptions(sslconfig, readtimeout, ratelimit, support100continue, chunksize, logbody)
 end
 """
-    WebSockets.ServerWS(::WebSockets.HandlerFunction, ::WebSockets.WebsocketHandler)
+    WebSockets.ServerWS(handler::Function, wshandler::Function, logger::IO)
 
 WebSockets.ServerWS is an argument type for WebSockets.serve. Instances
 include .in  and .out channels, see WebSockets.serve.
+
+Server options can be set using keyword arguments, see methods(WebSockets.ServerWS)
 """
 mutable struct ServerWS{T <: Scheme, H <: Handler, W <: WebsocketHandler}
     handler::H
@@ -313,10 +315,21 @@ end
 # Define ServerWS without wrapping the functions first. Rely on argument sequence.
 function ServerWS(h::Function, w::Function, l::IO=stdout;
             cert::String="", key::String="", args...)
+
         ServerWS(HandlerFunction(h),
                 WebsocketHandler(w), l;
                 cert=cert, key=key, ratelimit = 10//1, args...)
 end
+# Define ServerWS with keyword arguments only
+function ServerWS(;handler::Function, wshandler::Function,
+            logger::IO=stdout,
+            cert::String="", key::String="", args...)
+
+        ServerWS(HandlerFunction(handler),
+                WebsocketHandler(wshandler), logger;
+                cert=cert, key=key, ratelimit = 10//1, args...)
+end
+
 # Define ServerWS with function wrappers
 function ServerWS(handler::H,
                 wshandler::W,
@@ -325,6 +338,7 @@ function ServerWS(handler::H,
                 key::String = "",
                 ratelimit = 10//1,
                 args...) where {H <: HandlerFunction, W <: WebsocketHandler}
+
     sslconfig = nothing;
     scheme = http # http is an imported DataType
     if cert != "" && key != ""
@@ -336,7 +350,6 @@ function ServerWS(handler::H,
                                         logger, Channel(1), Channel(2),
                                         ServerOptions(;ratelimit = ratelimit,
                                                                      args...))
-    return serverws
 end
 """
     WebSockets.serve(server::ServerWS, port)
@@ -410,8 +423,9 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
     # through the server.in channel, see above.
     return
 end
-serve(server::WebSockets.ServerWS, host, port) =  serve(server, host, port, false)
-serve(server::WebSockets.ServerWS, port) =  serve(server, "127.0.0.1", port, false)
+serve(server::ServerWS; host= "127.0.0.1", port= "") =  serve(server, host, port, false)
+serve(server::ServerWS, host, port) =  serve(server, host, port, false)
+serve(server::ServerWS, port) =  serve(server, "127.0.0.1", port, false)
 
 """
 'checkratelimit!' updates a dictionary of IP addresses which keeps track of their

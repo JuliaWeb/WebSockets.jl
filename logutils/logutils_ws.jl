@@ -339,15 +339,15 @@ end
 function _limlen(data::Union{Vector{UInt8}, Vector{Float64}})
     le = length(data)
     maxlen = 12 # elements, not characters
-	if le <  maxlen
-		return  string(data)
+    if le <  maxlen
+        return  string(data)
     else
         adds =  " ..... "
         addlen = 2
         truncat = 2 * div(maxlen, 3)
         tail = maxlen - truncat - addlen - 1
         return string(data[1:truncat])[1:end-1] * adds * string(data[end-tail:end])[7:end]
-	end
+    end
 end
 
 
@@ -358,12 +358,12 @@ _tg() = Dates.Time(now())
 
 "For use in show(io::IO, obj) methods. Hook into this logger's dispatch mechanism."
 function directto_abstractdevice(io::IO, obj)
-	if isa(io, ColorDevices)
-		buf = ColorDevice(IOBuffer())
-	else
-		buf = BlackWDevice(IOBuffer())
-	end
-	_show(buf, obj)
+    if isa(io, ColorDevices)
+        buf = ColorDevice(IOBuffer())
+    else
+        buf = BlackWDevice(IOBuffer())
+    end
+    _show(buf, obj)
     write(io, take!(buf.s))
     nothing
 end
