@@ -223,7 +223,7 @@ output = String(take!(io))
 
 # with loggers
 sws = ServerWS(handler= h, wshandler= w, logger = stderr)
-io = IOBuffer()l
+io = IOBuffer()
 show(io, sws)
 output = String(take!(io))
 @test output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=TTY:✓)" ||
