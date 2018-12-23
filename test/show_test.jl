@@ -223,11 +223,12 @@ output = String(take!(io))
 
 # with loggers
 sws = ServerWS(handler= h, wshandler= w, logger = stderr)
-io = IOBuffer()
+io = IOBuffer()l
 show(io, sws)
 output = String(take!(io))
 @test output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=TTY:✓)" ||
-    output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=PipeEndpoint():✓)"
+    output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=PipeEndpoint():✓)" ||
+    println(stderr, "Test output :229= ", output)
 fi = open("temptemp", "w+")
 sws = ServerWS(h, w, fi)
 io = IOBuffer()
