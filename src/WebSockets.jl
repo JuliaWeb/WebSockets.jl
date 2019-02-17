@@ -1,25 +1,19 @@
 """
     WebSockets
-This module implements the WebSockets protocol.
-
-WebSockets relies on the package HTTP.jl
+This module implements the WebSockets protocol. It relies on the package HTTP.jl.
 
 Websocket|server relies on a client initiating the connection.
-Websocket|client initiate the connection, but requires HTTP.
+Websocket|client initiate the connection.
 
-The other side of the connection, the peer, is typically a browser with
+The client side of the connection is most typically a browser with
 scripts enabled. Browsers are always the initiating, client side. But the
 peer can be any program, in any language, that follows the protocol. That
-includes another Julia session, parallel process or task.
+includes another Julia session, running in a parallel process or task.
 
     Future improvements:
-1. Logging of refused requests and closures due to bad behavior of client.
-2. Allow users to receive control messages or metadata if they want to.
-    For example RSV1 (compressed message) would be interesting.
-3. Check rsv1 to rsv3 values. This will reduce bandwidth.
-4. Optimize maskswitch!, possibly threaded above a certain limit.
-5. Split messages over several frames.
-6. Allow customizable console output (e.g. 'ping').
+1. Check rsv1 to rsv3 values. This will reduce bandwidth.
+2. Optimize maskswitch!, possibly threaded above a certain limit.
+3. Split messages over several frames.
 """
 module WebSockets
 import MbedTLS: digest, MD_SHA1
@@ -29,12 +23,13 @@ import      Sockets: TCPSocket,
                      IPAddr,
                      getsockname
 using Dates
-# importing Logging seems to be necessary to get
-# output from coroutines through macros like @info.
-# This on Julia 0.7.0
-import Logging
 # imports from HTTP in this file
 include("HTTP.jl")
+
+using Logging
+# A logger based on ConsoleLogger. This has an effect
+# only if the user chooses to use WebSocketLogger.
+include("Logger/websocketlogger.jl")
 
 export WebSocket,
        serve,
@@ -50,7 +45,10 @@ export WebSocket,
        WebSocketClosedError,
        checkratelimit!,
        addsubproto,
-       ServerWS
+       ServerWS,
+       WebSocketLogger,
+       @wslog,
+       Wslog
 
 # revisit the need for defining this union type for method definitions. The functions would
 # probably work just as fine with duck typing.
@@ -367,10 +365,10 @@ function handle_control_frame(ws::WebSocket, wsf::WebSocketFragment)
         end
         throw(WebSocketClosedError("ws|$(ws.server ? "server" : "client") respond to OPCODE_CLOSE " * reason))
     elseif wsf.opcode == OPCODE_PING
-        @info("ws|$(ws.server ? "server" : "client") received OPCODE_PING")
+        @debug ws, " received OPCODE_PING"
         send_pong(ws, wsf.data)
     elseif wsf.opcode == OPCODE_PONG
-        @info("ws|$(ws.server ? "server" : "client") received OPCODE_PONG")
+        @debug ws, " received OPCODE_PING"
         # Nothing to do here; no reply is needed for a pong message.
     else  # %xB-F are reserved for further control frames
         error(" while handle_control_frame(ws|$(ws.server ? "server" : "client"), wsf): Unknown opcode $(wsf.opcode)")
@@ -659,11 +657,18 @@ The peer can potentially disconnect at any time, but no matter the
 cause you will usually just want to exit your websocket handling function
 when you can't write to it.
 
+To check the errors (if you get any), temporarily set loging min_level to Logging.debug, e.g:
+
+```julia
+using WebSockets, Logging
+global_logger(WebSocketLogger(stderr, Logging.Debug));
+```
 """
 function writeguarded(ws, msg)
     try
         write(ws, msg)
-    catch
+    catch err
+        @debug err
         return false
     end
     true
@@ -688,6 +693,14 @@ while true
     println(String(data))
 end
 ```
+
+To check the errors (if you get any), temporarily set loging min_level to Logging.debug, e.g:
+
+```julia
+using WebSockets, Logging
+global_logger(WebSocketLogger(stderr, Logging.Debug));
+```
+
 """
 function readguarded(ws)
     data = Vector{UInt8}()
@@ -695,6 +708,7 @@ function readguarded(ws)
     try
         data = read(ws)
     catch err
+        @debug err
         data = Vector{UInt8}()
         success = false
     finally
