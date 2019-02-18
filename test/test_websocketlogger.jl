@@ -30,22 +30,25 @@ import Base.CoreLogging: Info,
     buf = IOBuffer()
     io = IOContext(buf, :displaysize=>(30,80), :color=>false)
     logger = WebSocketLogger(io)
-    with_logger(logger) do
-        for i in 1:2
-            @info "test" maxlog=1
+    # This covers an issue (#28786) in stdlib/Julia v 0.7, where log_record_id is not defined
+    # in the expanded macro. Fixed Nov 2018, labelled for backporting to v1.0.0
+    if VERSION >= v"1.0.0"
+        with_logger(logger) do
+            for i in 1:2
+                @info "test" maxlog=1
+            end
         end
-    end
-    @test String(take!(buf)) ==
-    """
-    [ Info: test
-    """
-    with_logger(logger) do
-        for i in 1:2
-            @info "test" maxlog=0
+        @test String(take!(buf)) ==
+        """
+        [ Info: test
+        """
+        with_logger(logger) do
+            for i in 1:2
+                @info "test" maxlog=0
+            end
         end
+        @test String(take!(buf)) == ""
     end
-    @test String(take!(buf)) == ""
-
     @testset "Default metadata formatting" begin
         @test Logging.default_metafmt(Debug, Base, :g, :i, expanduser("~/somefile.jl"), 42) ==
             (:blue,      "Debug:",   "@ Base ~/somefile.jl:42")
@@ -288,15 +291,21 @@ end
     @test '@' in msg
 
     # Loglevel Wslog, own format
-    msg = spec_msg("---", level = Wslog)
-    @test startswith(msg, "[ Wslog ")
-    @test endswith(msg, ": ---\n")
-
+    # This covers an issue related to #28786 in stdlib/Julia v 0.7, where log_record_id is not defined
+    # in the expanded macro. Why it is triggered here, but not in the LogLevel Info test is unknown.
+    if VERSION >= v"1.0.0"
+        msg = spec_msg("---", level = Wslog)
+        @test startswith(msg, "[ Wslog ")
+        @test endswith(msg, ": ---\n")
+    end
     # Blocking all log levels except Wslog.
     spec_shouldlog(logger, level, _module, group, id) = level == Wslog
-    msg = spec_msg("---", level = Wslog, shouldlog = spec_shouldlog)
-    @test startswith(msg, "[ Wslog ")
-    @test endswith(msg, ": ---\n")
+    # Issue 28786
+    if VERSION >= v"1.0.0"
+        msg = spec_msg("---", level = Wslog, shouldlog = spec_shouldlog)
+        @test startswith(msg, "[ Wslog ")
+        @test endswith(msg, ": ---\n")
+    end
     @test spec_msg("---", shouldlog = spec_shouldlog) == ""
     @test spec_msg("---", level = Debug, shouldlog = spec_shouldlog) == ""
     @test spec_msg("---", level = Warn, shouldlog = spec_shouldlog) == ""
