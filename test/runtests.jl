@@ -8,6 +8,11 @@ using Test
        include("show_test.jl");sleep(1)
     end
 
+    printstyled(color=:blue, "\nWebsocketLogger\n")
+    @testset "WebSocketLogger" begin
+       include("test_websocketlogger.jl");sleep(1)
+    end
+
     printstyled(color=:blue, "\nFragment and unit\n")
     @testset "Fragment and unit" begin
        include("frametest.jl");sleep(1)

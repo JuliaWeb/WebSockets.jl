@@ -24,17 +24,14 @@ Server and client side [Websockets](https://tools.ietf.org/html/rfc6455) protoco
 In the package manager, add WebSockets. Then [paste](https://docs.julialang.org/en/v1/stdlib/REPL/index.html#The-Julian-mode-1) this into a REPL:
 
 ```julia
-julia> using WebSockets, Logging
+julia> using WebSockets
 
 julia> serverWS = ServerWS(handler = (req) -> WebSockets.Response(200), wshandler = (ws_server) -> (writeguarded(ws_server, "Hello"); readguarded(ws_server)))
-ServerWS(handler=#3(req), wshandler=#4(ws_server), logger=Base.DevNull())
+ServerWS(handler=<span>#</span>7(req), wshandler=<span>#</span>8(ws_server))
 
-julia> import Logging.shouldlog
-
-julia> shouldlog(::ConsoleLogger, level, _module, group, id) = _module != WebSockets.HTTP.Servers
-shouldlog (generic function with 4 methods)
-
-julia> ta = @async WebSockets.serve(serverWS, port = 8000)
+julia> ta = @async WebSockets.with_logger(WebSocketLogger()) do
+                WebSockets.serve(serverWS, port = 8000)
+            end
 Task (runnable) @0x000000000fc91cd0
 
 julia> WebSockets.HTTP.get("http://127.0.0.1:8000")
@@ -62,7 +59,7 @@ julia> ta
 Task (done) @0x000000000fc91cd0
 
 ```
-More things to do: Access inline documentation and have a look at the examples folder. The testing files demonstrate a variety of uses. Benchmarks show examples of websockets and servers running on separate processes, as oposed to asyncronous tasks.
+Access inline documentation and have a look at the examples folder! The testing files also demonstrate a variety of uses. Benchmarks show examples of websockets and servers running on separate processes, as oposed to asyncronous tasks.
 
 ### About this package
 Originally from 2013 and Julia 0.2, the WebSockets API has remained largely unchanged. It now depends on [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl) for establishing the http connections. That package is in ambitious development, and most functionality of this package is already implemented directly in HTTP.jl.
@@ -88,9 +85,11 @@ WebSockets are well suited for user interactions via a browser or [cross-platfor
 - Compression is not currenlty implemented, but easily adaptable. On local connections, there's probably not much to gain.
 - If you worry about milliseconds, TCP quirks like 'warm-up' time with low transmission speed after a pause can be avoided with heartbeats. High-performance examples are missing.
 - Garbage collection increases message latency at semi-random intervals, as is visible in  benchmark plots. Benchmarks should include non-memory-allocating examples.
+- Time prefixes in e.g. `@wslog` is not accurate. To accurately track sequences of logging messages, include the time in your logging message.
 
 ##### Debugging with WebSockets.ServeWS servers
 Error messages from run-time are directed to a .out channel. See inline docs: ?Websockets.serve.
+When using `readguarded` or `writeguarded`, errors are logged with `@debug` statements. Set the logging level of the logger you use to 'Debug', as in 'examples/count_with_logger.jl'.
 
 ##### Debugging with WebSockets.HTTP.listen servers
 Error messages may be sent as messages to the client. This may not be good practice if you're serving pages to the internet, but nice while developing locally. There are some inline comments in the source code which may be of help.
@@ -98,10 +97,14 @@ Error messages may be sent as messages to the client. This may not be good pract
 ## Further development and comments
 The issues section is used for planning development: Contributions are welcome.
 
-- The /logutils and /benchmark folders contain some features that are not currently fully implemented (or working?), namely a specialized logger. For application development, we generally require very fast logging and this approach may or may not be sufficiently fast.
+- Version 1.3 integrates `WebSocketLogger`. It closely resembles `ConsoleLogger` from the Julia standard library. Additional features: see inline docs and 'examples/count_with_logger.jl'. With this closer integration with Julia's core logging functionality, we also introduce `@debug` statements in `readguarded` and `writeguarded` (as well as when receiving 'ping' or 'pong'). The functions still return a boolean to indicate failure, but return no reason except the logger messages.
+- The /benchmark folder contain some code that is not currently working, pending logging facilities.
 - Alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) and the direct implementation in [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl).
 
 ## Errors after updating?
+### To version 1.3.0
+WebSockets additionaly exports WebSocketLogger, @wslog, Wslog.
+
 ### To version 1.1.0
 This version is driven by large restructuring in HTTP.jl. We import more functions and types into WebSockets, e.g., WebSockets.Request. The main interface does not, intentionally, change, except for 'origin', which should now be qualified as WebSockets.origin.
 
