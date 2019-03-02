@@ -1,24 +1,14 @@
-# Included in benchmark_prepare.jl and in browsertests.jl
-# Refers logutils
-if !@isdefined(SRCPATH)
-    const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") : Base.source_dir()
-    const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
-    SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
-    LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
-end
-using logutils_ws
-
+# Included in /benchmark/benchmark_prepare.jl and in test/timeout/timeout.jl
+using WebSockets
 "A list of potentially available browsers, to be tried in succession if present"
 const BROWSERS = ["chrome", "firefox", "iexplore", "safari", "phantomjs"]
-"An complicated browser counter."
+const DEFAULTURL = "http://127.0.0.1:8000/index.html"
+
+"A stateful browser counter."
 mutable struct Countbrowser;value::Int;end
 (c::Countbrowser)() =COUNTBROWSER.value += 1
 "For next value: COUNTBROWSER(). For current value: COUNTBROWSER.value"
 const COUNTBROWSER = Countbrowser(0)
-const PORT = [8000]
-const PAGE = ["bce.html"]
-const URL = ["http://127.0.0.1:$(PORT[1])/$(PAGE[1])"]
-
 
 
 "Get application path for developer applications"
@@ -104,8 +94,8 @@ function browser_path_windows(shortname)
     return ""
 end
 "Constructs launch command"
-function launch_command(shortbrowsername)
-    if Sys.is_windows()
+function launch_command(shortbrowsername; url = DEFAULTURL)
+    if Sys.iswindows()
         pt = browser_path_windows(shortbrowsername)
     else
         pt = browser_path_unix_apple(shortbrowsername)
@@ -122,26 +112,26 @@ function launch_command(shortbrowsername)
         else
             script = "phantom.js"
         end
-        return Cmd(`$pt $script $URL`)
+        return Cmd(`$pt $script $url`)
     else
-        if Sys.is_windows()
-            return Cmd( [ pt, URL, prsw])
+        if Sys.iswindows()
+            return Cmd( [ pt, url, prsw])
         else
-            if Sys.is_apple()
-                return Cmd(`open --fresh -n $URL -a $pt --args $prsw`)
-            elseif Sys.is_linux() || Sys.is_bsd()
-                return Cmd(`xdg-open $(URL) $pt`)
+            if Sys.isapple()
+                return Cmd(`open --fresh -n $url -a $pt --args $prsw`)
+            elseif Sys.islinux() || Sys.isbsd()
+                return Cmd(`xdg-open $(url) $pt`)
             end
         end
     end
 end
 
 
-function open_testpage(shortbrowsername)
-    id = "open_testpage"
+function open_testpage(shortbrowsername; url = DEFAULTURL)
+    id = "open_testpage "
     dmc = launch_command(shortbrowsername)
     if dmc == ``
-        clog(id, "Could not find " * shortbrowsername)
+        @info id, "Could not find ", shortbrowsername
         return false
     else
         try
@@ -150,10 +140,10 @@ function open_testpage(shortbrowsername)
                 # standalone REPL, run will freeze the main thread if not run async.
                 @async run(dmc)
             else
-                spawn(dmc)
+                run(dmc, wait = false)
             end
         catch
-            clog(id, :red, "Failed to spawn " * shortbrowsername)
+            @info id, "Failed to spawn ", shortbrowsername
             return false
         end
     end
@@ -168,8 +158,8 @@ just wait in vain. In those cases,
 call this function again after a reasonable timeout.
 The function remembers which browsers were tried before.
 "
-function open_a_browser()
-    id = "open_next_browser"
+function open_a_browser(;url = DEFAULTURL)
+    id = "open_a_browser "
     if COUNTBROWSER.value > length(BROWSERS)
         return false
     end
@@ -177,9 +167,17 @@ function open_a_browser()
     b = ""
     while COUNTBROWSER.value < length(BROWSERS) && !success
         b = BROWSERS[COUNTBROWSER()]
-        clog(id, "Trying to launch browser no. ", COUNTBROWSER.value, ", ", :yellow, b)
-        success = open_testpage(b)
+        @debug id, "Trying to launch browser no. ", COUNTBROWSER.value, ", ",  b
+        success = open_testpage(b, url = url)
     end
-    success && clog(id, "seems to work:", :yellow, b, :normal, " on ", URL)
+    if success
+        @info id, b, " on ", url, " seems to work."
+    end
     success, b
+end
+function open_browser(b;url = DEFAULTURL)
+    if b ∉ BROWSERS
+        throw(ArgumentError("$b not in $BROWSERS"))
+    end
+    open_testpage(b, url = url)
 end
