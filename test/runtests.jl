@@ -15,7 +15,7 @@ using Test
 
     printstyled(color=:blue, "\nFragment and unit\n")
     @testset "Fragment and unit" begin
-       include("frametest.jl");sleep(1)
+    #   include("frametest.jl");sleep(1)
     end
 
     printstyled(color=:blue, "\nHandshake\n")

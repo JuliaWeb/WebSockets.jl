@@ -2,6 +2,7 @@
 using Test
 using Base64
 using WebSockets
+#=
 import WebSockets:  HandlerFunction,
                     WebsocketHandler,
                     Response
@@ -9,7 +10,7 @@ include("logformat.jl")
 const THISPORT = 8092
 const FURL = "ws://127.0.0.1:$THISPORT"
 
-#=
+
 @info "Start a server with a ws handler that is unresponsive. \nClose from client side. The " *
       " close handshake aborts after $(WebSockets.TIMEOUT_CLOSEHANDSHAKE) seconds..."
 server_WS = ServerWS(   HandlerFunction(req-> HTTP.Response(200)),

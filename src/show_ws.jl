@@ -1,5 +1,6 @@
 import Base.show
 import Base.method_argnames
+import Sockets.UDPSocket
 # Long form, as in display(ws) or REPL: ws enter
 function Base.show(io::IO, ::MIME"text/plain", ws::WebSocket{T}) where T
     ioc = IOContext(io, :wslog => true)
@@ -38,7 +39,7 @@ function _show(io::IO, stream::Base.LibuvStream)
     else
         kwargs, msg = _uv_status_tuple(stream)
         printstyled(io, msg; kwargs...)
-        if !(stream isa Servers.UDPSocket)
+        if !(stream isa UDPSocket)
             nba = bytesavailable(stream.buffer)
             nba > 0 && print(io, ", ", nba, " bytes")
             nothing

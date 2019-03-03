@@ -1,30 +1,33 @@
-import HTTP
-import HTTP:Response,
-            Request,
-            Header,
-            Sockets,
-            Servers,
-            Connection,
-            Transaction,
-            header,
-            hasheader,
-            setheader,
-            setstatus,
-            startwrite,
-            startread
-import HTTP.Servers:RateLimit,
-                    update!
-import HTTP.Streams.Stream
-import HTTP.URIs.URI
-import HTTP.Handler
-import HTTP.Handlers.HandlerFunction
-import HTTP.Servers:    Scheme,
-                        http,
-                        https,
-                        handle_request
-import HTTP.MbedTLS.SSLConfig
-import HTTP.ExceptionRequest.StatusError
-import HTTP.ConnectionPool.getrawstream
+import Base64: base64decode # For upgrade
+import Sockets: IPAddr,     # For checkratelimit!
+                getsockname # For checkratelimit!
+import HTTP             # User convenience, depend on WebSockets only to avoid version confusion
+import HTTP:Response,   # For upgrade
+            Request,    # For upgrade, target, origin, subprotocol
+            Header,     # benchmarks, client_test, handshaketest
+            header,     # For upgrade, subprotocol
+            hasheader,  # For upgrade and check_upggrade
+            setheader,  # For upgrade
+            setstatus, # For upgrade
+            startwrite, # For upgrade
+            Connection, # For handshaketest
+            Transaction # For handshaketest
+            #startread # For _openstream
+            #  Servers # For further imports to ServerWS
+            #  Sockets # Present in WebSockets.jl
+import HTTP.Servers:RateLimit, # For checkratelimit!
+                    update! # For checkratelimit!
+import HTTP.Streams.Stream # For is_upgrade, handshaketest
+import HTTP.URIs.URI       # For open
+import HTTP.Handler        # For WebSocketHandler, ServerWS, error_test
+import HTTP.Handlers.HandlerFunction # For ServerWS
+import HTTP.Servers:    Scheme, # For ServerWS
+                        http,# For ServerWS
+                        https,# For ServerWS
+                        handle_request # For serve
+import HTTP.MbedTLS.SSLConfig# For ServerOptions
+import HTTP.ExceptionRequest.StatusError # For open
+import HTTP.ConnectionPool.getrawstream  # For _openstream
 #=
 """
 Initiate a websocket|client connection to server defined by url. If the server accepts

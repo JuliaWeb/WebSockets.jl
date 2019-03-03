@@ -3,7 +3,7 @@
 This module implements the WebSockets protocol. It relies on the package HTTP.jl.
 
 Websocket|server relies on a client initiating the connection.
-Websocket|client initiate the connection.
+Websocket|client initiates the connection.
 
 The client side of the connection is most typically a browser with
 scripts enabled. Browsers are always the initiating, client side. But the
@@ -16,14 +16,12 @@ includes another Julia session, running in a parallel process or task.
 3. Split messages over several frames.
 """
 module WebSockets
-import MbedTLS: digest, MD_SHA1
-import Base64: base64encode, base64decode
+import MbedTLS: MD_SHA1, digest
+import Base64: base64encode
 import Sockets
-import      Sockets: TCPSocket,
-                     IPAddr,
-                     getsockname
+import Sockets: TCPSocket
 using Dates
-# imports from HTTP in this file
+# Imports for and from HTTP in this file
 include("HTTP.jl")
 
 using Logging
