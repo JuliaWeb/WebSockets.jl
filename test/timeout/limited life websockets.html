@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+  <head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="X-UA-Compatible" content="ie=edge">
+	<title>WS timeout test</title>
+</head>
+<body>
+<p>Limited life websockets, testing against unwanted timeouts.
+</p>
+<ul><li id="1s_timeout">Timeout 1 s</li></ul>
+<ul><li id="2s_timeout">Timeout 2 s</li></ul>
+<ul><li id="4s_timeout">Timeout 4 s</li></ul>
+<ul><li id="8s_timeout">Timeout 8 s</li></ul>
+<ul><li id="16s_timeout">Timeout 16 s</li></ul>
+<ul><li id="32s_timeout">Timeout 32 s</li></ul>
+<ul><li id="64s_timeout">Timeout 64 s</li></ul>
+<ul><li id="128s_timeout">Timeout 128 s</li></ul>
+<ul><li id="256s_timeout">Timeout 256 s</li></ul>
+<ul><li id="512s_timeout">Timeout 512 s</li></ul>
+<ul><li id="1024s_timeout">Timeout 1024 s</li></ul>
+<ul><li id="2048s_timeout">Timeout 2048 s</li></ul>
+<ul><li id="4096s_timeout">Timeout 4096 s</li></ul>
+<ul><li id="8192s_timeout">Timeout 8192 s</li></ul>
+
+<p id = "init"></p>
+<script>
+
+window.onload= function(){
+	plog("init", "<p>:window.onload</p>")
+	for(var i = 0; i < 14; i++){
+			var sec = Math.pow(2, i)
+			addtimeoutwebsocket(sec)
+		}
+	}
+
+// log to DOM element with id ws
+function plog(ws, shtm){
+	document.getElementById(ws).innerHTML += shtm
+	}
+
+const sleep = (ms) => {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function addtimeoutwebsocket(s_timeout){
+	let wsuri = document.URL.replace("http:","ws:")
+	let ws = new WebSocket(wsuri)
+	let instancename = s_timeout + "s_timeout" 
+	ws.mynam = instancename
+	ws.onclose = function(e){
+		plog(e.target.mynam, "<p>: " + e.target.mynam + ".onclose:" +
+			"wasClean: " + e.wasClean + ";  " +
+			"code: " + e.code + ";  " + codeDesc[e.code] + ";  " +
+			"reason: " + e.reason + ";  " +
+			"<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
+			" " + readystateDesc[e.target.readyState] + ".</p>")
+		}
+	ws.onerror = function(e){
+		plog(e.target.mynam, "<p>: " + e.target.mynam + ".onerror: " +
+			"<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
+			" " + readystateDesc[e.target.readyState] + ".</p>")
+		}
+	ws.onopen = function(e){
+		plog(e.target.mynam, "<p>: " + e.target.mynam + ".onopen: " +
+			"<br>&nbsp;&nbsp;Websocket state is now " + e.target.readyState +
+			" " + readystateDesc[e.target.readyState]
+			)
+		ws.send(instancename)
+		}
+	ws.onmessage = function (e){
+		var msg = e.data
+		plog(e.target.mynam, "<p>Received: " + msg)
+	}
+	plog(instancename, "<p>" + instancename + " created.</p>")
+	sleep(1000*s_timeout).then(() => {
+		var msg = s_timeout + " seconds are up!"
+		plog(instancename, "<p>: " + msg + "</p>")
+		ws.close(1000, msg)
+	})
+	return ws
+} // addtimeoutwebsocket
+
+
+var codeDesc ={1000:"Normal",
+1001:"Going Away",
+1002:"Protocol Error",
+1003:"Unsupported Data",
+1004:"Reserved",
+1005:"No Status Recvd- reserved",
+1006:"Abnormal Closure- reserved",
+1007:"Invalid frame payload data",
+1008:"Policy Violation",
+1009:"Message too big",
+1010:"Missing Extension",
+1011:"Internal Error",
+1012:"Service Restart",
+1013:"Try Again Later",
+1014:"Bad Gateway",
+1015:"TLS Handshake"}
+
+var readystateDesc ={0:"CONNECTING",
+1:"OPEN",
+2:"CLOSING",
+3:"CLOSED"}
+</script>
+</body>
+</html>
