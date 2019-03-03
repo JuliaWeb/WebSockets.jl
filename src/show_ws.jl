@@ -119,6 +119,7 @@ function _uv_status_tuple(status::ReadyState)
 end
 
 ### ServerWS
+#=
 function Base.show(io::IO, sws::ServerWS)
     print(io, ServerWS, "(handler=")
     _show(io, sws.handler.func)
@@ -170,7 +171,7 @@ function Base.show(io::IO, swo::WebSockets.ServerOptions)
     nothing
 end
 
-
+=#
 
 
 _show(io::IO, x) = show(io, x)

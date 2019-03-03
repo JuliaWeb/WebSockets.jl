@@ -6,6 +6,7 @@
 # stress tests opening and closing a sequence of servers.
 # At this time, we unfortunately get irritating messages
 # 'Workqueue inconsistency detected:...'
+#=
 using Test
 using WebSockets
 import Sockets: IPAddr,
@@ -62,3 +63,4 @@ let
     closeserver(serverref)
 end
 nothing
+=#

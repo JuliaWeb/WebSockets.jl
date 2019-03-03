@@ -210,7 +210,7 @@ _show(io, x-> 2x)
 output = String(take!(io))
 @test output[1] == '#'
 
-
+#=
 sws = ServerWS(h, w)
 show(io, sws)
 output = String(take!(io))
@@ -254,3 +254,4 @@ io = IOBuffer()
 show(io, sws)
 output = String(take!(io))
 @test output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=IOBuffer():✓)"
+=#

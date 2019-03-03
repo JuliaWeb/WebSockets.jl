@@ -9,7 +9,7 @@ include("logformat.jl")
 const THISPORT = 8092
 const FURL = "ws://127.0.0.1:$THISPORT"
 
-
+#=
 @info "Start a server with a ws handler that is unresponsive. \nClose from client side. The " *
       " close handshake aborts after $(WebSockets.TIMEOUT_CLOSEHANDSHAKE) seconds..."
 server_WS = ServerWS(   HandlerFunction(req-> HTTP.Response(200)),
@@ -21,6 +21,9 @@ res = WebSockets.open((_) -> nothing, FURL);
 @test res.status == 101
 put!(server_WS.in, "x")
 
+=#
+
+#=
 @info "Start a server with a ws handler that always reads guarded."
 sleep(1)
 server_WS = ServerWS(   HandlerFunction(req -> HResponse(200)),
@@ -40,7 +43,6 @@ WebSockets.open(FURL) do ws_client
         @test (UInt8[], false) == readguarded(ws_client)
     end;
 sleep(1)
-
 
 @info "Attempt to write guarded from a closing ws|client. Check for return false."
 sleep(1)
@@ -202,3 +204,4 @@ global err = take!(server_WS.out)
 global stack_trace = take!(server_WS.out)
 put!(server_WS.in, "close server")
 sleep(2)
+=#

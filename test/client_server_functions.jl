@@ -141,10 +141,12 @@ function closeserver(ref::Ref)
     yield()
     nothing
 end
+#=
 function closeserver(ref::WebSockets.ServerWS)
     put!(ref.in, "Any message means close!")
     nothing
 end
+=#
 
 
 """
@@ -185,6 +187,8 @@ function startserver(;surl = SURL, port = PORT, usinglisten = false)
             end
         end
     else
+        throw(ArgumentError("Not currently supporting keyword argument usinglisten = false"))
+        #=
         # It is not strictly necessary to wrap the argument functions in HandleFunctions.
         reference =  WebSockets.ServerWS(   WebSockets.HandlerFunction(httphandler),
                                             WebSockets.WebsocketHandler(server_gatekeeper)
@@ -195,6 +199,7 @@ function startserver(;surl = SURL, port = PORT, usinglisten = false)
             # capture errors, if any were made during the definition.
             @error take!(myserver_WS.out)
         end
+        =#
     end
     servertask, reference
 end

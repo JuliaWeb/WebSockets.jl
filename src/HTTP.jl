@@ -25,7 +25,7 @@ import HTTP.Servers:    Scheme,
 import HTTP.MbedTLS.SSLConfig
 import HTTP.ExceptionRequest.StatusError
 import HTTP.ConnectionPool.getrawstream
-
+#=
 """
 Initiate a websocket|client connection to server defined by url. If the server accepts
 the connection and the upgrade to websocket, f is called with an open websocket|client
@@ -100,7 +100,7 @@ function _openstream(f::Function, stream, key::String)
     end
 end
 
-
+=#
 """
 Used as part of a server definition. Call this if
 is_upgrade(stream.message) returns true.
@@ -258,7 +258,7 @@ is_upgrade(stream::Stream) = is_upgrade(stream.message)
 target(req::Request) = req.target
 subprotocol(req::Request) = header(req, "Sec-WebSocket-Protocol")
 origin(req::Request) = header(req, "Origin")
-
+#=
 """
 WebsocketHandler(f::Function) <: Handler
 
@@ -426,7 +426,7 @@ end
 serve(server::ServerWS; host= "127.0.0.1", port= "") =  serve(server, host, port, false)
 serve(server::ServerWS, host, port) =  serve(server, host, port, false)
 serve(server::ServerWS, port) =  serve(server, "127.0.0.1", port, false)
-
+=#
 """
 'checkratelimit!' updates a dictionary of IP addresses which keeps track of their
 connection quota per time window.

@@ -1,5 +1,6 @@
 # included in runtests.jl
 # Opening / closing / triggering errors without crashing server.
+#=
 using Test
 using WebSockets
 import WebSockets:  is_upgrade,
@@ -128,3 +129,4 @@ sethd(resp, "Sec-WebSocket-Accept" => generate_websocket_key(base64encode(rand(U
 write(servsock, resp)
 @test_throws WebSockets.WebSocketError _openstream(dummywsh, s, key)
 nothing
+=#

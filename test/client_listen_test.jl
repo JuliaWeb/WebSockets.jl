@@ -40,7 +40,7 @@ for i = 1:3
         closeserver(serverref)
     end
 end
-
+#=
 @info "Listen: Client side initates message exchange."
 let
     servertask, serverref = startserver(usinglisten = true)
@@ -54,11 +54,12 @@ let
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL)
     closeserver(serverref)
 end
-
 @info "Listen: Server side initates message exchange. Close from within server side handler."
 let
     servertask, serverref = startserver(usinglisten = true)
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL_CLOSE)
     closeserver(serverref)
 end
+=#
+
 nothing

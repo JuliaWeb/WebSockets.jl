@@ -1,5 +1,6 @@
 # included in runtests.jl
 # tests throttling and secure server options.
+#=
 using Test
 using WebSockets
 import WebSockets: checkratelimit!,
@@ -90,3 +91,4 @@ const WSSURI = "wss://$IPA:$THISPORT"
 @info "Websocket upgrade request should throw error (15s)."
 @test_throws WebSocketClosedError WebSockets.open((_)->nothing, WSSURI)
 nothing
+=#
