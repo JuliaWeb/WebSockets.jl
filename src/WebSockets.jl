@@ -16,7 +16,7 @@ includes another Julia session, running in a parallel process or task.
 3. Split messages over several frames.
 """
 module WebSockets
-import MbedTLS: digest, MD_SHA1
+import HTTP.Servers: MbedTLS
 import Base64: base64encode, base64decode
 import Sockets
 import      Sockets: TCPSocket,
@@ -531,7 +531,7 @@ This function then returns the string of the base64-encoded value.
 """
 function generate_websocket_key(key)
     hashkey = "$(key)258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-    return base64encode(digest(MD_SHA1, hashkey))
+    return base64encode(MbedTLS.digest(MbedTLS.MD_SHA1, hashkey))
 end
 
 """

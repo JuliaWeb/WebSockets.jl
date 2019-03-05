@@ -1,15 +1,14 @@
 using Test
-import Base:    C_NULL, LibuvStream, GenericIOBuffer, BufferStream
-import Sockets: UDPSocket, @ip_str, send, recvfrom, TCPSocket
+import Sockets
+import Sockets.@ip_str
 
 using WebSockets
 
 import WebSockets:_show,
     ReadyState,
-    _uv_status_tuple,
-    Response
-mutable struct DummyStream <: LibuvStream
-    buffer::GenericIOBuffer
+    _uv_status_tuple
+mutable struct DummyStream <: Base.LibuvStream
+    buffer::Base.GenericIOBuffer
     status::Int
     handle::Any
 end
@@ -17,7 +16,7 @@ end
 
 let kws = [], msgs =[]
     ds = DummyStream(IOBuffer(), 0, 0)
-    for s = 0:9, h in [C_NULL, Ptr{UInt64}(3)]
+    for s = 0:9, h in [Base.C_NULL, Ptr{UInt64}(3)]
         ds.handle = h
         ds.status = s
         kwarg, msg = _uv_status_tuple(ds)
@@ -71,7 +70,7 @@ output = join(split(String(take!(io)), " ")[2:end], " ")
 
 
 
-udp = UDPSocket()
+udp = Sockets.UDPSocket()
 bind(udp, ip"127.0.0.1", 8079)
 io = IOContext(IOBuffer(), :color => true, :wslog=>true)
 _show(io, udp)
@@ -80,14 +79,14 @@ output = String(take!(io.io))
 @test output == "\e[32m✓\e[39m"
 
 
-udp = UDPSocket()
+udp = Sockets.UDPSocket()
 io = IOContext(IOBuffer(), :wslog=>true)
 _show(io, udp)
 output = String(take!(io.io))
 # No colors in file context, correct state
 @test output == "init"
 
-bs = BufferStream()
+bs = Base.BufferStream()
 io = IOContext(IOBuffer(), :color => true, :wslog=>true)
 _show(io, bs)
 output = String(take!(io.io))
@@ -95,7 +94,7 @@ output = String(take!(io.io))
 @test output == "\e[32m✓\e[39m"
 
 
-bs = BufferStream()
+bs = Base.BufferStream()
 write(bs, "321")
 io = IOContext(IOBuffer(), :color => true, :wslog=>true)
 _show(io, bs)
@@ -104,7 +103,7 @@ output = String(take!(io.io))
 @test output == "\e[32m✓\e[39m, 3 bytes"
 
 
-bs = BufferStream()
+bs = Base.BufferStream()
 close(bs)
 io = IOContext(IOBuffer(), :color => true, :wslog=>true)
 _show(io, bs)
@@ -112,7 +111,7 @@ output = String(take!(io.io))
 @test output == "\e[31m✘\e[39m"
 
 
-bs = BufferStream()
+bs = Base.BufferStream()
 write(bs, "321")
 close(bs)
 io = IOContext(IOBuffer(), :color => true, :wslog=>true)
@@ -121,7 +120,7 @@ output = String(take!(io.io))
 @test output == "\e[31m✘\e[39m, 3 bytes"
 
 
-bs = BufferStream()
+bs = Base.BufferStream()
 write(bs, "123")
 io = IOContext(IOBuffer(), :color => true, :wslog=>true)
 _show(io, ds)
@@ -150,26 +149,26 @@ output = String(take!(io.io))
 
 
 # Short form, as in print(stdout, ws)
-ws = WebSocket(BufferStream(), true)
+ws = WebSocket(Base.BufferStream(), true)
 io = IOContext(IOBuffer())
 show(io, ws)
 output = String(take!(io.io))
 @test output == "WebSocket{BufferStream}(server, CONNECTED)"
 
 
-ws = WebSocket(BufferStream(), false)
+ws = WebSocket(Base.BufferStream(), false)
 io = IOContext(IOBuffer())
 show(io, ws)
 output = String(take!(io.io))
 @test output == "WebSocket{BufferStream}(client, CONNECTED)"
 
-ws = WebSocket(BufferStream(), false)
+ws = WebSocket(Base.BufferStream(), false)
 io = IOContext(IOBuffer(), :color => true)
 show(io, ws)
 output = String(take!(io.io))
 @test output == "WebSocket{BufferStream}(client, \e[32mCONNECTED\e[39m)"
 
-ws = WebSocket(TCPSocket(), false)
+ws = WebSocket(Sockets.TCPSocket(), false)
 io = IOContext(IOBuffer(), :color => true)
 show(io, ws)
 output = String(take!(io.io))
@@ -177,21 +176,21 @@ output = String(take!(io.io))
 @test output == "WebSocket(client, \e[32mCONNECTED\e[39m)"
 
 #short form for Atom / Juno
-ws = WebSocket(TCPSocket(), false)
+ws = WebSocket(Sockets.TCPSocket(), false)
 io = IOContext(IOBuffer(), :color => true)
 show(io, "application/prs.juno.inline", ws)
 output = String(take!(io.io))
 @test output == "WebSocket(client, \e[32mCONNECTED\e[39m)"
 
 # Long form, as in print(stdout, ws)
-ws = WebSocket(TCPSocket(), true)
+ws = WebSocket(Sockets.TCPSocket(), true)
 io = IOContext(IOBuffer(), :color => true)
 show(io, "text/plain", ws)
 output = String(take!(io.io))
 @test output == "WebSocket{TCPSocket}(server, \e[32mCONNECTED\e[39m): \e[33minit\e[39m"
 
 
-ws = WebSocket(BufferStream(), false)
+ws = WebSocket(Base.BufferStream(), false)
 write(ws.socket, "78")
 io = IOContext(IOBuffer(), :color => true)
 show(io, "text/plain", ws)
@@ -199,7 +198,7 @@ output = String(take!(io.io))
 @test output == "WebSocket{BufferStream}(client, \e[32mCONNECTED\e[39m): \e[32m✓\e[39m, 2 bytes"
 
 ### For testing Base.show(ServerWS)
-h(r) = Response(200)
+h(r) = HTTP.Response(200)
 w(ws, r) = nothing
 io = IOBuffer()
 _show(io, h)

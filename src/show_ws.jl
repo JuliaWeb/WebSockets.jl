@@ -38,7 +38,7 @@ function _show(io::IO, stream::Base.LibuvStream)
     else
         kwargs, msg = _uv_status_tuple(stream)
         printstyled(io, msg; kwargs...)
-        if !(stream isa Servers.UDPSocket)
+        if !(stream isa HTTP.Servers.UDPSocket)
             nba = bytesavailable(stream.buffer)
             nba > 0 && print(io, ", ", nba, " bytes")
             nothing
