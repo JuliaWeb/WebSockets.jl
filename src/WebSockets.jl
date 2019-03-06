@@ -16,7 +16,6 @@ includes another Julia session, running in a parallel process or task.
 3. Split messages over several frames.
 """
 module WebSockets
-import HTTP.Servers: MbedTLS
 import Base64: base64encode, base64decode
 import Sockets
 import      Sockets: TCPSocket,
@@ -43,9 +42,7 @@ export WebSocket,
        send_ping,
        send_pong,
        WebSocketClosedError,
-       checkratelimit!,
        addsubproto,
-       ServerWS,
        WebSocketLogger,
        @wslog,
        Wslog

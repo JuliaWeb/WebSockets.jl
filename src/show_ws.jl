@@ -1,4 +1,3 @@
-import Base.show
 import Base.method_argnames
 # Long form, as in display(ws) or REPL: ws enter
 function Base.show(io::IO, ::MIME"text/plain", ws::WebSocket{T}) where T
@@ -154,8 +153,8 @@ end
 
 function Base.show(io::IO, swo::WebSockets.ServerOptions)
     hidetype = get(IOContext(io), :wslog, false)
-    fina = fieldnames(ServerOptions)
-    hidetype || print(io, ServerOptions, "(")
+    fina = fieldnames(WebSockets.ServerOptions)
+    hidetype || print(io, WebSockets.ServerOptions, "(")
     for field in fina
         fiva = getfield(swo, field)
         if fiva != nothing

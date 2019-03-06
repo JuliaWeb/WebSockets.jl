@@ -1,4 +1,8 @@
-using Test
+using WebSockets, Test, Base64
+import Base: BufferStream, convert
+import HTTP, Sockets, Dates
+import Sockets.@ip_str
+
 
 @testset "WebSockets" begin
     include("logformat.jl")
@@ -23,10 +27,10 @@ using Test
         include("handshaketest.jl");sleep(1)
     end
 
-    printstyled(color=:blue, "\nTest throttling\n")
-    @testset "Throttling" begin
-        include("throttling_test.jl");sleep(1)
-    end
+    # printstyled(color=:blue, "\nTest throttling\n")
+    # @testset "Throttling" begin
+    #     include("throttling_test.jl");sleep(1)
+    # end
 
     printstyled(color=:blue, "\nClient test\n")
     @testset "Client" begin

@@ -1,27 +1,29 @@
 import HTTP
-# import HTTP.Servers: MbedTLS
-# import HTTP:Response,
-#             Request,
-#             Header,
-#             Sockets,
-#             Servers,
-#             Connection,
-#             Transaction,
-#             header,
-#             hasheader,
-#             setheader,
-#             setstatus,
-#             startwrite,
-#             startread
-# import HTTP.Servers:RateLimit,
-#                     update!
-# import HTTP.Streams.Stream
-# import HTTP.URIs.URI
-# import HTTP.Handler
-# import HTTP.Servers:    handle_request
-# import HTTP.MbedTLS.SSLConfig
-# import HTTP.ExceptionRequest.StatusError
-# import HTTP.ConnectionPool.getrawstream
+import HTTP.Servers: MbedTLS
+
+"Called by open with a stream connected to a server, after handshake is initiated"
+function _openstream(f::Function, stream, key::String)
+    println("Try startread")
+    HTTP.startread(stream)
+    println("Finished startread")
+    response = stream.message
+    if response.status != 101
+        return
+    end
+    check_upgrade(stream)
+    if HTTP.header(response, "Sec-WebSocket-Accept") != generate_websocket_key(key)
+        throw(WebSocketError(0, "Invalid Sec-WebSocket-Accept\n" *
+                                "$response"))
+    end
+    # unwrap the stream
+    io = HTTP.ConnectionPool.getrawstream(stream)
+    ws = WebSocket(io, false)
+    try
+        f(ws)
+    finally
+        close(ws)
+    end
+end
 
 """
 Initiate a websocket|client connection to server defined by url. If the server accepts
@@ -56,46 +58,29 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
     if in('#', url)
         throw(ArgumentError(" replace '#' with %23 in url: $url"))
     end
-    uri = URI(url)
+    uri = HTTP.URI(url)
     if uri.scheme != "ws" && uri.scheme != "wss"
         throw(ArgumentError(" bad argument url: Scheme not ws or wss. Input scheme: $(uri.scheme)"))
     end
     openstream(stream) = _openstream(f, stream, key)
     try
+        println("*******************************************************************")
+        println(HTTP.stack(reuse_limit=0,verbose=verbose ? 2 : 0))
+        println("*******************************************************************")
         HTTP.open(openstream,
                 "GET", uri, headers;
                 reuse_limit=0, verbose=verbose ? 2 : 0, kw...)
     catch err
         if typeof(err) <: HTTP.IOExtras.IOError
             throw(WebSocketClosedError(" while open ws|client: $(string(err.e.msg))"))
-        elseif typeof(err) <: StatusError
+        elseif typeof(err) <: HTTP.StatusError
             return err.response
         else
            rethrow(err)
         end
     end
 end
-"Called by open with a stream connected to a server, after handshake is initiated"
-function _openstream(f::Function, stream, key::String)
-    HTTP.startread(stream)
-    response = stream.message
-    if response.status != 101
-        return
-    end
-    check_upgrade(stream)
-    if HTTP.header(response, "Sec-WebSocket-Accept") != generate_websocket_key(key)
-        throw(WebSocketError(0, "Invalid Sec-WebSocket-Accept\n" *
-                                "$response"))
-    end
-    # unwrap the stream
-    io = HTTP.ConnectionPool.getrawstream(stream)
-    ws = WebSocket(io, false)
-    try
-        f(ws)
-    finally
-        close(ws)
-    end
-end
+
 
 
 """
@@ -256,20 +241,6 @@ target(req::HTTP.Request) = req.target
 subprotocol(req::HTTP.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
 origin(req::HTTP.Request) = HTTP.header(req, "Origin")
 
-"""
-WebsocketHandler(f::Function) <: HTTP.Handler
-
-The provided argument should be one of the forms
-    `f(WebSocket) => nothing`
-    `f(Request, WebSocket) => nothing`
-The latter form is intended for gatekeeping, ref. RFC 6455 section 10.1
-
-f accepts a `WebSocket` and does interesting things with it, like reading, writing and exiting when finished.
-"""
-struct WebsocketHandler{F <: Function} <: HTTP.Handler
-    func::F # func(ws) or func(request, ws)
-end
-
 struct ServerOptions
     sslconfig::Union{HTTP.Servers.MbedTLS.SSLConfig, Nothing}
     readtimeout::Float64
@@ -296,7 +267,7 @@ include .in  and .out channels, see WebSockets.serve.
 
 Server options can be set using keyword arguments, see methods(WebSockets.ServerWS)
 """
-mutable struct ServerWS{T <: Val, H <: HTTP.Handler, W <: WebsocketHandler}
+mutable struct ServerWS{S <: Val, H <: HTTP.RequestHandlerFunction, W <: HTTP.StreamHandlerFunction}
     handler::H
     wshandler::W
     logger::IO
@@ -304,17 +275,17 @@ mutable struct ServerWS{T <: Val, H <: HTTP.Handler, W <: WebsocketHandler}
     out::Channel{Any}
     options::ServerOptions
 
-    ServerWS{T, H, W}(handler::H, wshandler::W, logger::IO = stdout, ch=Channel(1), ch2=Channel(2),
-                 options = ServerOptions()) where {T, H, W} =
-        new{T, H, W}(handler, wshandler, logger, ch, ch2, options)
+    ServerWS{S, H, W}(handler::H, wshandler::W, logger::IO = stdout, ch=Channel(1), ch2=Channel(2),
+                 options = ServerOptions()) where {S, H, W} =
+        new{S, H, W}(handler, wshandler, logger, ch, ch2, options)
 end
 
 # Define ServerWS without wrapping the functions first. Rely on argument sequence.
 function ServerWS(h::Function, w::Function, l::IO=stdout;
             cert::String="", key::String="", args...)
 
-        ServerWS(HTTP.StreamHandlerFunction(h),
-                WebsocketHandler(w), l;
+        ServerWS(HTTP.RequestHandlerFunction(h),
+                HTTP.StreamHandlerFunction(w), l;
                 cert=cert, key=key, ratelimit = 10//1, args...)
 end
 # Define ServerWS with keyword arguments only
@@ -322,8 +293,8 @@ function ServerWS(;handler::Function, wshandler::Function,
             logger::IO=stdout,
             cert::String="", key::String="", args...)
 
-        ServerWS(HTTP.StreamHandlerFunction(handler),
-                WebsocketHandler(wshandler), logger;
+        ServerWS(HTTP.RequestHandlerFunction(handler),
+                HTTP.StreamHandlerFunction(wshandler), logger;
                 cert=cert, key=key, ratelimit = 10//1, args...)
 end
 
@@ -334,15 +305,15 @@ function ServerWS(handler::H,
                 cert::String = "",
                 key::String = "",
                 ratelimit = 10//1,
-                args...) where {H <: HTTP.StreamHandlerFunction, W <: WebsocketHandler}
+                args...) where {H <: HTTP.RequestHandlerFunction, W <: HTTP.StreamHandlerFunction}
 
     sslconfig = nothing;
-    scheme = typeof(HTTP.Handlers.SCHEMES["http"]) # http is an imported DataType
+    S = typeof(HTTP.Handlers.SCHEMES["http"]) # http is an imported DataType
     if cert != "" && key != ""
         sslconfig = HTTP.Servers.MbedTLS.SSLConfig(cert, key)
-        scheme = typeof(HTTP.Handlers.SCHEMES["https"]) # https is an imported DataType
+        S = typeof(HTTP.Handlers.SCHEMES["https"]) # https is an imported DataType
     end
-    serverws = ServerWS{scheme, H, W}(  handler,
+    serverws = ServerWS{S, H, W}(  handler,
                                         wshandler,
                                         logger, Channel(1), Channel(2),
                                         ServerOptions(;ratelimit = ratelimit,
@@ -366,32 +337,39 @@ After a suspected connection task failure:
     end
 ```
 """
-function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
+function serve(server::ServerWS{S, H, W}, host, port, verbose) where {S, H, W}
+    println("server: $(server)")
+    println("host: $(host)")
+    println("port: $(port)")
+    println("verbose: $(verbose)")
+    println("server.in: $(server.in)")
     # An internal reference used for closing.
     tcpserver = Ref{Union{Base.IOServer, Nothing}}()
     # Start a couroutine that sleeps until tcpserver is assigned,
-    # ie. the reference is established further down.
+    # ie. the reference is established further down.server:
     # It then enters the while loop, where it
     # waits for put! to channel .in. The value does not matter.
     # The coroutine then closes the server and finishes its run.
     # Note that WebSockets v1.0.3 required the channel input to be HTTP.KILL,
     # but will now kill the server regardless of what is sent.
-    @async begin
-        # Next line will hold
-        take!(server.in)
-        close(tcpserver[])
-        tcpserver[] = nothing
-        GC.gc()
-        yield()
-    end
+    # @async begin
+    #     # Next line will hold
+    #     take!(server.in)
+    #     println("take! has completed")
+    #     close(tcpserver[])
+    #     tcpserver[] = nothing
+    #     GC.gc()
+    #     yield()
+    # end
     # We capture some variables in this inner function, which takes just one-argument.
     # The inner function will be called in a new task for every incoming connection.
     function _servercoroutine(stream::HTTP.Stream)
+        println("Try _servercoroutine")
         try
             if is_upgrade(stream.message)
-                upgrade(server.wshandler.func, stream)
+                HTTP.handle(server.wshandler, stream)
             else
-                handle_request(server.handler.func, stream)
+                HTTP.handle(server.handler, stream)
             end
         catch err
             put!(server.out, err)
@@ -405,16 +383,20 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
     #    The default tcpvalid function is defined in this module.
     # 2) If we are ready, it spawns a new task or coroutine _servercoroutine.
     #
+    println("Scheme: $(S) $(S == Val{:https})")
+    println("SSLConfig: $(isnothing(server.options.sslconfig) ? "Nothing" : server.options.sslconfig)")
+    println("Server Options: $(server.options)")
     HTTP.listen(_servercoroutine,
             host, port;
-            tcpref=tcpserver,
-            ssl=(T == Servers.https),
+            # server=tcpserver,
+            # ssl=(S == Val{:https}),
             sslconfig = server.options.sslconfig,
             verbose = verbose,
-            tcpisvalid = server.options.ratelimit > 0 ? checkratelimit! :
-                                                     (tcp; kw...) -> true,
-            ratelimits = Dict{IPAddr, HTTP.Servers.MbedTLS.SSLConfig}(),
-            ratelimit = server.options.ratelimit)
+            # tcpisvalid = server.options.ratelimit > 0 ? 
+            #     tcp -> checkratelimit!(tcp,ratelimit=server.options.ratelimit) :
+            #     tcp -> true,
+            # ratelimits = Dict{IPAddr, HTTP.Servers.MbedTLS.SSLConfig}(),
+            rate_limit = server.options.ratelimit)
     # We will only get to this point if the server is closed.
     # If this serve function is running as a coroutine, the server is closed
     # through the server.in channel, see above.
@@ -437,16 +419,11 @@ it as the 'tcpisvalid' argument to 'WebSockets.HTTP.listen'. Other functions can
 keyword argument, as long as they adhere to this form, which WebSockets.HTTP.listen
 expects.
 """
-checkratelimit!(tcp::Base.PipeEndpoint; kw...) = true
+checkratelimit!(tcp::Base.PipeEndpoint) = true
 function checkratelimit!(tcp;
-                          ratelimits = nothing,
-                          ratelimit::Rational{Int}=Int(10)//Int(1), kw...)
+                          ratelimit::Rational{Int}=Int(10)//Int(1))
     println("**************************************************************")
-    println("Rate limits: $(isnothing(ratelimits) ? "Nothing" : ratelimits)")
     println("Rate limit: $(ratelimit)")
-    if ratelimits == nothing
-        throw(ArgumentError(" checkratelimit! called without keyword argument ratelimits::Dict{IPAddr, RateLimit}(). "))
-    end
     println("Keep going...")
     ip = getsockname(tcp)[1]
     println("ip: $(ip)")
