@@ -30,7 +30,7 @@ function handshakeresponse(request::HTTP.Request)
     c = HTTP.Connection(buf)
     t = HTTP.Transaction(c)
     s = HTTP.Stream(request, t)
-    upgrade(dummywshandler, s)
+    WebSockets.upgrade(dummywshandler, s)
     close(buf)
     takefirstline(buf)
 end
