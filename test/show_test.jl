@@ -187,9 +187,9 @@ show(io, "text/plain", ws)
 output = String(take!(io.io))
 @test output == "WebSocket{BufferStream}(client, \e[32mCONNECTED\e[39m): \e[32m✓\e[39m, 2 bytes"
 
-### For testing Base.show(ServerWS)
+### For testing Base.show(WSServer)
 h(r) = HTTP.Response(200)
-w(ws, r) = nothing
+w(s) = nothing
 io = IOBuffer()
 WebSockets._show(io, h)
 output = String(take!(io))
@@ -199,46 +199,46 @@ WebSockets._show(io, x-> 2x)
 output = String(take!(io))
 @test output[1] == '#'
 
-sws = WebSockets.ServerWS(h, w)
+sws = WebSockets.WSServer(h, w)
 show(io, sws)
 output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(ws, r))"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s))"
 
-sws = WebSockets.ServerWS(h, w,  ratelimit = 1 // 1)
+sws = WebSockets.WSServer(h, w, rate_limit=1//1)
 show(io, sws)
 output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(ws, r), readtimeout=180.0, ratelimit=1//1, support100continue=true, logbody=true)"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), readtimeout=180.0, rate_limit=1//1, support100continue=true, logbody=true)"
 
 # with loggers
-sws = WebSockets.ServerWS(handler= h, wshandler= w, logger = stderr)
+sws = WebSockets.WSServer(handler= h, wshandler= w, logger = stderr)
 io = IOBuffer()
 show(io, sws)
 output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(ws, r), logger=TTY:✓)" ||
-    output == "WebSockets.ServerWS(handler=h(r), wshandler=w(ws, r), logger=PipeEndpoint():✓)" ||
-    output == "WebSockets.ServerWS(handler=h(r), wshandler=w(ws, r), logger=PipeEndpoint:✓)"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=TTY:✓)" ||
+    output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=PipeEndpoint():✓)" ||
+    output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=PipeEndpoint:✓)"
 fi = open("temptemp", "w+")
-sws = WebSockets.ServerWS(h, w, fi)
+sws = WebSockets.WSServer(h, w, fi)
 io = IOBuffer()
 WebSockets._show(io, sws)
 output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(ws, r), logger=<file temptemp>:✓)"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=<file temptemp>:✓)"
 close(fi)
 WebSockets._show(io, sws)
 rm("temptemp")
 output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(ws, r), logger=<file temptemp>:✘)"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=<file temptemp>:✘)"
 
 
-sws = WebSockets.ServerWS(handler= h, wshandler= w, logger = devnull)
+sws = WebSockets.WSServer(handler= h, wshandler= w, logger = devnull)
 io = IOBuffer()
 show(io, sws)
 output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(ws, r), logger=Base.DevNull())" ||
-    output == "WebSockets.ServerWS(handler=h(r), wshandler=w(ws, r), logger=Base.DevNullStream())"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=Base.DevNull())" ||
+    output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=Base.DevNullStream())"
 
-sws = WebSockets.ServerWS(handler= h, wshandler= w, logger = IOBuffer())
+sws = WebSockets.WSServer(handler= h, wshandler= w, logger = IOBuffer())
 io = IOBuffer()
 show(io, sws)
 output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(ws, r), logger=IOBuffer():✓)"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=IOBuffer():✓)"

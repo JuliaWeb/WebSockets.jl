@@ -1,11 +1,12 @@
-using WebSockets, Test, Base64
+using WebSockets, Test, Base64, Random
 import Base: BufferStream, convert
 import HTTP, Sockets, Dates
+import HTTP.Servers: MbedTLS
 import Sockets.@ip_str
-
 
 @testset "WebSockets" begin
     include("logformat.jl")
+    include("client_server_functions.jl")
 
     printstyled(color=:blue, "\nBase.Show\n")
     @testset "Base.show" begin
@@ -47,10 +48,10 @@ import Sockets.@ip_str
         include("client_serverWS_test.jl");sleep(1)
     end
 
-    printstyled(color=:blue, "\nAbrupt close & error handling\n")
-    @testset "Abrupt close & error handling" begin
-       include("error_test.jl");sleep(1)
-    end
+    # printstyled(color=:blue, "\nAbrupt close & error handling\n")
+    # @testset "Abrupt close & error handling" begin
+    #    include("error_test.jl");sleep(1)
+    # end
     if !@isdefined(OLDLOGGER)
         Logging.global_logger(OLDLOGGER)
     end

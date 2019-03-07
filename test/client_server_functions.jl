@@ -6,11 +6,12 @@
 A near identical server coroutine is implemented as an inner function in WebSockets.serve.
 The 'function arguments' `server_gatekeeper` and `httphandler` are defined below.
 """
-function servercoroutine(stream::WebSockets.Stream)
+function servercoroutine(stream::HTTP.Stream)
+    println("servercoroutine called")
     if WebSockets.is_upgrade(stream.message)
         WebSockets.upgrade(server_gatekeeper, stream)
     else
-        WebSockets.handle_request(httphandler, stream)
+        HTTP.handle(httphandler, stream)
     end
 end
 
@@ -18,7 +19,7 @@ end
 `httphandler` is called by `servercoroutine` for all accepted http requests
 that are not upgrades. We don't check what's actually requested.
 """
-httphandler(req::WebSockets.Request) = WebSockets.Response(200, "OK")
+httphandler(req::HTTP.Request) = HTTP.Response(200, "OK")
 
 """
 `server_gatekeeper` is called by `servercouroutine` or WebSockets inner function
@@ -30,12 +31,12 @@ Based on the requested subprotocol, server_gatekeeper calls
         or
     `echows`
 """
-function server_gatekeeper(req::WebSockets.Request, ws::WebSocket)
+function server_gatekeeper(req::HTTP.Request, ws::WebSocket)
     WebSockets.origin(req) != "" && @error "server_gatekeeper, got origin header as from a browser."
-    target(req) != "/" && @error "server_gatekeeper, got origin header as in a POST request."
-    if subprotocol(req) == SUBPROTOCOL
+    WebSockets.target(req) != "/" && @error "server_gatekeeper, got origin header as in a POST request."
+    if WebSockets.subprotocol(req) == SUBPROTOCOL
         initiatingws(ws, msglengths = MSGLENGTHS)
-    elseif subprotocol(req) == SUBPROTOCOL_CLOSE
+    elseif WebSockets.subprotocol(req) == SUBPROTOCOL_CLOSE
         initiatingws(ws, msglengths = MSGLENGTHS,  closebeforeexit = true)
     else
         echows(ws)
@@ -103,7 +104,7 @@ function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = 
     # The other side must be reading in order to process the ping-pong.
     yield()
     for slen in msglengths
-        test_str = randstring(slen)
+        test_str = Random.randstring(slen)
         forcecopy_str = test_str |> collect |> copy |> join
         if writeguarded(ws, test_str)
             yield()
@@ -134,19 +135,6 @@ function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = 
     closebeforeexit && close(ws, statusnumber = 1000)
 end
 
-function closeserver(ref::Ref)
-    close(ref[])
-    ref[] = nothing
-    GC.gc()
-    yield()
-    nothing
-end
-function closeserver(ref::WebSockets.ServerWS)
-    put!(ref.in, "Any message means close!")
-    nothing
-end
-
-
 """
 `startserver` is called from tests.
 Keyword argument
@@ -162,39 +150,19 @@ a web server.
 For usinglisten = false, error messages can sometimes be inspected through take!(reference.out)
 
 To close the server, call
-    closeserver(reference)
+    close(wsserver)
 """
-function startserver(;surl = SURL, port = PORT, usinglisten = false)
-    if usinglisten
-        #reference = Ref{Base.IOServer}()
-        reference = Ref{Union{Base.IOServer, Nothing}}()
-        servertask = @async WebSockets.HTTP.listen(servercoroutine,
-                                            surl,
-                                            port,
-                                            tcpref = reference,
-                                            tcpisvalid = checkratelimit!,
-                                            ratelimits = Dict{IPAddr, WebSockets.RateLimit}()
-                                            )
-        while !istaskstarted(servertask);sleep(1);end
-        while !isassigned(reference)
-            if istaskdone(servertask)
-                ff = fetch(servertask)
-                @debug "servertask fetch", typeof(ff)
-                @debug "servertask fetch", ff
-                break
-            end
-        end
-    else
-        # It is not strictly necessary to wrap the argument functions in HandleFunctions.
-        reference =  WebSockets.ServerWS(   WebSockets.HandlerFunction(httphandler),
-                                            WebSockets.WebsocketHandler(server_gatekeeper)
-                                        )
-        servertask = @async WebSockets.serve(reference, surl, port)
-        while !istaskstarted(servertask);yield();end
-        if isready(reference.out)
-            # capture errors, if any were made during the definition.
-            @error take!(myserver_WS.out)
-        end
+function startserver(;surl = SURL, port = PORT)
+    wsserver = WebSockets.WSServer(
+        HTTP.RequestHandlerFunction(httphandler),
+        HTTP.StreamHandlerFunction(server_gatekeeper),
+        stdout,
+        Sockets.listen(HTTP.Servers.getinet(surl,port)))
+    servertask = @async WebSockets.serve(wsserver, surl, port)
+    while !istaskstarted(servertask);yield();end
+    if isready(wsserver.out)
+        # capture errors, if any were made during the definition.
+        @error take!(wsserver.out)
     end
-    servertask, reference
+    wsserver
 end

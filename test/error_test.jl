@@ -1,35 +1,26 @@
 # included in runtests.jl
-using Test
-using Base64
-using WebSockets
-import WebSockets:  HandlerFunction,
-                    WebsocketHandler,
-                    Response
-include("logformat.jl")
-const THISPORT = 8092
-const FURL = "ws://127.0.0.1:$THISPORT"
-
+const FURL = "ws://127.0.0.1"
+const FPORT = 8092
 
 @info "Start a server with a ws handler that is unresponsive. \nClose from client side. The " *
       " close handshake aborts after $(WebSockets.TIMEOUT_CLOSEHANDSHAKE) seconds..."
-server_WS = ServerWS(   HandlerFunction(req-> HTTP.Response(200)),
-                        WebsocketHandler(ws-> sleep(16)))
-tas = @async serve(server_WS, THISPORT)
-while !istaskstarted(tas); yield(); end
-sleep(1)
-res = WebSockets.open((_) -> nothing, FURL);
+wsserver = WebSockets.WSServer(
+    HTTP.RequestHandlerFunction(req-> HTTP.Response(200)),
+    HTTP.StreamHandlerFunction(stream -> (sleep(16);return)))
+
+startserver(wsserver, surl=FURL, port=FPORT)
+res = WebSockets.open((_) -> nothing, FURL*FPORT);
 @test res.status == 101
-put!(server_WS.in, "x")
 
 @info "Start a server with a ws handler that always reads guarded."
 sleep(1)
-server_WS = ServerWS(   HandlerFunction(req -> HResponse(200)),
+wsserver = WebSockets.WSServer(   HTTP.RequestHandlerFunction(req -> HResponse(200)),
                         WebSockets.WebsocketHandler() do req, ws_serv
                                                 while isopen(ws_serv)
                                                     readguarded(ws_serv)
                                                 end
                                             end);
-tas = @async serve(server_WS, "127.0.0.1", THISPORT)
+tas = @async serve(wsserver, "127.0.0.1", FPORT)
 while !istaskstarted(tas); yield(); end
 sleep(1)
 
@@ -79,13 +70,13 @@ catch err
      @test err.message == " while open ws|client: stream is closed or unusable"
 end
 
-put!(server_WS.in, "x")
+put!(wsserver.in, "x")
 
 
 @info "Start a server. The wshandler use global channels for inspecting caught errors."
 sleep(1)
 chfromserv=Channel(2)
-server_WS = ServerWS(   HandlerFunction(req-> HTTP.Response(200)),
+wsserver = WebSockets.WSServer(   HTTP.RequestHandlerFunction(req-> HTTP.Response(200)),
                         WebsocketHandler() do ws_serv
                                                 while isopen(ws_serv)
                                                     try
@@ -96,7 +87,7 @@ server_WS = ServerWS(   HandlerFunction(req-> HTTP.Response(200)),
                                                     end
                                                 end
                                             end);
-tas = @async serve(server_WS, "127.0.0.1", THISPORT)
+tas = @async serve(wsserver, "127.0.0.1", FPORT)
 while !istaskstarted(tas); yield(); end
 sleep(3)
 
@@ -112,36 +103,36 @@ if VERSION <= v"1.0.2"
     # Stack trace on master is zero. Unknown cause.
     @test length(stack_trace) == 2
 end
-put!(server_WS.in, "x")
+put!(wsserver.in, "x")
 sleep(1)
 
 @info "Start a server. Errors are output on built-in channel"
 sleep(1)
-global server_WS = ServerWS(   HandlerFunction(req-> HTTP.Response(200)),
+global wsserver = WebSockets.WSServer(   HTTP.RequestHandlerFunction(req-> HTTP.Response(200)),
                                WebsocketHandler() do ws_serv
                                                 while isopen(ws_serv)
                                                         read(ws_serv)
                                                 end
                                             end);
-global tas = @async serve(server_WS, "127.0.0.1", THISPORT, false)
+global tas = @async serve(wsserver, "127.0.0.1", FPORT, false)
 while !istaskstarted(tas); yield(); end
 sleep(3)
 
 @info "Open a ws|client, close it out of protocol. Check server error on server.out channel."
 sleep(1)
 WebSockets.open((ws)-> close(ws.socket), FURL);
-global err = take!(server_WS.out)
+global err = take!(wsserver.out)
 @test typeof(err) <: WebSocketClosedError
 @test err.message == " while read(ws|server) BoundsError(UInt8[], (1,))"
 sleep(1)
-global stack_trace = take!(server_WS.out);
+global stack_trace = take!(wsserver.out);
 if VERSION <= v"1.0.2"
     # Stack trace on master is zero. Unknown cause.
     @test length(stack_trace) in [5, 6]
 end
 
-while isready(server_WS.out)
-    take!(server_WS.out)
+while isready(wsserver.out)
+    take!(wsserver.out)
 end
 sleep(1)
 
@@ -153,18 +144,18 @@ for (ke, va) in WebSockets.codeDesc
     @info "Closing ws|client with reason ", ke, " ", va
     sleep(0.3)
     WebSockets.open((ws)-> close(ws, statusnumber = ke), FURL)
-    wait(server_WS.out)
-    global err = take!(server_WS.out)
+    wait(wsserver.out)
+    global err = take!(wsserver.out)
     @test typeof(err) <: WebSocketClosedError
     @test err.message == "ws|server respond to OPCODE_CLOSE $ke:$va"
-    wait(server_WS.out)
-    stacktra = take!(server_WS.out)
+    wait(wsserver.out)
+    stacktra = take!(wsserver.out)
     if VERSION <= v"1.0.2"
         # Unknown cause, nighly behaves differently
         @test length(stacktra) == 0
     end
-    while isready(server_WS.out)
-        take!(server_WS.out)
+    while isready(wsserver.out)
+        take!(wsserver.out)
     end
     sleep(1)
 end
@@ -176,11 +167,11 @@ sleep(1)
 global va = 1000
 @info "Closing ws|client with reason", va, " ", WebSockets.codeDesc[va], " and goodbye!"
 WebSockets.open((ws)-> close(ws, statusnumber = va, freereason = "goodbye!"), FURL)
-wait(server_WS.out)
-global err = take!(server_WS.out)
+wait(wsserver.out)
+global err = take!(wsserver.out)
 @test typeof(err) <: WebSocketClosedError
 @test err.message == "ws|server respond to OPCODE_CLOSE 1000:goodbye!"
-global stack_trace = take!(server_WS.out)
+global stack_trace = take!(wsserver.out)
 sleep(1)
 
 
@@ -196,9 +187,9 @@ function selfinterruptinghandler(ws)
 end
 WebSockets.open(selfinterruptinghandler, FURL)
 sleep(6)
-global err = take!(server_WS.out)
+global err = take!(wsserver.out)
 @test typeof(err) <: WebSocketClosedError
 @test err.message == "ws|server respond to OPCODE_CLOSE 1006: while read(ws|client received InterruptException."
-global stack_trace = take!(server_WS.out)
-put!(server_WS.in, "close server")
+global stack_trace = take!(wsserver.out)
+put!(wsserver.in, "close server")
 sleep(2)

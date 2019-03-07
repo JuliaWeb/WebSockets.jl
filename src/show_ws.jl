@@ -117,9 +117,9 @@ function _uv_status_tuple(status::ReadyState)
     end
 end
 
-### ServerWS
-function Base.show(io::IO, sws::ServerWS)
-    print(io, ServerWS, "(handler=")
+### WSServer
+function Base.show(io::IO, sws::WSServer)
+    print(io, WSServer, "(handler=")
     _show(io, sws.handler.func)
     print(io, ", wshandler=")
     _show(io, sws.wshandler.func)

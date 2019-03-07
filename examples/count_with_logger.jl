@@ -87,7 +87,7 @@ function gatekeeper(req, ws)
 end
 
 function serve_task(logger= WebSocketLogger(stderr, WebSockets.Logging.Debug))
-    server = WebSockets.ServerWS(httphandler, gatekeeper)
+    server = WebSockets.WSServer(httphandler, gatekeeper)
     task = @async   with_logger(logger) do
         WebSockets.serve(server, port = PORT)
     end

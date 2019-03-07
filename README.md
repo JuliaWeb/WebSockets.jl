@@ -26,8 +26,8 @@ In the package manager, add WebSockets. Then [paste](https://docs.julialang.org/
 ```julia
 julia> using WebSockets
 
-julia> serverWS = ServerWS(handler = (req) -> WebSockets.Response(200), wshandler = (ws_server) -> (writeguarded(ws_server, "Hello"); readguarded(ws_server)))
-ServerWS(handler=<span>#</span>7(req), wshandler=<span>#</span>8(ws_server))
+julia> serverWS = WSServer(handler = (req) -> WebSockets.Response(200), wshandler = (ws_server) -> (writeguarded(ws_server, "Hello"); readguarded(ws_server)))
+WSServer(handler=<span>#</span>7(req), wshandler=<span>#</span>8(ws_server))
 
 julia> ta = @async WebSockets.with_logger(WebSocketLogger()) do
                 WebSockets.serve(serverWS, port = 8000)
@@ -113,7 +113,7 @@ The introduction of client side websockets to this package in version 0.5.0 may 
 - The `WebSocket.id` field is no longer supported. You can generate unique counters by code similar to 'bencmark/functions_open_browsers.jl' COUNTBROWSER.
 - You may want to modify you error handling code. Examine WebSocketsClosedError.message.
 - You may want to use `readguarded` and `writeguarded` to save on error handling code.
-- `Server` -> `WebSockets.ServerWS`
+- `Server` -> `WebSockets.WSServer`
 - `WebSocketHandler` -> `WebSockets.WebsocketHandler` (or just pass a function without wrapper)
 - `HttpHandler`-> `HTTP.HandlerFunction` (or just pass a function without wrapper)
 - `run` -> `serve`
