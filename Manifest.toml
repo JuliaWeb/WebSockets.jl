@@ -24,8 +24,8 @@ deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[HTTP]]
-deps = ["Base64", "Dates", "Distributed", "IniFile", "JSON", "MbedTLS", "Sockets", "Test"]
-path = "C:\\Users\\Eric\\.julia\\dev\\HTTP"
+deps = ["Base64", "Dates", "Distributed", "IniFile", "MbedTLS", "Random", "Sockets", "Test"]
+git-tree-sha1 = "25db0e3f27bd5715814ca7e4ad22025fdcf5cc6e"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 version = "0.8.0"
 
