@@ -1,39 +1,39 @@
 # included in client_serverWS_test.jl
 # and in client_listen_test.jl
 
-"""
-`servercoroutine`is called by the listen loop (`starserver`) for each accepted http request.
-A near identical server coroutine is implemented as an inner function in WebSockets.serve.
-The 'function arguments' `server_gatekeeper` and `httphandler` are defined below.
-"""
-function servercoroutine(stream::HTTP.Stream)
-    println("servercoroutine called")
-    if WebSockets.is_upgrade(stream.message)
-        WebSockets.upgrade(server_gatekeeper, stream)
-    else
-        HTTP.handle(httphandler, stream)
-    end
+if !@isdefined SUBPROTOCOL
+    const SUBPROTOCOL = "Server start the conversation"
+    const SUBPROTOCOL_CLOSE = "Server start the conversation and close it from within websocket handler"
+end
+addsubproto(SUBPROTOCOL)
+addsubproto(SUBPROTOCOL_CLOSE)
+if !@isdefined(PORT)
+    const PORT = 8000
+    const SURL = "127.0.0.1"
+    const EXTERNALWSURI = "ws://echo.websocket.org"
+    const EXTERNALHTTP = "http://httpbin.org/ip"
+    const MSGLENGTHS = [0 , 125, 126, 127, 2000]
 end
 
 """
-`httphandler` is called by `servercoroutine` for all accepted http requests
+`test_handler` is called by WebSockets inner function `_servercoroutine` for all accepted http requests
 that are not upgrades. We don't check what's actually requested.
 """
-httphandler(req::HTTP.Request) = HTTP.Response(200, "OK")
+test_handler(req::HTTP.Request) = HTTP.Response(200, "OK")
 
 """
-`server_gatekeeper` is called by `servercouroutine` or WebSockets inner function
+`test_wshandler` is called by WebSockets inner function
 `_servercoroutine` for all http requests that
     1) qualify as an upgrade,
     2) request a subprotocol we claim to support
-Based on the requested subprotocol, server_gatekeeper calls
+Based on the requested subprotocol, test_wshandler calls
     `initiatingws`
         or
     `echows`
 """
-function server_gatekeeper(req::HTTP.Request, ws::WebSocket)
-    WebSockets.origin(req) != "" && @error "server_gatekeeper, got origin header as from a browser."
-    WebSockets.target(req) != "/" && @error "server_gatekeeper, got origin header as in a POST request."
+function test_wshandler(req::HTTP.Request, ws::WebSocket)
+    WebSockets.origin(req) != "" && @error "test_wshandler, got origin header as from a browser."
+    WebSockets.target(req) != "/" && @error "test_wshandler, got origin header as in a POST request."
     if WebSockets.subprotocol(req) == SUBPROTOCOL
         initiatingws(ws, msglengths = MSGLENGTHS)
     elseif WebSockets.subprotocol(req) == SUBPROTOCOL_CLOSE
@@ -43,11 +43,9 @@ function server_gatekeeper(req::HTTP.Request, ws::WebSocket)
     end
 end
 
-
-
 """
 `echows` is called by
-    - `server_gatekeeper` (in which case ws will be a server side websocket)
+    - `test_wshandler` (in which case ws will be a server side websocket)
     or
     - 'WebSockets.open' (in which case ws will be a client side websocket)
 
@@ -80,7 +78,7 @@ end
 
 """
 `initiatingws` is called by
-    - `server_gatekeeper` (in which case ws will be a server side websocket)
+    - `test_wshandler` (in which case ws will be a server side websocket)
     or
     - 'WebSockets.open' (in which case ws will be a client side websocket)
 
@@ -135,6 +133,10 @@ function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = 
     closebeforeexit && close(ws, statusnumber = 1000)
 end
 
+test_wsserver = WebSockets.WSServer(
+    HTTP.RequestHandlerFunction(test_handler),
+    HTTP.StreamHandlerFunction(test_wshandler))
+
 """
 `startserver` is called from tests.
 Keyword argument
@@ -152,13 +154,8 @@ For usinglisten = false, error messages can sometimes be inspected through take!
 To close the server, call
     close(wsserver)
 """
-function startserver(;surl = SURL, port = PORT)
-    wsserver = WebSockets.WSServer(
-        HTTP.RequestHandlerFunction(httphandler),
-        HTTP.StreamHandlerFunction(server_gatekeeper),
-        stdout,
-        Sockets.listen(HTTP.Servers.getinet(surl,port)))
-    servertask = @async WebSockets.serve(wsserver, surl, port)
+function startserver(wsserver=test_wsserver;url=SURL, port=PORT)
+    servertask = @async WebSockets.serve(wsserver,url,port)
     while !istaskstarted(servertask);yield();end
     if isready(wsserver.out)
         # capture errors, if any were made during the definition.

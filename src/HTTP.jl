@@ -263,18 +263,18 @@ include .in  and .out channels, see WebSockets.serve.
 
 Server options can be set using keyword arguments, see methods(WebSockets.WSServer)
 """
-mutable struct WSServer{S <: Union{Val{:http},Val{:https}}, H <: HTTP.RequestHandler, W <: HTTP.StreamHandler, I <: Union{Base.IOServer,Nothing}}
+mutable struct WSServer{S <: Union{Val{:http},Val{:https}}, H <: HTTP.RequestHandler, W <: HTTP.StreamHandler}
     handler::H
     wshandler::W
     logger::IO
-    server::I
+    server::Union{Base.IOServer,Nothing}
     in::Channel{Any}
     out::Channel{Any}
     options::ServerOptions
 
-    WSServer{S,H,W,I}(handler::H, wshandler::W, logger::IO=stdout, server::I=nothing, 
-        ch1=Channel(1), ch2=Channel(2), options=ServerOptions()) where {S,H,W,I} =
-        new{S,H,W,I}(handler, wshandler, logger, server, ch1, ch2, options)
+    WSServer{S,H,W}(handler::H, wshandler::W, logger::IO=stdout, server=nothing, 
+        ch1=Channel(1), ch2=Channel(2), options=ServerOptions()) where {S,H,W} =
+        new{S,H,W}(handler, wshandler, logger, server, ch1, ch2, options)
 end
 
 # Define WSServer without wrapping the functions first. Rely on argument sequence.
@@ -300,10 +300,10 @@ end
 function WSServer(handler::H,
                 wshandler::W,
                 logger::IO = stdout,
-                server::I = nothing;
+                server = nothing;
                 cert::String = "",
                 key::String = "",
-                kwargs...) where {H <: HTTP.RequestHandler, W <: HTTP.StreamHandler, I <: Union{Base.IOServer,Nothing}}
+                kwargs...) where {H <: HTTP.RequestHandler, W <: HTTP.StreamHandler}
 
     sslconfig = nothing;
     S = typeof(HTTP.Handlers.SCHEMES["http"]) # Val{:http} is an imported DataType
@@ -312,7 +312,7 @@ function WSServer(handler::H,
         S = typeof(HTTP.Handlers.SCHEMES["https"]) # Val{:https} is an imported DataType
     end
     
-    wsserver = WSServer{S,H,W,I}(handler,wshandler,logger,server,
+    wsserver = WSServer{S,H,W}(handler,wshandler,logger,server,
         Channel(1), Channel(2), ServerOptions(sslconfig=sslconfig;kwargs...))
 end
 
@@ -334,7 +334,7 @@ After a suspected connection task failure:
     end
 ```
 """
-function serve(wsserver::WSServer{S,H,W,I}, host, port, verbose) where {S,H,W,I}
+function serve(wsserver::WSServer{S,H,W}, host, port, verbose) where {S,H,W}
     # An internal reference used for closing.
     # tcpserver = Ref{Union{Base.IOServer, Nothing}}()
     # Start a couroutine that sleeps until tcpserver is assigned,
@@ -373,6 +373,7 @@ function serve(wsserver::WSServer{S,H,W,I}, host, port, verbose) where {S,H,W,I}
     #    The default tcpvalid function is defined in this module.
     # 2) If we are ready, it spawns a new task or coroutine _servercoroutine.
     #
+    wsserver.server = Sockets.listen(Sockets.InetAddr(parse(IPAddr, host), port))
     HTTP.listen(_servercoroutine,
             host, port;
             server=wsserver.server,
@@ -393,7 +394,11 @@ serve(wsserver::WSServer; host= "127.0.0.1", port= "") =  serve(wsserver, host, 
 serve(wsserver::WSServer, host, port) =  serve(wsserver, host, port, false)
 serve(wsserver::WSServer, port) =  serve(wsserver, "127.0.0.1", port, false)
 
-Base.close(wss::WebSockets.WSServer) = close(wss.server)
+function Base.close(wsserver::WebSockets.WSServer)
+    close(wsserver.server)
+    wsserver.server=nothing
+    return
+end
 
 """
 'checkratelimit!' updates a dictionary of IP addresses which keeps track of their
