@@ -322,7 +322,7 @@ function ServerWS(h::Function, w::Function, l::IO=stdout;
 
         ServerWS(HandlerFunction(h),
                 WebsocketHandler(w), l;
-                cert=cert, key=key, ratelimit = 10//1, args...)
+                cert=cert, key=key, ratelimit = 0//1, args...)
 end
 # Define ServerWS with keyword arguments only
 function ServerWS(;handler::Function, wshandler::Function,
@@ -331,7 +331,7 @@ function ServerWS(;handler::Function, wshandler::Function,
 
         ServerWS(HandlerFunction(handler),
                 WebsocketHandler(wshandler), logger;
-                cert=cert, key=key, ratelimit = 10//1, args...)
+                cert=cert, key=key, ratelimit = 0//1, args...)
 end
 
 # Define ServerWS with function wrappers
@@ -340,7 +340,7 @@ function ServerWS(handler::H,
                 logger::IO = stdout;
                 cert::String = "",
                 key::String = "",
-                ratelimit = 10//1,
+                ratelimit = 0//1,
                 args...) where {H <: HandlerFunction, W <: WebsocketHandler}
 
     sslconfig = nothing;
