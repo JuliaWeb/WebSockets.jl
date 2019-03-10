@@ -23,11 +23,6 @@ using Test
         include("handshaketest.jl");sleep(1)
     end
 
-    printstyled(color=:blue, "\nTest throttling\n")
-    @testset "Throttling" begin
-        include("throttling_test.jl");sleep(1)
-    end
-
     printstyled(color=:blue, "\nClient test\n")
     @testset "Client" begin
         include("client_test.jl");sleep(1)
