@@ -154,8 +154,8 @@ For usinglisten = false, error messages can sometimes be inspected through take!
 To close the server, call
     close(wsserver)
 """
-function startserver(wsserver=test_wsserver;url=SURL, port=PORT)
-    servertask = @async WebSockets.serve(wsserver,url,port)
+function startserver(wsserver=test_wsserver;url=SURL, port=PORT, verbose=false)
+    servertask = @async WebSockets.serve(wsserver,url,port,verbose)
     while !istaskstarted(servertask);yield();end
     if isready(wsserver.out)
         # capture errors, if any were made during the definition.

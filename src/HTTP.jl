@@ -40,17 +40,11 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
     end
     openstream(stream) = _openstream(f, stream, key)
     try
-        println("Try open")
-        println("uri: $(uri)")
-        res = HTTP.open(
+        HTTP.open(
             openstream,
             "GET", uri, headers;
-            reuse_limit=0, verbose=verbose ? 2 : 0, kw...
-        )
-        println(res)
-        return res
+            reuse_limit=0, verbose=verbose ? 2 : 0, kw...)
     catch err
-        println(err)
         if typeof(err) <: HTTP.IOExtras.IOError
             throw(WebSocketClosedError(" while open ws|client: $(string(err.e.msg))"))
         elseif typeof(err) <: HTTP.StatusError
@@ -65,7 +59,6 @@ end
 function _openstream(f::Function, stream, key::String)
     HTTP.startread(stream)
     response = stream.message
-    println(response)
     if response.status != 101
         return
     end
