@@ -284,7 +284,7 @@ end
 function ServerOptions(;
         sslconfig::Union{SSLConfig, Nothing} = nothing,
         readtimeout::Float64=180.0,
-        ratelimit::Rational{Int}= 10 // 1,
+        ratelimit::Rational{Int}= 0 // 1,
         support100continue::Bool=true,
         chunksize::Union{Nothing, Int}=nothing,
         logbody::Bool=true

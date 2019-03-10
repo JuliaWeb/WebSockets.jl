@@ -102,6 +102,9 @@ The issues section is used for planning development: Contributions are welcome.
 - Alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) and the direct implementation in [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl).
 
 ## Errors after updating?
+### To version 1.4.0
+We removed the default ratelimit! function, since the way it worked was counter-intuitive and slowed down most use cases. If you have not provided any ratelimit to SererOptions in the past, you may be able to notice a very tiny performance improvement. See issue #124 and the inline documentation.  
+
 ### To version 1.3.0
 WebSockets additionaly exports WebSocketLogger, @wslog, Wslog.
 

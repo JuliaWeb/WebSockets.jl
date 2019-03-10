@@ -172,7 +172,7 @@ function startserver(;surl = SURL, port = PORT, usinglisten = false)
                                             surl,
                                             port,
                                             tcpref = reference,
-                                            tcpisvalid = checkratelimit!,
+                                            tcpisvalid = (tcp; kw...) -> true,
                                             ratelimits = Dict{IPAddr, WebSockets.RateLimit}()
                                             )
         while !istaskstarted(servertask);sleep(1);end
