@@ -40,10 +40,17 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
     end
     openstream(stream) = _openstream(f, stream, key)
     try
-        HTTP.open(openstream,
-                "GET", uri, headers;
-                reuse_limit=0, verbose=verbose ? 2 : 0, kw...)
+        println("Try open")
+        println("uri: $(uri)")
+        res = HTTP.open(
+            openstream,
+            "GET", uri, headers;
+            reuse_limit=0, verbose=verbose ? 2 : 0, kw...
+        )
+        println(res)
+        return res
     catch err
+        println(err)
         if typeof(err) <: HTTP.IOExtras.IOError
             throw(WebSocketClosedError(" while open ws|client: $(string(err.e.msg))"))
         elseif typeof(err) <: HTTP.StatusError
@@ -58,6 +65,7 @@ end
 function _openstream(f::Function, stream, key::String)
     HTTP.startread(stream)
     response = stream.message
+    println(response)
     if response.status != 101
         return
     end
@@ -410,34 +418,34 @@ function Base.close(wsserver::WebSockets.WSServer)
     return
 end
 
-"""
-'checkratelimit!' updates a dictionary of IP addresses which keeps track of their
-connection quota per time window.
+# """
+# 'checkratelimit!' updates a dictionary of IP addresses which keeps track of their
+# connection quota per time window.
 
-The allowed connections per time is given in keyword argument `rate_limit`.
+# The allowed connections per time is given in keyword argument `rate_limit`.
 
-The actual rate_limit::Rational value, is normally given as a field value in ServerOpions.
+# The actual rate_limit::Rational value, is normally given as a field value in ServerOpions.
 
-'checkratelimit!' is the default rate limiting function for WSServer, which passes
-it as the 'tcpisvalid' argument to 'WebSockets.HTTP.listen'. Other functions can be given as a
-keyword argument, as long as they adhere to this form, which WebSockets.HTTP.listen
-expects.
-"""
-checkratelimit!(tcp::Base.PipeEndpoint) = true
-function checkratelimit!(tcp;
-                          rate_limit::Rational{Int}=10//1)
-    ip = getsockname(tcp)[1]
-    rate = Float64(rate_limit.num)
-    rl = get!(ratelimits, ip, HTTP.Servers.MbedTLS.SSLConfig(rate, Dates.now()))
-    update!(rl, rate_limit)
-    if rl.allowance > rate
-        rl.allowance = rate
-    end
-    if rl.allowance < 1.0
-        #@debug "discarding connection due to rate limiting"
-        return false
-    else
-        rl.allowance -= 1.0
-    end
-    return true
-end
+# 'checkratelimit!' is the default rate limiting function for WSServer, which passes
+# it as the 'tcpisvalid' argument to 'WebSockets.HTTP.listen'. Other functions can be given as a
+# keyword argument, as long as they adhere to this form, which WebSockets.HTTP.listen
+# expects.
+# """
+# checkratelimit!(tcp::Base.PipeEndpoint) = true
+# function checkratelimit!(tcp;
+#                           rate_limit::Rational{Int}=10//1)
+#     ip = getsockname(tcp)[1]
+#     rate = Float64(rate_limit.num)
+#     rl = get!(ratelimits, ip, HTTP.Servers.MbedTLS.SSLConfig(rate, Dates.now()))
+#     update!(rl, rate_limit)
+#     if rl.allowance > rate
+#         rl.allowance = rate
+#     end
+#     if rl.allowance < 1.0
+#         #@debug "discarding connection due to rate limiting"
+#         return false
+#     else
+#         rl.allowance -= 1.0
+#     end
+#     return true
+# end
