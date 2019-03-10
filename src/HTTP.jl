@@ -284,7 +284,7 @@ end
 function ServerOptions(;
         sslconfig::Union{SSLConfig, Nothing} = nothing,
         readtimeout::Float64=180.0,
-        ratelimit::Rational{Int}= 10 // 1,
+        ratelimit::Rational{Int}= 0 // 1,
         support100continue::Bool=true,
         chunksize::Union{Nothing, Int}=nothing,
         logbody::Bool=true
@@ -297,7 +297,11 @@ end
 WebSockets.ServerWS is an argument type for WebSockets.serve. Instances
 include .in  and .out channels, see WebSockets.serve.
 
-Server options can be set using keyword arguments, see methods(WebSockets.ServerWS)
+Server options can be set using keyword arguments, see methods(WebSockets.ServerWS).
+
+Note that giving keyword argument ratelimits has no effect by itself. You must also provide
+a ratelimit function, for example by importing HTTP.??.check_rate_limit. This interface is
+in a state of flux.
 """
 mutable struct ServerWS{T <: Scheme, H <: Handler, W <: WebsocketHandler}
     handler::H
@@ -318,7 +322,7 @@ function ServerWS(h::Function, w::Function, l::IO=stdout;
 
         ServerWS(HandlerFunction(h),
                 WebsocketHandler(w), l;
-                cert=cert, key=key, ratelimit = 10//1, args...)
+                cert=cert, key=key, ratelimit = 0//1, args...)
 end
 # Define ServerWS with keyword arguments only
 function ServerWS(;handler::Function, wshandler::Function,
@@ -327,7 +331,7 @@ function ServerWS(;handler::Function, wshandler::Function,
 
         ServerWS(HandlerFunction(handler),
                 WebsocketHandler(wshandler), logger;
-                cert=cert, key=key, ratelimit = 10//1, args...)
+                cert=cert, key=key, ratelimit = 0//1, args...)
 end
 
 # Define ServerWS with function wrappers
@@ -336,7 +340,7 @@ function ServerWS(handler::H,
                 logger::IO = stdout;
                 cert::String = "",
                 key::String = "",
-                ratelimit = 10//1,
+                ratelimit = 0//1,
                 args...) where {H <: HandlerFunction, W <: WebsocketHandler}
 
     sslconfig = nothing;
@@ -414,8 +418,7 @@ function serve(server::ServerWS{T, H, W}, host, port, verbose) where {T, H, W}
             ssl=(T == Servers.https),
             sslconfig = server.options.sslconfig,
             verbose = verbose,
-            tcpisvalid = server.options.ratelimit > 0 ? checkratelimit! :
-                                                     (tcp; kw...) -> true,
+            tcpisvalid = (tcp; kw...) -> true,
             ratelimits = Dict{IPAddr, RateLimit}(),
             ratelimit = server.options.ratelimit)
     # We will only get to this point if the server is closed.
@@ -426,39 +429,3 @@ end
 serve(server::ServerWS; host= "127.0.0.1", port= "") =  serve(server, host, port, false)
 serve(server::ServerWS, host, port) =  serve(server, host, port, false)
 serve(server::ServerWS, port) =  serve(server, "127.0.0.1", port, false)
-
-"""
-'checkratelimit!' updates a dictionary of IP addresses which keeps track of their
-connection quota per time window.
-
-The allowed connections per time is given in keyword argument ratelimit.
-
-The actual ratelimit::Rational value, is normally given as a field value in ServerOpions.
-
-'checkratelimit!' is the default rate limiting function for ServerWS, which passes
-it as the 'tcpisvalid' argument to 'WebSockets.HTTP.listen'. Other functions can be given as a
-keyword argument, as long as they adhere to this form, which WebSockets.HTTP.listen
-expects.
-"""
-checkratelimit!(tcp::Base.PipeEndpoint; kw...) = true
-function checkratelimit!(tcp;
-                          ratelimits = nothing,
-                          ratelimit::Rational{Int}=Int(10)//Int(1), kw...)
-    if ratelimits == nothing
-        throw(ArgumentError(" checkratelimit! called without keyword argument ratelimits::Dict{IPAddr, RateLimit}(). "))
-    end
-    ip = getsockname(tcp)[1]
-    rate = Float64(ratelimit.num)
-    rl = get!(ratelimits, ip, RateLimit(rate, Dates.now()))
-    update!(rl, ratelimit)
-    if rl.allowance > rate
-        rl.allowance = rate
-    end
-    if rl.allowance < 1.0
-        #@debug "discarding connection due to rate limiting"
-        return false
-    else
-        rl.allowance -= 1.0
-    end
-    return true
-end
