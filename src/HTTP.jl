@@ -1,28 +1,6 @@
 import HTTP
 import HTTP.Servers: MbedTLS
 
-"Called by open with a stream connected to a server, after handshake is initiated"
-function _openstream(f::Function, stream, key::String)
-    HTTP.startread(stream)
-    response = stream.message
-    if response.status != 101
-        return
-    end
-    check_upgrade(stream)
-    if HTTP.header(response, "Sec-WebSocket-Accept") != generate_websocket_key(key)
-        throw(WebSocketError(0, "Invalid Sec-WebSocket-Accept\n" *
-                                "$response"))
-    end
-    # unwrap the stream
-    io = HTTP.ConnectionPool.getrawstream(stream)
-    ws = WebSocket(io, false)
-    try
-        f(ws)
-    finally
-        close(ws)
-    end
-end
-
 """
 Initiate a websocket|client connection to server defined by url. If the server accepts
 the connection and the upgrade to websocket, f is called with an open websocket|client
@@ -76,7 +54,27 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
     end
 end
 
-
+"Called by open with a stream connected to a server, after handshake is initiated"
+function _openstream(f::Function, stream, key::String)
+    HTTP.startread(stream)
+    response = stream.message
+    if response.status != 101
+        return
+    end
+    check_upgrade(stream)
+    if HTTP.header(response, "Sec-WebSocket-Accept") != generate_websocket_key(key)
+        throw(WebSocketError(0, "Invalid Sec-WebSocket-Accept\n" *
+                                "$response"))
+    end
+    # unwrap the stream
+    io = HTTP.ConnectionPool.getrawstream(stream)
+    ws = WebSocket(io, false)
+    try
+        f(ws)
+    finally
+        close(ws)
+    end
+end
 
 """
 Used as part of a server definition. Call this if
