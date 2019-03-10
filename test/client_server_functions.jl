@@ -135,7 +135,7 @@ end
 
 test_wsserver = WebSockets.WSServer(
     HTTP.RequestHandlerFunction(test_handler),
-    HTTP.StreamHandlerFunction(test_wshandler))
+    WebSockets.WSHandlerFunction(test_wshandler))
 
 """
 `startserver` is called from tests.

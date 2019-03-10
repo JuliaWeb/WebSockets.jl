@@ -236,6 +236,20 @@ target(req::HTTP.Request) = req.target
 subprotocol(req::HTTP.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
 origin(req::HTTP.Request) = HTTP.header(req, "Origin")
 
+"""	
+WSHandlerFunction(f::Function) <: Handler
+ The provided argument should be one of the forms
+
+    `f(WebSocket) => nothing`
+    `f(Request, WebSocket) => nothing`
+
+    The latter form is intended for gatekeeping, ref. RFC 6455 section 10.1
+ f accepts a `WebSocket` and does interesting things with it, like reading, writing and exiting when finished.
+"""	
+struct WSHandlerFunction{F <: Function} <: HTTP.Handler
+    func::F # func(ws) or func(request, ws)	
+end
+
 struct ServerOptions
     sslconfig::Union{HTTP.Servers.MbedTLS.SSLConfig, Nothing}
     readtimeout::Float64
@@ -263,18 +277,18 @@ include .in  and .out channels, see WebSockets.serve.
 
 Server options can be set using keyword arguments, see methods(WebSockets.WSServer)
 """
-mutable struct WSServer{S <: Union{Val{:http},Val{:https}}, H <: HTTP.RequestHandler, W <: HTTP.StreamHandler}
-    handler::H
-    wshandler::W
+mutable struct WSServer
+    handler::HTTP.RequestHandlerFunction
+    wshandler::WebSockets.WSHandlerFunction
     logger::IO
     server::Union{Base.IOServer,Nothing}
     in::Channel{Any}
     out::Channel{Any}
     options::ServerOptions
 
-    WSServer{S,H,W}(handler::H, wshandler::W, logger::IO=stdout, server=nothing, 
-        ch1=Channel(1), ch2=Channel(2), options=ServerOptions()) where {S,H,W} =
-        new{S,H,W}(handler, wshandler, logger, server, ch1, ch2, options)
+    WSServer(handler, wshandler, logger::IO=stdout, server=nothing, 
+        ch1=Channel(1), ch2=Channel(2), options=ServerOptions()) =
+        new(handler, wshandler, logger, server, ch1, ch2, options)
 end
 
 # Define WSServer without wrapping the functions first. Rely on argument sequence.
@@ -282,7 +296,7 @@ function WSServer(h::Function, w::Function, l::IO=stdout, s=nothing;
             cert::String="", key::String="", kwargs...)
 
         WSServer(HTTP.RequestHandlerFunction(h),
-                HTTP.StreamHandlerFunction(w), l, s;
+                WebSockets.WSHandlerFunction(w), l, s;
                 cert=cert, key=key, kwargs...)
 end
 
@@ -292,27 +306,25 @@ function WSServer(;handler::Function, wshandler::Function,
             cert::String="", key::String="", kwargs...)
 
         WSServer(HTTP.RequestHandlerFunction(handler),
-                HTTP.StreamHandlerFunction(wshandler), logger, server,
+                WebSockets.WSHandlerFunction(wshandler), logger, server,
                 cert=cert, key=key, kwargs...)
 end
 
 # Define WSServer with function wrappers
-function WSServer(handler::H,
-                wshandler::W,
+function WSServer(handler::HTTP.RequestHandlerFunction,
+                wshandler::WebSockets.WSHandlerFunction,
                 logger::IO = stdout,
                 server = nothing;
                 cert::String = "",
                 key::String = "",
-                kwargs...) where {H <: HTTP.RequestHandler, W <: HTTP.StreamHandler}
+                kwargs...)
 
     sslconfig = nothing;
-    S = typeof(HTTP.Handlers.SCHEMES["http"]) # Val{:http} is an imported DataType
     if cert != "" && key != ""
         sslconfig = HTTP.Servers.MbedTLS.SSLConfig(cert, key)
-        S = typeof(HTTP.Handlers.SCHEMES["https"]) # Val{:https} is an imported DataType
     end
     
-    wsserver = WSServer{S,H,W}(handler,wshandler,logger,server,
+    wsserver = WSServer(handler,wshandler,logger,server,
         Channel(1), Channel(2), ServerOptions(sslconfig=sslconfig;kwargs...))
 end
 
@@ -334,7 +346,7 @@ After a suspected connection task failure:
     end
 ```
 """
-function serve(wsserver::WSServer{S,H,W}, host, port, verbose) where {S,H,W}
+function serve(wsserver::WSServer, host, port, verbose)
     # An internal reference used for closing.
     # tcpserver = Ref{Union{Base.IOServer, Nothing}}()
     # Start a couroutine that sleeps until tcpserver is assigned,

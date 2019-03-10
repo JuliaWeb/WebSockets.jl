@@ -10,7 +10,7 @@ const NEWPORT = 8091
 addsubproto("xml")
 wsserver =  WebSockets.WSServer(  
     (r::HTTP.Request) -> HTTP.Response(200, "OK"),
-    (r::HTTP.Stream) -> nothing)
+    (r::HTTP.Request, ws::WebSocket) -> nothing)
 @async WebSockets.serve(wsserver, "127.0.0.1", NEWPORT, true)
 # tas = @async WebSockets.serve(wsserver, "127.0.0.1", NEWPORT, true)
 # while !istaskstarted(tas);yield();end
