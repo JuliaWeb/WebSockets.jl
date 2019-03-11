@@ -1,14 +1,10 @@
 # included in runtests.jl
 using Test
+import HTTP
 import Base: convert, BufferStream
 using WebSockets
-import WebSockets:  generate_websocket_key,
-                    upgrade,
-                    Request, Stream,
-                    Response,
-                    Header,
-                    Connection,
-                    Transaction
+import WebSockets:  generate_websocket_key, upgrade
+
 include("logformat.jl")
 include("handshaketest_functions.jl")
 
@@ -19,15 +15,15 @@ include("handshaketest_functions.jl")
 # Test reject / switch format"
 io = IOBuffer()
 const REJECT = "HTTP/1.1 400 Bad Request"
-Base.write(io, Response(400))
+Base.write(io, HTTP.Response(400))
 @test takefirstline(io) == REJECT
-Base.write(io, Response(400))
+Base.write(io, HTTP.Response(400))
 @test takefirstline(io) == REJECT
 
 const SWITCH = "HTTP/1.1 101 Switching Protocols"
-Base.write(io, Response(101))
+Base.write(io, HTTP.Response(101))
 @test takefirstline(io) == SWITCH
-Base.write(io, Response(101))
+Base.write(io, HTTP.Response(101))
 @test takefirstline(io) == SWITCH
 
 # "Test simple handshakes that are unacceptable"

@@ -1,16 +1,9 @@
 # This is run multiple times during testing,
 # for simpler running of individual tests.
-import WebSockets
-import WebSockets:  Logging,
-                    WebSocketLogger,
-                    Dates.now,
-                    global_logger,
-                    default_logcolor
-
 function custom_metafmt(level, _module, group, id, file, line)
-    color = default_logcolor(level)
+    color = WebSockets.default_logcolor(level)
     prefix = string(level) * ':'
-    suffix = " $(Int(round((now() - T0_TESTS).value / 1000))) s @"
+    suffix = " $(Int(round((Dates.now() - T0_TESTS).value / 1000))) s @"
     _module !== nothing && (suffix *= "$(_module)")
     if file !== nothing
         _module !== nothing && (suffix *= " ")
@@ -24,11 +17,11 @@ end
 
 if !@isdefined OLDLOGGER
     const OLDLOGGER = WebSockets.global_logger()
-    const T0_TESTS = now()
+    const T0_TESTS = Dates.now()
 end
 
 if !@isdefined TESTLOGR
-    const TESTLOGR = WebSocketLogger(stderr, Base.CoreLogging.Debug, meta_formatter = custom_metafmt)
-    global_logger(TESTLOGR)
+    const TESTLOGR = WebSockets.WebSocketLogger(stderr, Base.CoreLogging.Debug, meta_formatter = custom_metafmt)
+    WebSockets.global_logger(TESTLOGR)
 end
 nothing
