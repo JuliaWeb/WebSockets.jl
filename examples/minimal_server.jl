@@ -40,7 +40,7 @@ end
 
 handle(req) = replace(BAREHTML, "<body></body>" => BODY) |> WebSockets.Response
 
-const server = WebSockets.ServerWS(handle,
+const server = WebSockets.WSServer(handle,
                                     gatekeeper)
 
 @info "In browser > $LOCALIP:$PORT , F12> console > ws = new WebSocket(\"ws://$LOCALIP:$PORT\") "

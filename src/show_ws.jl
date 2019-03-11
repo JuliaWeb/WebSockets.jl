@@ -1,4 +1,3 @@
-import Base.show
 import Base.method_argnames
 # Long form, as in display(ws) or REPL: ws enter
 function Base.show(io::IO, ::MIME"text/plain", ws::WebSocket{T}) where T
@@ -38,7 +37,7 @@ function _show(io::IO, stream::Base.LibuvStream)
     else
         kwargs, msg = _uv_status_tuple(stream)
         printstyled(io, msg; kwargs...)
-        if !(stream isa Servers.UDPSocket)
+        if !(stream isa HTTP.Servers.UDPSocket)
             nba = bytesavailable(stream.buffer)
             nba > 0 && print(io, ", ", nba, " bytes")
             nothing
@@ -118,9 +117,9 @@ function _uv_status_tuple(status::ReadyState)
     end
 end
 
-### ServerWS
-function Base.show(io::IO, sws::ServerWS)
-    print(io, ServerWS, "(handler=")
+### WSServer
+function Base.show(io::IO, sws::WSServer)
+    print(io, WSServer, "(handler=")
     _show(io, sws.handler.func)
     print(io, ", wshandler=")
     _show(io, sws.wshandler.func)
@@ -154,8 +153,8 @@ end
 
 function Base.show(io::IO, swo::WebSockets.ServerOptions)
     hidetype = get(IOContext(io), :wslog, false)
-    fina = fieldnames(ServerOptions)
-    hidetype || print(io, ServerOptions, "(")
+    fina = fieldnames(WebSockets.ServerOptions)
+    hidetype || print(io, WebSockets.ServerOptions, "(")
     for field in fina
         fiva = getfield(swo, field)
         if fiva != nothing

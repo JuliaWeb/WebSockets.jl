@@ -16,7 +16,6 @@ includes another Julia session, running in a parallel process or task.
 3. Split messages over several frames.
 """
 module WebSockets
-import MbedTLS: digest, MD_SHA1
 import Base64: base64encode, base64decode
 import Sockets
 import      Sockets: TCPSocket,
@@ -44,7 +43,6 @@ export WebSocket,
        send_pong,
        WebSocketClosedError,
        addsubproto,
-       ServerWS,
        WebSocketLogger,
        @wslog,
        Wslog
@@ -73,15 +71,15 @@ struct WebSocketError <: Exception
 end
 
 "Status codes according to RFC 6455 7.4.1"
-const codeDesc = Dict{Int, String}(1000=>"Normal", 1001=>"Going Away",
-    1002=>"Protocol Error", 1003=>"Unsupported Data",
-    1004=>"Reserved", 1005=>"No Status Recvd- reserved",
+const codeDesc = Dict{Int, String}(
+    1000=>"Normal",                     1001=>"Going Away",
+    1002=>"Protocol Error",             1003=>"Unsupported Data",
+    1004=>"Reserved",                   1005=>"No Status Recvd- reserved",
     1006=>"Abnormal Closure- reserved", 1007=>"Invalid frame payload data",
-    1008=>"Policy Violation", 1009=>"Message too big",
-    1010=>"Missing Extension", 1011=>"Internal Error",
-    1012=>"Service Restart", 1013=>"Try Again Later",
-    1014=>"Bad Gateway", 1015=>"TLS Handshake")
-
+    1008=>"Policy Violation",           1009=>"Message too big",
+    1010=>"Missing Extension",          1011=>"Internal Error",
+    1012=>"Service Restart",            1013=>"Try Again Later",
+    1014=>"Bad Gateway",                1015=>"TLS Handshake")
 
 """
 A WebSocket is a wrapper over a TCPSocket. It takes care of wrapping outgoing
@@ -530,7 +528,7 @@ This function then returns the string of the base64-encoded value.
 """
 function generate_websocket_key(key)
     hashkey = "$(key)258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-    return base64encode(digest(MD_SHA1, hashkey))
+    return base64encode(MbedTLS.digest(MbedTLS.MD_SHA1, hashkey))
 end
 
 """

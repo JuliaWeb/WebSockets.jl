@@ -6,59 +6,39 @@
 # stress tests opening and closing a sequence of servers.
 # At this time, we unfortunately get irritating messages
 # 'Workqueue inconsistency detected:...'
-using Test
-using WebSockets
-import Sockets: IPAddr,
-                InetAddr,
-                IPv4
-import Random.randstring
 
-include("logformat.jl")
-if !@isdefined SUBPROTOCOL
-    const SUBPROTOCOL = "Server start the conversation"
-    const SUBPROTOCOL_CLOSE = "Server start the conversation and close it from within websocket handler"
-end
-addsubproto(SUBPROTOCOL)
-addsubproto(SUBPROTOCOL_CLOSE)
-if !@isdefined(PORT)
-    const PORT = 8000
-    const SURL = "127.0.0.1"
-    const EXTERNALWSURI = "ws://echo.websocket.org"
-    const EXTERNALHTTP = "http://httpbin.org/ip"
-    const MSGLENGTHS = [0 , 125, 126, 127, 2000]
-end
-include("client_server_functions.jl")
-
-@info "External server http request"
-@test 200 == WebSockets.HTTP.request("GET", EXTERNALHTTP).status
+# @info "External server http request"
+# @test 200 == HTTP.request("GET", EXTERNALHTTP).status
 
 @info "Listen: Open, http response, close. Repeat three times. Takes a while."
 for i = 1:3
     let
-        servertask, serverref = startserver(usinglisten = true)
-        @test 200 == WebSockets.HTTP.request("GET", "http://$SURL:$PORT").status
-        closeserver(serverref)
+        server = startserver(url=SURL,port=PORT)
+        status = HTTP.request("GET", "http://$SURL:$PORT").status
+        println("Status($(i)): $(status)")
+        @test 200 == status
+        close(server)
     end
 end
 
 @info "Listen: Client side initates message exchange."
 let
-    servertask, serverref = startserver(usinglisten = true)
+    server = startserver(url=SURL,port=PORT)
     WebSockets.open(initiatingws, "ws://$SURL:$PORT")
-    closeserver(serverref)
+    close(server)
 end
 
 @info "Listen: Server side initates message exchange."
 let
-    servertask, serverref = startserver(usinglisten = true)
+    server = startserver(url=SURL,port=PORT)
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL)
-    closeserver(serverref)
+    close(server)
 end
 
 @info "Listen: Server side initates message exchange. Close from within server side handler."
 let
-    servertask, serverref = startserver(usinglisten = true)
+    server = startserver(url=SURL,port=PORT)
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL_CLOSE)
-    closeserver(serverref)
+    close(server)
 end
 nothing

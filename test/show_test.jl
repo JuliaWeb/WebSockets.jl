@@ -1,26 +1,15 @@
-using Test
-import Base:    C_NULL, LibuvStream, GenericIOBuffer, BufferStream
-import Sockets: UDPSocket, @ip_str, send, recvfrom, TCPSocket
-
-using WebSockets
-
-import WebSockets:_show,
-    ReadyState,
-    _uv_status_tuple,
-    Response
-mutable struct DummyStream <: LibuvStream
-    buffer::GenericIOBuffer
+mutable struct DummyStream <: Base.LibuvStream
+    buffer::Base.GenericIOBuffer
     status::Int
     handle::Any
 end
 
-
 let kws = [], msgs =[]
     ds = DummyStream(IOBuffer(), 0, 0)
-    for s = 0:9, h in [C_NULL, Ptr{UInt64}(3)]
+    for s = 0:9, h in [Base.C_NULL, Ptr{UInt64}(3)]
         ds.handle = h
         ds.status = s
-        kwarg, msg = _uv_status_tuple(ds)
+        kwarg, msg = WebSockets._uv_status_tuple(ds)
         push!(kws, kwarg)
         push!(msgs, msg)
     end
@@ -29,8 +18,8 @@ let kws = [], msgs =[]
 end
 
 let kws = [], msgs =[]
-    for s in instances(ReadyState)
-        kwarg, msg = _uv_status_tuple(s)
+    for s in instances(WebSockets.ReadyState)
+        kwarg, msg = WebSockets._uv_status_tuple(s)
         push!(kws, kwarg)
         push!(msgs, msg)
     end
@@ -40,12 +29,12 @@ end
 
 let kws = [], msgs =[]
     fi = open("temptemp", "w+")
-    kwarg, msg = _uv_status_tuple(fi)
+    kwarg, msg = WebSockets._uv_status_tuple(fi)
     push!(kws, kwarg)
     push!(msgs, msg)
     close(fi)
     rm("temptemp")
-    kwarg, msg = _uv_status_tuple(fi)
+    kwarg, msg = WebSockets._uv_status_tuple(fi)
     push!(kws, kwarg)
     push!(msgs, msg)
     @test kws == [(color = :green,), (color = :red,)]
@@ -55,7 +44,7 @@ end
 
 fi = open("temptemp", "w+")
 io = IOBuffer()
-_show(IOContext(io, :wslog=>true), fi)
+WebSockets._show(IOContext(io, :wslog=>true), fi)
 close(fi)
 rm("temptemp")
 output = String(take!(io))
@@ -63,7 +52,7 @@ output = String(take!(io))
 
 ds = DummyStream(IOBuffer(), 0, 0x00000001)
 io = IOBuffer()
-_show(io, ds)
+WebSockets._show(io, ds)
 # The handle type depends on operating system, skip that
 output = join(split(String(take!(io)), " ")[2:end], " ")
 # The fallback show has been used.
@@ -71,60 +60,60 @@ output = join(split(String(take!(io)), " ")[2:end], " ")
 
 
 
-udp = UDPSocket()
+udp = Sockets.UDPSocket()
 bind(udp, ip"127.0.0.1", 8079)
 io = IOContext(IOBuffer(), :color => true, :wslog=>true)
-_show(io, udp)
+WebSockets._show(io, udp)
 output = String(take!(io.io))
 # No bytesavailable for UDPSocket
 @test output == "\e[32m✓\e[39m"
 
 
-udp = UDPSocket()
+udp = Sockets.UDPSocket()
 io = IOContext(IOBuffer(), :wslog=>true)
-_show(io, udp)
+WebSockets._show(io, udp)
 output = String(take!(io.io))
 # No colors in file context, correct state
 @test output == "init"
 
-bs = BufferStream()
+bs = Base.BufferStream()
 io = IOContext(IOBuffer(), :color => true, :wslog=>true)
-_show(io, bs)
+WebSockets._show(io, bs)
 output = String(take!(io.io))
 # No reporting of zero bytes
 @test output == "\e[32m✓\e[39m"
 
 
-bs = BufferStream()
+bs = Base.BufferStream()
 write(bs, "321")
 io = IOContext(IOBuffer(), :color => true, :wslog=>true)
-_show(io, bs)
+WebSockets._show(io, bs)
 output = String(take!(io.io))
 # Report bytes
 @test output == "\e[32m✓\e[39m, 3 bytes"
 
 
-bs = BufferStream()
+bs = Base.BufferStream()
 close(bs)
 io = IOContext(IOBuffer(), :color => true, :wslog=>true)
-_show(io, bs)
+WebSockets._show(io, bs)
 output = String(take!(io.io))
 @test output == "\e[31m✘\e[39m"
 
 
-bs = BufferStream()
+bs = Base.BufferStream()
 write(bs, "321")
 close(bs)
 io = IOContext(IOBuffer(), :color => true, :wslog=>true)
-_show(io, bs)
+WebSockets._show(io, bs)
 output = String(take!(io.io))
 @test output == "\e[31m✘\e[39m, 3 bytes"
 
 
-bs = BufferStream()
+bs = Base.BufferStream()
 write(bs, "123")
 io = IOContext(IOBuffer(), :color => true, :wslog=>true)
-_show(io, ds)
+WebSockets._show(io, ds)
 output = String(take!(io.io))
 # No reporting of zero bytes
 @test output == "\e[34muninit\e[39m"
@@ -132,44 +121,44 @@ output = String(take!(io.io))
 iob = IOBuffer()
 write(iob, "123")
 io = IOContext(IOBuffer(), :color => true, :wslog=>true)
-_show(io, iob)
+WebSockets._show(io, iob)
 output = String(take!(io.io))
 @test output == "\e[32m✓\e[39m, 3 bytes"
 
 iob = IOBuffer()
 io = IOContext(IOBuffer())
-_show(io, iob)
+WebSockets._show(io, iob)
 output = String(take!(io.io))
 @test output == "IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=Inf, ptr=1, mark=-1)"
 
 io = IOContext(IOBuffer())
-_show(io, devnull)
+WebSockets._show(io, devnull)
 output = String(take!(io.io))
 @test output == "Base.DevNull()" || output == "Base.DevNullStream()"
 
 
 
 # Short form, as in print(stdout, ws)
-ws = WebSocket(BufferStream(), true)
+ws = WebSocket(Base.BufferStream(), true)
 io = IOContext(IOBuffer())
 show(io, ws)
 output = String(take!(io.io))
 @test output == "WebSocket{BufferStream}(server, CONNECTED)"
 
 
-ws = WebSocket(BufferStream(), false)
+ws = WebSocket(Base.BufferStream(), false)
 io = IOContext(IOBuffer())
 show(io, ws)
 output = String(take!(io.io))
 @test output == "WebSocket{BufferStream}(client, CONNECTED)"
 
-ws = WebSocket(BufferStream(), false)
+ws = WebSocket(Base.BufferStream(), false)
 io = IOContext(IOBuffer(), :color => true)
 show(io, ws)
 output = String(take!(io.io))
 @test output == "WebSocket{BufferStream}(client, \e[32mCONNECTED\e[39m)"
 
-ws = WebSocket(TCPSocket(), false)
+ws = WebSocket(Sockets.TCPSocket(), false)
 io = IOContext(IOBuffer(), :color => true)
 show(io, ws)
 output = String(take!(io.io))
@@ -177,80 +166,79 @@ output = String(take!(io.io))
 @test output == "WebSocket(client, \e[32mCONNECTED\e[39m)"
 
 #short form for Atom / Juno
-ws = WebSocket(TCPSocket(), false)
+ws = WebSocket(Sockets.TCPSocket(), false)
 io = IOContext(IOBuffer(), :color => true)
 show(io, "application/prs.juno.inline", ws)
 output = String(take!(io.io))
 @test output == "WebSocket(client, \e[32mCONNECTED\e[39m)"
 
 # Long form, as in print(stdout, ws)
-ws = WebSocket(TCPSocket(), true)
+ws = WebSocket(Sockets.TCPSocket(), true)
 io = IOContext(IOBuffer(), :color => true)
 show(io, "text/plain", ws)
 output = String(take!(io.io))
 @test output == "WebSocket{TCPSocket}(server, \e[32mCONNECTED\e[39m): \e[33minit\e[39m"
 
 
-ws = WebSocket(BufferStream(), false)
+ws = WebSocket(Base.BufferStream(), false)
 write(ws.socket, "78")
 io = IOContext(IOBuffer(), :color => true)
 show(io, "text/plain", ws)
 output = String(take!(io.io))
 @test output == "WebSocket{BufferStream}(client, \e[32mCONNECTED\e[39m): \e[32m✓\e[39m, 2 bytes"
 
-### For testing Base.show(ServerWS)
-h(r) = Response(200)
-w(ws, r) = nothing
+### For testing Base.show(WSServer)
+h(r) = HTTP.Response(200)
+w(s) = nothing
 io = IOBuffer()
-_show(io, h)
+WebSockets._show(io, h)
 output = String(take!(io))
 @test output == "h(r)"
 
-_show(io, x-> 2x)
+WebSockets._show(io, x-> 2x)
 output = String(take!(io))
 @test output[1] == '#'
 
-
-sws = ServerWS(h, w)
+sws = WebSockets.WSServer(h, w)
 show(io, sws)
 output = String(take!(io))
-@test output == "ServerWS(handler=h(r), wshandler=w(ws, r))"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s))"
 
-sws = ServerWS(h, w,  ratelimit = 1 // 1)
+sws = WebSockets.WSServer(h, w, rate_limit=1//1)
 show(io, sws)
 output = String(take!(io))
-@test output == "ServerWS(handler=h(r), wshandler=w(ws, r), readtimeout=180.0, ratelimit=1//1, support100continue=true, logbody=true)"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), readtimeout=180.0, rate_limit=1//1, support100continue=true, logbody=true)"
 
 # with loggers
-sws = ServerWS(handler= h, wshandler= w, logger = stderr)
+sws = WebSockets.WSServer(handler= h, wshandler= w, logger = stderr)
 io = IOBuffer()
 show(io, sws)
 output = String(take!(io))
-@test output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=TTY:✓)" ||
-    output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=PipeEndpoint():✓)" ||
-    output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=PipeEndpoint:✓)"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=TTY:✓)" ||
+    output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=PipeEndpoint():✓)" ||
+    output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=PipeEndpoint:✓)"
 fi = open("temptemp", "w+")
-sws = ServerWS(h, w, fi)
+sws = WebSockets.WSServer(h, w, fi)
 io = IOBuffer()
-_show(io, sws)
+WebSockets._show(io, sws)
 output = String(take!(io))
-@test output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=<file temptemp>:✓)"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=<file temptemp>:✓)"
 close(fi)
-_show(io, sws)
+WebSockets._show(io, sws)
 rm("temptemp")
 output = String(take!(io))
-@test output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=<file temptemp>:✘)"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=<file temptemp>:✘)"
 
 
-sws = ServerWS(handler= h, wshandler= w, logger = devnull)
+sws = WebSockets.WSServer(handler= h, wshandler= w, logger = devnull)
 io = IOBuffer()
 show(io, sws)
 output = String(take!(io))
-@test output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=Base.DevNull())" ||
-    output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=Base.DevNullStream())"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=Base.DevNull())" ||
+    output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=Base.DevNullStream())"
 
-sws = ServerWS(handler= h, wshandler= w, logger = IOBuffer())
+sws = WebSockets.WSServer(handler= h, wshandler= w, logger = IOBuffer())
 io = IOBuffer()
 show(io, sws)
 output = String(take!(io))
-@test output == "ServerWS(handler=h(r), wshandler=w(ws, r), logger=IOBuffer():✓)"
+@test output == "WebSockets.WSServer(handler=h(r), wshandler=w(s), logger=IOBuffer():✓)"
