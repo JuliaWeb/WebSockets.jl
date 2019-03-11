@@ -235,7 +235,7 @@ target(req::HTTP.Request) = req.target
 subprotocol(req::HTTP.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
 origin(req::HTTP.Request) = HTTP.header(req, "Origin")
 
-"""	
+"""
 WSHandlerFunction(f::Function) <: Handler
  The provided argument should be one of the forms
 
@@ -244,9 +244,9 @@ WSHandlerFunction(f::Function) <: Handler
 
     The latter form is intended for gatekeeping, ref. RFC 6455 section 10.1
  f accepts a `WebSocket` and does interesting things with it, like reading, writing and exiting when finished.
-"""	
+"""
 struct WSHandlerFunction{F <: Function} <: HTTP.Handler
-    func::F # func(ws) or func(request, ws)	
+    func::F # func(ws) or func(request, ws)
 end
 
 struct ServerOptions
@@ -260,7 +260,7 @@ end
 function ServerOptions(;
         sslconfig::Union{HTTP.Servers.MbedTLS.SSLConfig, Nothing} = nothing,
         readtimeout::Float64=180.0,
-        ratelimit::Rational{Int}= 0 // 1,
+        rate_limit::Rational{Int}= 0 // 1,
         support100continue::Bool=true,
         chunksize::Union{Nothing, Int}=nothing,
         logbody::Bool=true
@@ -276,7 +276,7 @@ include .in  and .out channels, see WebSockets.serve.
 
 Server options can be set using keyword arguments, see methods(WebSockets.ServerWS).
 
-Note that giving keyword argument ratelimits has no effect by itself. You must also provide
+TODO check if true..Note that giving keyword argument ratelimit has no effect by itself. You must also provide
 a ratelimit function, for example by importing HTTP.??.check_rate_limit. This interface is
 in a state of flux.
 """
@@ -289,7 +289,7 @@ mutable struct WSServer
     out::Channel{Any}
     options::ServerOptions
 
-    WSServer(handler, wshandler, logger::IO=stdout, server=nothing, 
+    WSServer(handler, wshandler, logger::IO=stdout, server=nothing,
         ch1=Channel(1), ch2=Channel(2), options=ServerOptions()) =
         new(handler, wshandler, logger, server, ch1, ch2, options)
 end
@@ -326,7 +326,7 @@ function WSServer(handler::HTTP.RequestHandlerFunction,
     if cert != "" && key != ""
         sslconfig = HTTP.Servers.MbedTLS.SSLConfig(cert, key)
     end
-    
+
     wsserver = WSServer(handler,wshandler,logger,server,
         Channel(1), Channel(2), ServerOptions(sslconfig=sslconfig;kwargs...))
 end
@@ -395,7 +395,7 @@ function serve(wsserver::WSServer, host, port, verbose)
             # ssl=(S == Val{:https}),
             sslconfig = wsserver.options.sslconfig,
             verbose = verbose,
-            # tcpisvalid = wsserver.options.rate_limit > 0 ? 
+            # tcpisvalid = wsserver.options.rate_limit > 0 ?
             #     tcp -> checkratelimit!(tcp,rate_limit=wsserver.options.rate_limit) :
             #     tcp -> true,
             # ratelimits = Dict{IPAddr, HTTP.Servers.MbedTLS.SSLConfig}(),
@@ -414,35 +414,3 @@ function Base.close(wsserver::WebSockets.WSServer)
     wsserver.server=nothing
     return
 end
-
-# """
-# 'checkratelimit!' updates a dictionary of IP addresses which keeps track of their
-# connection quota per time window.
-
-# The allowed connections per time is given in keyword argument `rate_limit`.
-
-# The actual rate_limit::Rational value, is normally given as a field value in ServerOpions.
-
-# 'checkratelimit!' is the default rate limiting function for WSServer, which passes
-# it as the 'tcpisvalid' argument to 'WebSockets.HTTP.listen'. Other functions can be given as a
-# keyword argument, as long as they adhere to this form, which WebSockets.HTTP.listen
-# expects.
-# """
-# checkratelimit!(tcp::Base.PipeEndpoint) = true
-# function checkratelimit!(tcp;
-#                           rate_limit::Rational{Int}=10//1)
-#     ip = getsockname(tcp)[1]
-#     rate = Float64(rate_limit.num)
-#     rl = get!(ratelimits, ip, HTTP.Servers.MbedTLS.SSLConfig(rate, Dates.now()))
-#     update!(rl, rate_limit)
-#     if rl.allowance > rate
-#         rl.allowance = rate
-#     end
-#     if rl.allowance < 1.0
-#         #@debug "discarding connection due to rate limiting"
-#         return false
-#     else
-#         rl.allowance -= 1.0
-#     end
-#     return true
-# end

@@ -16,12 +16,12 @@ const CLOSINGMESSAGES = Vector{String}()
 
 const T0 = now()
 # At Http 0.7 / WebSockets 1.3, there is no obviously nice interface to limiting
-# the maximum simulconnection pool. We settle for a naughty as well as ugly way, and state our
+# the maximum simultaneous connections. We settle for a naughty as well as ugly way, and state our
 # intention to fix this up (sometime). It should not concern timeouts, just
 # our ability to open many sockets at a time.
 @eval WebSockets.HTTP.ConnectionPool default_connection_limit = 32
-# The default ratelimit is below the number of websockets we're intending to open.
-const SERVER = WebSockets.WSServer(handle, gatekeeper, ratelimit = 0//1)
+
+const SERVER = WebSockets.WSServer(handle, gatekeeper, rate_limit = 0//1)
 const OLDLOGGER = WebSockets.global_logger()
 
 WebSockets.global_logger(WebSocketLogger())
