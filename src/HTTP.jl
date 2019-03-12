@@ -269,14 +269,14 @@ function ServerOptions(;
 end
 
 """
-    WebSockets.WSServer(handler::Function, wshandler::Function, logger::IO)
+    WebSockets.ServerWS(handler::Function, wshandler::Function, logger::IO)
 
-WebSockets.WSServer is an argument type for WebSockets.serve. Instances
+WebSockets.ServerWS is an argument type for WebSockets.serve. Instances
 include .in  and .out channels, see WebSockets.serve.
 
-Server options can be set using keyword arguments, see methods(WebSockets.WSServer)
+Server options can be set using keyword arguments, see methods(WebSockets.ServerWS)
 """
-mutable struct WSServer
+mutable struct ServerWS
     handler::HTTP.RequestHandlerFunction
     wshandler::WebSockets.WSHandlerFunction
     logger::IO
@@ -285,32 +285,32 @@ mutable struct WSServer
     out::Channel{Any}
     options::ServerOptions
 
-    WSServer(handler, wshandler, logger::IO=stdout, server=nothing, 
+    ServerWS(handler, wshandler, logger::IO=stdout, server=nothing, 
         ch1=Channel(1), ch2=Channel(2), options=ServerOptions()) =
         new(handler, wshandler, logger, server, ch1, ch2, options)
 end
 
-# Define WSServer without wrapping the functions first. Rely on argument sequence.
-function WSServer(h::Function, w::Function, l::IO=stdout, s=nothing;
+# Define ServerWS without wrapping the functions first. Rely on argument sequence.
+function ServerWS(h::Function, w::Function, l::IO=stdout, s=nothing;
             cert::String="", key::String="", kwargs...)
 
-        WSServer(HTTP.RequestHandlerFunction(h),
+        ServerWS(HTTP.RequestHandlerFunction(h),
                 WebSockets.WSHandlerFunction(w), l, s;
                 cert=cert, key=key, kwargs...)
 end
 
-# Define WSServer with keyword arguments only
-function WSServer(;handler::Function, wshandler::Function,
+# Define ServerWS with keyword arguments only
+function ServerWS(;handler::Function, wshandler::Function,
             logger::IO=stdout, server=nothing,
             cert::String="", key::String="", kwargs...)
 
-        WSServer(HTTP.RequestHandlerFunction(handler),
+        ServerWS(HTTP.RequestHandlerFunction(handler),
                 WebSockets.WSHandlerFunction(wshandler), logger, server,
                 cert=cert, key=key, kwargs...)
 end
 
-# Define WSServer with function wrappers
-function WSServer(handler::HTTP.RequestHandlerFunction,
+# Define ServerWS with function wrappers
+function ServerWS(handler::HTTP.RequestHandlerFunction,
                 wshandler::WebSockets.WSHandlerFunction,
                 logger::IO = stdout,
                 server = nothing;
@@ -323,14 +323,14 @@ function WSServer(handler::HTTP.RequestHandlerFunction,
         sslconfig = HTTP.Servers.MbedTLS.SSLConfig(cert, key)
     end
     
-    wsserver = WSServer(handler,wshandler,logger,server,
+    serverws = ServerWS(handler,wshandler,logger,server,
         Channel(1), Channel(2), ServerOptions(sslconfig=sslconfig;kwargs...))
 end
 
 """
-    WebSockets.serve(server::WSServer, port)
-    WebSockets.serve(server::WSServer, host, port)
-    WebSockets.serve(server::WSServer, host, port, verbose)
+    WebSockets.serve(server::ServerWS, port)
+    WebSockets.serve(server::ServerWS, host, port)
+    WebSockets.serve(server::ServerWS, host, port, verbose)
 
 A wrapper for WebSockets.HTTP.listen.
 Puts any caught error and stacktrace on the server.out channel.
@@ -345,7 +345,7 @@ After a suspected connection task failure:
     end
 ```
 """
-function serve(wsserver::WSServer, host, port, verbose)
+function serve(serverws::ServerWS, host, port, verbose)
     # An internal reference used for closing.
     # tcpserver = Ref{Union{Base.IOServer, Nothing}}()
     # Start a couroutine that sleeps until tcpserver is assigned,
@@ -357,7 +357,7 @@ function serve(wsserver::WSServer, host, port, verbose)
     # but will now kill the server regardless of what is sent.
     # @async begin
     #     # Next line will hold
-    #     take!(wsserver.in)
+    #     take!(serverws.in)
     #     close(tcpserver[])
     #     tcpserver[] = nothing
     #     GC.gc()
@@ -368,13 +368,13 @@ function serve(wsserver::WSServer, host, port, verbose)
     function _servercoroutine(stream::HTTP.Stream)
         try
             if is_upgrade(stream.message)
-                upgrade(wsserver.wshandler.func, stream)
+                upgrade(serverws.wshandler.func, stream)
             else
-                HTTP.handle(wsserver.handler, stream)
+                HTTP.handle(serverws.handler, stream)
             end
         catch err
-            put!(wsserver.out, err)
-            put!(wsserver.out, stacktrace(catch_backtrace()))
+            put!(serverws.out, err)
+            put!(serverws.out, stacktrace(catch_backtrace()))
         end
     end
     #
@@ -384,30 +384,30 @@ function serve(wsserver::WSServer, host, port, verbose)
     #    The default tcpvalid function is defined in this module.
     # 2) If we are ready, it spawns a new task or coroutine _servercoroutine.
     #
-    wsserver.server = Sockets.listen(Sockets.InetAddr(parse(IPAddr, host), port))
+    serverws.server = Sockets.listen(Sockets.InetAddr(parse(IPAddr, host), port))
     HTTP.listen(_servercoroutine,
             host, port;
-            server=wsserver.server,
+            server=serverws.server,
             # ssl=(S == Val{:https}),
-            sslconfig = wsserver.options.sslconfig,
+            sslconfig = serverws.options.sslconfig,
             verbose = verbose,
-            # tcpisvalid = wsserver.options.rate_limit > 0 ? 
-            #     tcp -> checkratelimit!(tcp,rate_limit=wsserver.options.rate_limit) :
+            # tcpisvalid = serverws.options.rate_limit > 0 ? 
+            #     tcp -> checkratelimit!(tcp,rate_limit=serverws.options.rate_limit) :
             #     tcp -> true,
             # ratelimits = Dict{IPAddr, HTTP.Servers.MbedTLS.SSLConfig}(),
-            rate_limit = wsserver.options.rate_limit)
+            rate_limit = serverws.options.rate_limit)
     # We will only get to this point if the server is closed.
     # If this serve function is running as a coroutine, the server is closed
     # through the server.in channel, see above.
     return
 end
-serve(wsserver::WSServer; host= "127.0.0.1", port= "") =  serve(wsserver, host, port, false)
-serve(wsserver::WSServer, host, port) =  serve(wsserver, host, port, false)
-serve(wsserver::WSServer, port) =  serve(wsserver, "127.0.0.1", port, false)
+serve(serverws::ServerWS; host= "127.0.0.1", port= "") =  serve(serverws, host, port, false)
+serve(serverws::ServerWS, host, port) =  serve(serverws, host, port, false)
+serve(serverws::ServerWS, port) =  serve(serverws, "127.0.0.1", port, false)
 
-function Base.close(wsserver::WebSockets.WSServer)
-    close(wsserver.server)
-    wsserver.server=nothing
+function Base.close(serverws::WebSockets.ServerWS)
+    close(serverws.server)
+    serverws.server=nothing
     return
 end
 
@@ -419,7 +419,7 @@ end
 
 # The actual rate_limit::Rational value, is normally given as a field value in ServerOpions.
 
-# 'checkratelimit!' is the default rate limiting function for WSServer, which passes
+# 'checkratelimit!' is the default rate limiting function for ServerWS, which passes
 # it as the 'tcpisvalid' argument to 'WebSockets.HTTP.listen'. Other functions can be given as a
 # keyword argument, as long as they adhere to this form, which WebSockets.HTTP.listen
 # expects.

@@ -59,7 +59,7 @@ if !@isdefined(THISPORT)
 end
 const IPA = "127.0.0.1"
 const URL9 = "http://$IPA:$THISPORT"
-# serverWS =  WSServer(  (r) -> WebSockets.Response(200, "OK"),
+# serverWS =  ServerWS(  (r) -> WebSockets.Response(200, "OK"),
 #                        (r, ws) -> nothing,
 #                        ratelimit = 1 // 1)
 # tas = @async WebSockets.serve(serverWS, IPA, THISPORT)
@@ -82,7 +82,7 @@ const URL9 = "http://$IPA:$THISPORT"
 
 @info "Commented. Starting server seems to have issues."
 # @info "Set up a secure server, missing local certificates. Http request should throw error (15s). "
-# serverWS =  WSServer(  (r) -> WebSockets.Response(200, "OK"),
+# serverWS =  ServerWS(  (r) -> WebSockets.Response(200, "OK"),
 #                        (r, ws) -> nothing,
 #                        sslconfig = HTTP.Servers.MbedTLS.SSLConfig())
 
