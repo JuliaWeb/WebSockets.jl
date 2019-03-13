@@ -4,7 +4,7 @@ const FPORT = 8092
 
 @info "Start a server with a ws handler that is unresponsive. \nClose from client side. The " *
       " close handshake aborts after $(WebSockets.TIMEOUT_CLOSEHANDSHAKE) seconds..."
-s = WebSockets.WSServer(
+s = WebSockets.ServerWS(
     req::HTTP.Request -> HTTP.Response(200),
     (req::HTTP.Request, ws::WebSocket) -> begin
         for i=1:16
@@ -22,7 +22,7 @@ close(s)
 
 @info "Start a server with a ws handler that always reads guarded."
 sleep(1)
-s = WebSockets.WSServer(
+s = WebSockets.ServerWS(
     req -> HTTP.Response(200),
     (req, ws_serv) -> begin
         while isopen(ws_serv)
@@ -85,7 +85,7 @@ close(s)
 @info "Start a server. The wshandler use global channels for inspecting caught errors."
 sleep(1)
 chfromserv=Channel(2)
-s = WebSockets.WSServer(
+s = WebSockets.ServerWS(
     req-> HTTP.Response(200),
     ws_serv->begin
         while isopen(ws_serv)
@@ -119,7 +119,7 @@ sleep(1)
 
 @info "Start a server. Errors are output on built-in channel"
 sleep(1)
-s = WebSockets.WSServer(
+s = WebSockets.ServerWS(
     req-> HTTP.Response(200),
     ws_serv->begin
         while isopen(ws_serv)
@@ -147,7 +147,7 @@ while isready(s.out)
 end
 
 # println("********************************************************")
-# println("WSServer: $(s)")
+# println("ServerWS: $(s)")
 # println("HTTP Handle: $(s.handler)")
 # println("WS Handler: $(s.wshandler)")
 # println("Logger: $(s.logger)")

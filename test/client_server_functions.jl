@@ -133,7 +133,7 @@ function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = 
     closebeforeexit && close(ws, statusnumber = 1000)
 end
 
-test_wsserver = WebSockets.WSServer(
+test_serverws = WebSockets.ServerWS(
     HTTP.RequestHandlerFunction(test_handler),
     WebSockets.WSHandlerFunction(test_wshandler))
 
@@ -152,14 +152,14 @@ a web server.
 For usinglisten = false, error messages can sometimes be inspected through take!(reference.out)
 
 To close the server, call
-    close(wsserver)
+    close(serverws)
 """
-function startserver(wsserver=test_wsserver;url=SURL, port=PORT, verbose=false)
-    servertask = @async WebSockets.serve(wsserver,url,port,verbose)
+function startserver(serverws=test_serverws;url=SURL, port=PORT, verbose=false)
+    servertask = @async WebSockets.serve(serverws,url,port,verbose)
     while !istaskstarted(servertask);yield();end
-    if isready(wsserver.out)
+    if isready(serverws.out)
         # capture errors, if any were made during the definition.
-        @error take!(wsserver.out)
+        @error take!(serverws.out)
     end
-    wsserver
+    serverws
 end

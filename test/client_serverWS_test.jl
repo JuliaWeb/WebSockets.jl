@@ -28,7 +28,7 @@ end
 @info "External server http request"
 @test 200 == WebSockets.HTTP.request("GET", EXTERNALHTTP).status
 
-@info "WSServer: Open, http response, close. Repeat three times. Takes a while."
+@info "ServerWS: Open, http response, close. Repeat three times. Takes a while."
 for i = 1:3
     let
         server = startserver()
@@ -37,21 +37,21 @@ for i = 1:3
     end
 end
 
-@info "WSServer: Client side initates message exchange."
+@info "ServerWS: Client side initates message exchange."
 let
     server = startserver()
     WebSockets.open(initiatingws, "ws://$SURL:$PORT")
     close(server)
 end
 
-@info "WSServer: Server side initates message exchange."
+@info "ServerWS: Server side initates message exchange."
 let
     server = startserver()
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL)
     close(server)
 end
 
-@info "WSServer: Server side initates message exchange. Close from within server side handler."
+@info "ServerWS: Server side initates message exchange. Close from within server side handler."
 let
     server = startserver()
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL_CLOSE)
