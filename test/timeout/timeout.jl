@@ -21,7 +21,7 @@ const T0 = now()
 # our ability to open many sockets at a time.
 @eval WebSockets.HTTP.ConnectionPool default_connection_limit = 32
 
-const SERVER = WebSockets.WSServer(handle, gatekeeper, rate_limit = 0//1)
+const SERVER = WebSockets.ServerWS(handle, gatekeeper, rate_limit = 0//1)
 const OLDLOGGER = WebSockets.global_logger()
 
 WebSockets.global_logger(WebSocketLogger())

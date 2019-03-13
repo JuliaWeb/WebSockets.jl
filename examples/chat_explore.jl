@@ -148,9 +148,9 @@ function shouldlog(::ConsoleLogger, level, _module, group, id)
     end
 end
 
-# WSServer takes two functions; the first a http request handler function for page requests,
+# ServerWS takes two functions; the first a http request handler function for page requests,
 # one for opening websockets (which javascript in the HTML page will try to do)
-global LASTSERVER = WebSockets.WSServer(req2resp, gatekeeper)
+global LASTSERVER = WebSockets.ServerWS(req2resp, gatekeeper)
 
 # Start the server asyncronously, and stop it later
 @async WebSockets.serve(LASTSERVER, LOCALIP, HTTPPORT)

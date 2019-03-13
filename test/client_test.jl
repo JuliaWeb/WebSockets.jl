@@ -8,11 +8,11 @@ const NEWPORT = 8091
 @info "Start server which accepts websocket upgrades including with subprotocol " *
       "'xml' and immediately closes, following protocol."
 addsubproto("xml")
-wsserver =  WebSockets.WSServer(  
+serverws =  WebSockets.ServerWS(  
     (r::HTTP.Request) -> HTTP.Response(200, "OK"),
     (r::HTTP.Request, ws::WebSocket) -> nothing)
-@async WebSockets.serve(wsserver, "127.0.0.1", NEWPORT, true)
-# tas = @async WebSockets.serve(wsserver, "127.0.0.1", NEWPORT, true)
+@async WebSockets.serve(serverws, "127.0.0.1", NEWPORT, true)
+# tas = @async WebSockets.serve(serverws, "127.0.0.1", NEWPORT, true)
 # while !istaskstarted(tas);yield();end
 
 sleep(2)
@@ -86,7 +86,7 @@ sleep(1)
 
 @info "Stop the server in morse code."
 sleep(1)
-put!(wsserver.in, "...-.-")
+put!(serverws.in, "...-.-")
 sleep(1)
 @info "Emulate a correct first accept response from server, with BufferStream socket."
 sleep(1)
