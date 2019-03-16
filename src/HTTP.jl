@@ -251,7 +251,7 @@ end
 
 struct ServerOptions
     sslconfig::Union{HTTP.Servers.MbedTLS.SSLConfig, Nothing}
-    readtimeout::Float64
+    readtimeout::Int
     rate_limit::Rational{Int}
     support100continue::Bool
     chunksize::Union{Nothing, Int}
@@ -259,10 +259,10 @@ struct ServerOptions
 end
 function ServerOptions(;
         sslconfig::Union{HTTP.Servers.MbedTLS.SSLConfig, Nothing} = nothing,
-        readtimeout::Float64=180.0,
-        rate_limit::Rational{Int}=10//1,
-        support100continue::Bool=true,
-        chunksize::Union{Nothing, Int}=nothing,
+        readtimeout::Int = 0,
+        rate_limit::Rational{Int} = 10//1,
+        support100continue::Bool = true,
+        chunksize::Union{Nothing, Int} = nothing,
         logbody::Bool=true
     )
     ServerOptions(sslconfig, readtimeout, rate_limit, support100continue, chunksize, logbody)
@@ -399,7 +399,8 @@ function serve(serverws::ServerWS, host, port, verbose)
             #     tcp -> checkratelimit!(tcp,rate_limit=serverws.options.rate_limit) :
             #     tcp -> true,
             # ratelimits = Dict{IPAddr, HTTP.Servers.MbedTLS.SSLConfig}(),
-            rate_limit = serverws.options.rate_limit)
+            rate_limit = serverws.options.rate_limit,
+            readtimeout = serverws.options.readtimeout)
     # We will only get to this point if the server is closed.
     # If this serve function is running as a coroutine, the server is closed
     # through the server.in channel, see above.
