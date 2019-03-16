@@ -207,7 +207,7 @@ output = String(take!(io))
 sws = WebSockets.ServerWS(h, w, rate_limit=1//1)
 show(io, sws)
 output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), readtimeout=180.0, rate_limit=1//1, support100continue=true, logbody=true)"
+@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), readtimeout=0, rate_limit=1//1, support100continue=true, logbody=true)"
 
 # with loggers
 sws = WebSockets.ServerWS(handler= h, wshandler= w, logger = stderr)

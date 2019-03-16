@@ -73,7 +73,7 @@ end
     close(SERVER)
 
     #Check that all the sockets were closed for the right reason
-    for clmsg in CLOSINGMESSAGES
+    for clmsg in values(CLOSINGMESSAGES)
         @test occursin("seconds are up", clmsg)
     end
     WebSockets.global_logger(OLDLOGGER)
