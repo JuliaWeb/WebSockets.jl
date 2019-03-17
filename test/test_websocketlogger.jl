@@ -339,7 +339,7 @@ end
     with_logger(logger) do
            @wslog sqrt(-2)
            end
-   @test length(String(take!(buf))) == 1949
+   @test length(String(take!(buf))) > 1900
    """
    [ Info: test
    """
