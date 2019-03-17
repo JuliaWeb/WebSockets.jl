@@ -359,14 +359,15 @@ function serve(serverws::ServerWS, host, port, verbose)
     # The coroutine then closes the server and finishes its run.
     # Note that WebSockets v1.0.3 required the channel input to be HTTP.KILL,
     # but will now kill the server regardless of what is sent.
-    # @async begin
-    #     # Next line will hold
-    #     take!(serverws.in)
-    #     close(tcpserver[])
-    #     tcpserver[] = nothing
-    #     GC.gc()
-    #     yield()
-    # end
+    serverws.server = Sockets.listen(Sockets.InetAddr(parse(IPAddr, host), port))
+    @async begin
+         # Next line will hold
+         take!(serverws.in)
+         close(serverws.server[])
+         serverws.server = nothing
+         GC.gc()
+         yield()
+    end
     # We capture some variables in this inner function, which takes just one-argument.
     # The inner function will be called in a new task for every incoming connection.
     function _servercoroutine(stream::HTTP.Stream)
@@ -382,13 +383,11 @@ function serve(serverws::ServerWS, host, port, verbose)
         end
     end
     #
-    # Call the listen loop, which
-    # 1) Checks if we are ready to accept a new task yet. It does
-    #    so using the function given as a keyword argument, tcpisvalid.
-    #    The default tcpvalid function is defined in this module.
-    # 2) If we are ready, it spawns a new task or coroutine _servercoroutine.
+    # Call the listen loop, which when somebody tries to open a connection,
+    # 1) Checks if we are willing to accept
+    # 2) Spawns a new task, namely our coroutine _servercoroutine.
     #
-    serverws.server = Sockets.listen(Sockets.InetAddr(parse(IPAddr, host), port))
+
     HTTP.listen(_servercoroutine,
             host, port;
             server=serverws.server,
@@ -398,9 +397,9 @@ function serve(serverws::ServerWS, host, port, verbose)
             # tcpisvalid = serverws.options.rate_limit > 0 ?
             #     tcp -> checkratelimit!(tcp,rate_limit=serverws.options.rate_limit) :
             #     tcp -> true,
-            # ratelimits = Dict{IPAddr, HTTP.Servers.MbedTLS.SSLConfig}(),
             rate_limit = serverws.options.rate_limit,
             readtimeout = serverws.options.readtimeout)
+
     # We will only get to this point if the server is closed.
     # If this serve function is running as a coroutine, the server is closed
     # through the server.in channel, see above.
@@ -411,7 +410,10 @@ serve(serverws::ServerWS, host, port) =  serve(serverws, host, port, false)
 serve(serverws::ServerWS, port) =  serve(serverws, "127.0.0.1", port, false)
 
 function Base.close(serverws::WebSockets.ServerWS)
-    close(serverws.server)
-    serverws.server=nothing
+    put!(serverws.in, "Close!")
+    if isready(serverws.out)
+        @warn "Server closed. Error messages exist on the server's .out channel. Check
+            String(take!(myserver.out))"
+    end
     return
 end
