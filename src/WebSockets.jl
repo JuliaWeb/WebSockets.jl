@@ -16,16 +16,22 @@ includes another Julia session, running in a parallel process or task.
 3. Split messages over several frames.
 """
 module WebSockets
-import Base64: base64encode, base64decode
-import Sockets
-import      Sockets: TCPSocket,
-                     IPAddr,
-                     getsockname
 using Dates
-# imports from HTTP in this file
+using Logging
+import Sockets
+import Sockets: TCPSocket,      # For locked_write, show
+                IPAddr          # For serve
+import Base64:  base64decode,   # For generate_websocket_key
+                base64encode    # For open client websocket
+import HTTP                     # Depend on WebSockets.HTTP only to avoid version confusion
+import HTTP.Servers.MbedTLS     # For further imports
+import HTTP.Servers.MbedTLS:
+                MD_SHA1,        # For generate_websocket_key
+                digest         # For generate_websocket_key
+
+# further imports from HTTP in this file
 include("HTTP.jl")
 
-using Logging
 # A logger based on ConsoleLogger. This has an effect
 # only if the user chooses to use WebSocketLogger.
 include("Logger/websocketlogger.jl")
@@ -528,7 +534,7 @@ This function then returns the string of the base64-encoded value.
 """
 function generate_websocket_key(key)
     hashkey = "$(key)258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-    return base64encode(MbedTLS.digest(MbedTLS.MD_SHA1, hashkey))
+    return base64encode(digest(MD_SHA1, hashkey))
 end
 
 """

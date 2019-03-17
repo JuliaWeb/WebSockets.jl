@@ -1,5 +1,28 @@
-import HTTP
-import HTTP.Servers: MbedTLS
+import HTTP:Response,   # For upgrade
+            Request,    # For upgrade, target, origin, subprotocol
+            Header,     # benchmarks, client_test, handshaketest
+            header,     # For upgrade, subprotocol
+            hasheader,  # For upgrade and check_upggrade
+            setheader,  # For upgrade
+            setstatus,  # For upgrade
+            startwrite, # For upgrade
+            Connection, # For handshaketest
+            Transaction,# For handshaketest
+            startread,  # For _openstream
+            URI,        # For open
+            Handler,    # For WebSocketHandler, ServerWS, error_test
+            RequestHandlerFunction,         # For ServerWS
+            StatusError,                    # For open
+            Servers,                        # For further imports
+            Streams,                        # For further imports
+            ConnectionPool                  # For further imports
+import HTTP.ConnectionPool:
+            getrawstream                    # For _openstream
+import HTTP.Streams:
+            Stream                          # For is_upgrade, handshaketest
+import HTTP.Servers: MbedTLS                # For further imports
+import HTTP.Servers.MbedTLS:
+            SSLConfig                       # For ServerWS
 
 """
 Initiate a websocket|client connection to server defined by url. If the server accepts
@@ -284,40 +307,39 @@ mutable struct ServerWS
     handler::HTTP.RequestHandlerFunction
     wshandler::WebSockets.WSHandlerFunction
     logger::IO
-    server::Union{Base.IOServer,Nothing}
     in::Channel{Any}
     out::Channel{Any}
     options::ServerOptions
 
-    ServerWS(handler, wshandler, logger::IO=stdout, server=nothing,
+    ServerWS(handler, wshandler, logger::IO=stdout,
         ch1=Channel(1), ch2=Channel(2), options=ServerOptions()) =
-        new(handler, wshandler, logger, server, ch1, ch2, options)
+        new(handler, wshandler, logger, ch1, ch2, options)
 end
 
 # Define ServerWS without wrapping the functions first. Rely on argument sequence.
-function ServerWS(h::Function, w::Function, l::IO=stdout, s=nothing;
+function ServerWS(h::Function, w::Function, l::IO=stdout;
             cert::String="", key::String="", kwargs...)
 
         ServerWS(HTTP.RequestHandlerFunction(h),
-                WebSockets.WSHandlerFunction(w), l, s;
+                WebSockets.WSHandlerFunction(w), l;
                 cert=cert, key=key, kwargs...)
 end
 
 # Define ServerWS with keyword arguments only
 function ServerWS(;handler::Function, wshandler::Function,
-            logger::IO=stdout, server=nothing,
+            logger::IO=stdout,
             cert::String="", key::String="", kwargs...)
 
         ServerWS(HTTP.RequestHandlerFunction(handler),
-                WebSockets.WSHandlerFunction(wshandler), logger, server,
+                WebSockets.WSHandlerFunction(wshandler), logger,
                 cert=cert, key=key, kwargs...)
 end
 
 # Define ServerWS with function wrappers
 function ServerWS(handler::HTTP.RequestHandlerFunction,
                 wshandler::WebSockets.WSHandlerFunction,
-                logger::IO = stdout,
-                server = nothing;
+                logger::IO = stdout
+                ;
                 cert::String = "",
                 key::String = "",
                 kwargs...)
@@ -327,7 +349,7 @@ function ServerWS(handler::HTTP.RequestHandlerFunction,
         sslconfig = HTTP.Servers.MbedTLS.SSLConfig(cert, key)
     end
 
-    serverws = ServerWS(handler,wshandler,logger,server,
+    serverws = ServerWS(handler, wshandler, logger,
         Channel(1), Channel(2), ServerOptions(sslconfig=sslconfig;kwargs...))
 end
 
@@ -359,14 +381,16 @@ function serve(serverws::ServerWS, host, port, verbose)
     # The coroutine then closes the server and finishes its run.
     # Note that WebSockets v1.0.3 required the channel input to be HTTP.KILL,
     # but will now kill the server regardless of what is sent.
-    serverws.server = Sockets.listen(Sockets.InetAddr(parse(IPAddr, host), port))
+    tcpserver = Ref{Union{Base.IOServer, Nothing}}(Sockets.listen(Sockets.InetAddr(parse(IPAddr, host), port)))
     @async begin
-         # Next line will hold
+         # Next line will hold until something is put on the channel
          take!(serverws.in)
-         close(serverws.server[])
-         serverws.server = nothing
-         GC.gc()
-         yield()
+         if tcpserver[] != nothing
+             close(tcpserver[])
+             tcpserver[] = nothing
+               GC.gc()
+             yield()
+        end
     end
     # We capture some variables in this inner function, which takes just one-argument.
     # The inner function will be called in a new task for every incoming connection.
@@ -383,14 +407,13 @@ function serve(serverws::ServerWS, host, port, verbose)
         end
     end
     #
-    # Call the listen loop, which when somebody tries to open a connection,
+    # Call the constructor for the listen loop. When somebody tries to open a connection,
+    # the listenloop
     # 1) Checks if we are willing to accept
     # 2) Spawns a new task, namely our coroutine _servercoroutine.
-    #
-
     HTTP.listen(_servercoroutine,
             host, port;
-            server=serverws.server,
+            server=tcpserver[],
             # ssl=(S == Val{:https}),
             sslconfig = serverws.options.sslconfig,
             verbose = verbose,
@@ -399,7 +422,6 @@ function serve(serverws::ServerWS, host, port, verbose)
             #     tcp -> true,
             rate_limit = serverws.options.rate_limit,
             readtimeout = serverws.options.readtimeout)
-
     # We will only get to this point if the server is closed.
     # If this serve function is running as a coroutine, the server is closed
     # through the server.in channel, see above.
@@ -413,7 +435,7 @@ function Base.close(serverws::WebSockets.ServerWS)
     put!(serverws.in, "Close!")
     if isready(serverws.out)
         @warn "Server closed. Error messages exist on the server's .out channel. Check
-            String(take!(myserver.out))"
+            string(take!(myserver.out))"
     end
     return
 end
