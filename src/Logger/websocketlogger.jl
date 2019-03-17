@@ -9,7 +9,8 @@ import Logging: Info,
 import Base.CoreLogging: logmsg_code,
                 @_sourceinfo,
                 _min_enabled_level,
-                current_logger_for_env
+                current_logger_for_env,
+                logging_error
 import Base.string_with_env
 const Wslog = LogLevel(50)
 """

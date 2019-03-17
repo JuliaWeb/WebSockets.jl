@@ -332,5 +332,16 @@ end
     @test shouldlog(logger, Info, WebSockets.HTTP.Servers, :group, :asdf) == false
     @test shouldlog(logger, Info, Main, :group, :asdf) == true
 
+    # Check that error handling works with @wslog
+    buf = IOBuffer()
+    io = IOContext(buf, :displaysize=>(30,80), :color=>true)
+    logger = WebSocketLogger(io)
+    with_logger(logger) do
+           @wslog sqrt(-2)
+           end
+   @test length(String(take!(buf))) == 1949
+   """
+   [ Info: test
+   """
 end
 nothing
