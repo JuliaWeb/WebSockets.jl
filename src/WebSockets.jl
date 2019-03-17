@@ -19,15 +19,22 @@ module WebSockets
 using Dates
 using Logging
 import Sockets
-import Sockets: TCPSocket,      # For locked_write, show
-                IPAddr          # For serve
-import Base64:  base64decode,   # For generate_websocket_key
-                base64encode    # For open client websocket
-import HTTP                     # Depend on WebSockets.HTTP only to avoid version confusion
-import HTTP.Servers.MbedTLS     # For further imports
+import Sockets: TCPSocket,        # For locked_write, show
+                IPAddr,           # For serve
+                InetAddr          # For serve
+import Base64:  base64decode,     # For generate_websocket_key
+                base64encode      # For open client websocket
+import Base:    IOServer,         # For serve
+                ReinterpretArray, # For data type
+                buffer_writes,    # For init_socket
+                CodeUnits,        # For data type
+                throwto           # For readframe_nonblocking
+import HTTP                       # Depend on WebSockets.HTTP only 
+                                  # to avoid version conflicts!
+import HTTP.Servers.MbedTLS       # For further imports
 import HTTP.Servers.MbedTLS:
-                MD_SHA1,        # For generate_websocket_key
-                digest         # For generate_websocket_key
+                MD_SHA1,          # For generate_websocket_key
+                digest            # For generate_websocket_key
 
 # further imports from HTTP in this file
 include("HTTP.jl")
@@ -55,16 +62,16 @@ export WebSocket,
 
 # revisit the need for defining this union type for method definitions. The functions would
 # probably work just as fine with duck typing.
-const Dt = Union{Base.ReinterpretArray{UInt8,1,UInt16,Array{UInt16,1}},
+const Dt = Union{ReinterpretArray{UInt8,1,UInt16,Array{UInt16,1}},
             Vector{UInt8},
-            Base.CodeUnits{UInt8,String}   }
+            CodeUnits{UInt8,String}   }
 "A reasonable amount of time"
 const TIMEOUT_CLOSEHANDSHAKE = 10.0
 
 @enum ReadyState CONNECTED=0x1 CLOSING=0x2 CLOSED=0x3
 
 """ Buffer writes to socket till flush (sock)"""
-init_socket(sock) = Base.buffer_writes(sock)
+init_socket(sock) = buffer_writes(sock)
 
 
 struct WebSocketClosedError <: Exception
@@ -510,7 +517,7 @@ function readframe_nonblocking(ws)
     # Define a task for throwing interrupt exception to the (possibly blocked) read task.
     # We don't start this task because it would never return
     killta = @task try
-        Base.throwto(rt, InterruptException())
+        throwto(rt, InterruptException())
     catch
     end
     # We start the killing task. When it is scheduled the second time,

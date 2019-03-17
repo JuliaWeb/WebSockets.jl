@@ -26,8 +26,8 @@ include(joinpath(SRCPATH, "functions_benchmark.jl"))
 #
 prepareworker()
 # Load modules on both processes
-import HTTP
 using WebSockets
+import WebSockets.HTTP
 using ws_jce
 using UnicodePlots
 import IndexedTables.table

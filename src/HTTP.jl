@@ -6,9 +6,10 @@ import HTTP:Response,   # For upgrade
             setheader,  # For upgrade
             setstatus,  # For upgrade
             startwrite, # For upgrade
+            startread,  # For _openstream
+            handle,     # For _servercoroutine
             Connection, # For handshaketest
             Transaction,# For handshaketest
-            startread,  # For _openstream
             URI,        # For open
             Handler,    # For WebSocketHandler, ServerWS, error_test
             RequestHandlerFunction,         # For ServerWS
@@ -57,7 +58,7 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
     if in('#', url)
         throw(ArgumentError(" replace '#' with %23 in url: $url"))
     end
-    uri = HTTP.URI(url)
+    uri = URI(url)
     if uri.scheme != "ws" && uri.scheme != "wss"
         throw(ArgumentError(" bad argument url: Scheme not ws or wss. Input scheme: $(uri.scheme)"))
     end
@@ -80,18 +81,18 @@ end
 
 "Called by open with a stream connected to a server, after handshake is initiated"
 function _openstream(f::Function, stream, key::String)
-    HTTP.startread(stream)
+    startread(stream)
     response = stream.message
     if response.status != 101
         return
     end
     check_upgrade(stream)
-    if HTTP.header(response, "Sec-WebSocket-Accept") != generate_websocket_key(key)
+    if header(response, "Sec-WebSocket-Accept") != generate_websocket_key(key)
         throw(WebSocketError(0, "Invalid Sec-WebSocket-Accept\n" *
                                 "$response"))
     end
     # unwrap the stream
-    io = HTTP.ConnectionPool.getrawstream(stream)
+    io = getrawstream(stream)
     ws = WebSocket(io, false)
     try
         f(ws)
@@ -126,7 +127,7 @@ using WebSockets
 
 badgatekeeper(reqdict, ws) = sqrt(-2)
 handlerequest(req) = WebSockets.Response(501)
-const SERVERREF = Ref{Base.IOServer}()
+const SERVERREF = Ref{IOServer}()
 try
     WebSockets.HTTP.listen("127.0.0.1", UInt16(8000), tcpref = SERVERREF) do stream
         if WebSockets.is_upgrade(stream.message)
@@ -143,45 +144,45 @@ end
 """
 function upgrade(f::Function, stream)
     check_upgrade(stream)
-    if !HTTP.hasheader(stream, "Sec-WebSocket-Version", "13")
-        HTTP.setheader(stream, "Sec-WebSocket-Version" => "13")
-        HTTP.setstatus(stream, 400)
-        HTTP.startwrite(stream)
+    if !hasheader(stream, "Sec-WebSocket-Version", "13")
+                    setheader(stream, "Sec-WebSocket-Version" => "13")
+                    setstatus(stream, 400)
+                    startwrite(stream)
         return
     end
-    if HTTP.hasheader(stream, "Sec-WebSocket-Protocol")
-        requestedprotocol = HTTP.header(stream, "Sec-WebSocket-Protocol")
+    if hasheader(stream, "Sec-WebSocket-Protocol")
+        requestedprotocol = header(stream, "Sec-WebSocket-Protocol")
         if !hasprotocol(requestedprotocol)
-            HTTP.setheader(stream, "Sec-WebSocket-Protocol" => requestedprotocol)
-            HTTP.setstatus(stream, 400)
-            HTTP.startwrite(stream)
+            setheader(stream, "Sec-WebSocket-Protocol" => requestedprotocol)
+            setstatus(stream, 400)
+            startwrite(stream)
             return
         else
-            HTTP.setheader(stream, "Sec-WebSocket-Protocol" => requestedprotocol)
+            setheader(stream, "Sec-WebSocket-Protocol" => requestedprotocol)
         end
     end
-    key = HTTP.header(stream, "Sec-WebSocket-Key")
+    key = header(stream, "Sec-WebSocket-Key")
     decoded = UInt8[]
     try
         decoded = base64decode(key)
     catch
-        HTTP.setstatus(stream, 400)
-        HTTP.startwrite(stream)
+        setstatus(stream, 400)
+        startwrite(stream)
         return
     end
     if length(decoded) != 16 # Key must be 16 bytes
-        HTTP.setstatus(stream, 400)
-        HTTP.startwrite(stream)
+        setstatus(stream, 400)
+        startwrite(stream)
         return
     end
     # This upgrade is acceptable. Send the response.
-    HTTP.setheader(stream, "Sec-WebSocket-Accept" => generate_websocket_key(key))
-    HTTP.setheader(stream, "Upgrade" => "websocket")
-    HTTP.setheader(stream, "Connection" => "Upgrade")
-    HTTP.setstatus(stream, 101)
-    HTTP.startwrite(stream)
+    setheader(stream, "Sec-WebSocket-Accept" => generate_websocket_key(key))
+    setheader(stream, "Upgrade" => "websocket")
+    setheader(stream, "Connection" => "Upgrade")
+    setstatus(stream, 101)
+    startwrite(stream)
     # Pass the connection on as a WebSocket.
-    io = HTTP.ConnectionPool.getrawstream(stream)
+    io = getrawstream(stream)
     ws = WebSocket(io, true)
     # If the callback function f has two methods,
     # prefer the more secure one which takes (request, websocket)
@@ -225,10 +226,10 @@ and from `_openstream' for potential client side websockets.
 Not normally called from user code.
 """
 function check_upgrade(r)
-    if !HTTP.hasheader(r, "Upgrade", "websocket")
+    if !hasheader(r, "Upgrade", "websocket")
         throw(WebSocketError(0, "Check upgrade: Expected \"Upgrade => websocket\"!\n$(r)"))
     end
-    if !(HTTP.hasheader(r, "Connection", "upgrade") || HTTP.hasheader(r, "Connection", "keep-alive, upgrade"))
+    if !(hasheader(r, "Connection", "upgrade") || hasheader(r, "Connection", "keep-alive, upgrade"))
         throw(WebSocketError(0, "Check upgrade: Expected \"Connection => upgrade or Connection => keep alive, upgrade\"!\n$(r)"))
     end
 end
@@ -237,12 +238,12 @@ end
 Fast checking for websocket upgrade request vs content requests.
 Called on all new connections in '_servercoroutine'.
 """
-function is_upgrade(r::HTTP.Request)
-    if (r isa HTTP.Request && r.method == "GET")  || (r isa HTTP.Response && r.status == 101)
-        if HTTP.header(r, "Connection", "") != "keep-alive"
+function is_upgrade(r::Request)
+    if (r isa Request && r.method == "GET")  || (r isa Response && r.status == 101)
+        if header(r, "Connection", "") != "keep-alive"
             # "Connection => upgrade" for most and "Connection => keep-alive, upgrade" for Firefox.
-            if HTTP.hasheader(r, "Connection", "upgrade") || HTTP.hasheader(r, "Connection", "keep-alive, upgrade")
-                if lowercase(HTTP.header(r, "Upgrade", "")) == "websocket"
+            if hasheader(r, "Connection", "upgrade") || hasheader(r, "Connection", "keep-alive, upgrade")
+                if lowercase(header(r, "Upgrade", "")) == "websocket"
                     return true
                 end
             end
@@ -251,12 +252,12 @@ function is_upgrade(r::HTTP.Request)
     return false
 end
 
-is_upgrade(stream::HTTP.Stream) = is_upgrade(stream.message)
+is_upgrade(stream::Stream) = is_upgrade(stream.message)
 
 # Inline docs in 'WebSockets.jl'
-target(req::HTTP.Request) = req.target
-subprotocol(req::HTTP.Request) = HTTP.header(req, "Sec-WebSocket-Protocol")
-origin(req::HTTP.Request) = HTTP.header(req, "Origin")
+target(req::Request) = req.target
+subprotocol(req::Request) = header(req, "Sec-WebSocket-Protocol")
+origin(req::Request) = header(req, "Origin")
 
 """
 WSHandlerFunction(f::Function) <: Handler
@@ -268,12 +269,12 @@ WSHandlerFunction(f::Function) <: Handler
     The latter form is intended for gatekeeping, ref. RFC 6455 section 10.1
  f accepts a `WebSocket` and does interesting things with it, like reading, writing and exiting when finished.
 """
-struct WSHandlerFunction{F <: Function} <: HTTP.Handler
+struct WSHandlerFunction{F <: Function} <: Handler
     func::F # func(ws) or func(request, ws)
 end
 
 struct ServerOptions
-    sslconfig::Union{HTTP.Servers.MbedTLS.SSLConfig, Nothing}
+    sslconfig::Union{SSLConfig, Nothing}
     readtimeout::Int
     rate_limit::Rational{Int}
     support100continue::Bool
@@ -281,7 +282,7 @@ struct ServerOptions
     logbody::Bool
 end
 function ServerOptions(;
-        sslconfig::Union{HTTP.Servers.MbedTLS.SSLConfig, Nothing} = nothing,
+        sslconfig::Union{SSLConfig, Nothing} = nothing,
         readtimeout::Int = 0,
         rate_limit::Rational{Int} = 10//1,
         support100continue::Bool = true,
@@ -298,13 +299,9 @@ WebSockets.ServerWS is an argument type for WebSockets.serve. Instances
 include .in  and .out channels, see WebSockets.serve.
 
 Server options can be set using keyword arguments, see methods(WebSockets.ServerWS).
-
-TODO check if true..Note that giving keyword argument ratelimit has no effect by itself. You must also provide
-a ratelimit function, for example by importing HTTP.??.check_rate_limit. This interface is
-in a state of flux.
 """
 mutable struct ServerWS
-    handler::HTTP.RequestHandlerFunction
+    handler::RequestHandlerFunction
     wshandler::WebSockets.WSHandlerFunction
     logger::IO
     in::Channel{Any}
@@ -320,7 +317,7 @@ end
 function ServerWS(h::Function, w::Function, l::IO=stdout;
             cert::String="", key::String="", kwargs...)
 
-        ServerWS(HTTP.RequestHandlerFunction(h),
+        ServerWS(RequestHandlerFunction(h),
                 WebSockets.WSHandlerFunction(w), l;
                 cert=cert, key=key, kwargs...)
 end
@@ -330,13 +327,13 @@ function ServerWS(;handler::Function, wshandler::Function,
             logger::IO=stdout,
             cert::String="", key::String="", kwargs...)
 
-        ServerWS(HTTP.RequestHandlerFunction(handler),
+        ServerWS(RequestHandlerFunction(handler),
                 WebSockets.WSHandlerFunction(wshandler), logger,
                 cert=cert, key=key, kwargs...)
 end
 
 # Define ServerWS with function wrappers
-function ServerWS(handler::HTTP.RequestHandlerFunction,
+function ServerWS(handler::RequestHandlerFunction,
                 wshandler::WebSockets.WSHandlerFunction,
                 logger::IO = stdout
                 ;
@@ -346,7 +343,7 @@ function ServerWS(handler::HTTP.RequestHandlerFunction,
 
     sslconfig = nothing;
     if cert != "" && key != ""
-        sslconfig = HTTP.Servers.MbedTLS.SSLConfig(cert, key)
+        sslconfig = SSLConfig(cert, key)
     end
 
     serverws = ServerWS(handler, wshandler, logger,
@@ -373,7 +370,7 @@ After a suspected connection task failure:
 """
 function serve(serverws::ServerWS, host, port, verbose)
     # An internal reference used for closing.
-    # tcpserver = Ref{Union{Base.IOServer, Nothing}}()
+    # tcpserver = Ref{Union{IOServer, Nothing}}()
     # Start a couroutine that sleeps until tcpserver is assigned,
     # ie. the reference is established further down.server:
     # It then enters the while loop, where it
@@ -381,7 +378,7 @@ function serve(serverws::ServerWS, host, port, verbose)
     # The coroutine then closes the server and finishes its run.
     # Note that WebSockets v1.0.3 required the channel input to be HTTP.KILL,
     # but will now kill the server regardless of what is sent.
-    tcpserver = Ref{Union{Base.IOServer, Nothing}}(Sockets.listen(Sockets.InetAddr(parse(IPAddr, host), port)))
+    tcpserver = Ref{Union{IOServer, Nothing}}(Sockets.listen(InetAddr(parse(IPAddr, host), port)))
     @async begin
          # Next line will hold until something is put on the channel
          take!(serverws.in)
@@ -394,12 +391,12 @@ function serve(serverws::ServerWS, host, port, verbose)
     end
     # We capture some variables in this inner function, which takes just one-argument.
     # The inner function will be called in a new task for every incoming connection.
-    function _servercoroutine(stream::HTTP.Stream)
+    function _servercoroutine(stream::Stream)
         try
             if is_upgrade(stream.message)
                 upgrade(serverws.wshandler.func, stream)
             else
-                HTTP.handle(serverws.handler, stream)
+                handle(serverws.handler, stream)
             end
         catch err
             put!(serverws.out, err)

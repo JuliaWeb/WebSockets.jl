@@ -1,6 +1,6 @@
 # included in runtests.jl
 using Test
-import HTTP
+import WebSockets.HTTP
 import Base: convert, BufferStream
 using WebSockets
 import WebSockets:  generate_websocket_key, upgrade

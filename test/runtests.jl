@@ -1,7 +1,7 @@
 using WebSockets, Test, Base64, Random
 import Base: BufferStream, convert
 import WebSockets.HTTP, Sockets, Dates
-import WebSockets.HTTP.Servers: MbedTLS
+import WebSockets.MbedTLS
 import Sockets.@ip_str
 
 @testset "WebSockets" begin

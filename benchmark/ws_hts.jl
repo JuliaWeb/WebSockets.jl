@@ -5,9 +5,10 @@
 # running echo tests with that client.
 # The server stays open until close_hts or the websocket is closed.
 module ws_hts
-using ..HTTP
-import HTTP.Header
 using ..WebSockets
+using ..WebSockets.HTTP
+import ..WebSockets.Header
+
 # We want to log to a separate file, so
 # we use our own instance of logutils_ws here.
 import logutils_ws: logto, clog, zlog, zflush, clog_notime
