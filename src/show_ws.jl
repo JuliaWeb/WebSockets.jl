@@ -123,8 +123,11 @@ function Base.show(io::IO, sws::ServerWS)
     _show(io, sws.handler.func)
     print(io, ", wshandler=")
     _show(io, sws.wshandler.func)
+    if sws.connection_count[] != 0
+        print(io, ", connection_count=" * sws.connection_count[]  )
+    end
     for dke in keys(DEFAULTOPTIONS)
-        if dke ∉ (:in, :out)
+        if dke ∉ (:in, :out, :connection_count)
             dva = get(DEFAULTOPTIONS, dke, nothing)
             ava = getfield(sws, dke)
             if dva != ava
@@ -150,7 +153,7 @@ end
 function _showoptions(io::IO, sws::ServerWS)
     fina = fieldnames(ServerWS)
     for field in fina
-        if field ∉ (:handler, :wshandler, :in, :out)
+        if field ∉ (:handler, :wshandler, :in, :out, :connection_count)
             fiva = getfield(sws, field)
             print(io, field, "=")
             if fiva == nothing
