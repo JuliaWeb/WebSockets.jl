@@ -26,6 +26,30 @@ import HTTP.Servers.MbedTLS:
             SSLConfig                       # For ServerWS
 
 """
+DEFAULTOPTIONS can be overruled by passing keyword arguments to the
+ServerWS constructor.
+# Options include
+```
+    sslconfig::Union{SSLConfig, Nothing}
+    tcpisvalid::Function
+    reuseaddr::Bool
+    connection_count::Ref{Int}
+    rate_limit::Union{Rational{Int}, Nothing}
+    reuse_limit::Int
+    readtimeout::Int
+```
+"""
+const DEFAULTOPTIONS = (in = Channel(1),
+                    out = Channel(2),
+                    sslconfig = nothing,
+                    tcpisvalid = tcp->true,
+                    reuseaddr = false,
+                    connection_count = Ref(0),
+                    rate_limit = nothing,
+                    reuse_limit = typemax(Int),
+                    readtimeout = 0)
+
+"""
 Initiate a websocket|client connection to server defined by url. If the server accepts
 the connection and the upgrade to websocket, f is called with an open websocket|client
 
@@ -273,24 +297,6 @@ struct WSHandlerFunction{F <: Function} <: Handler
     func::F # func(ws) or func(request, ws)
 end
 
-struct ServerOptions
-    sslconfig::Union{SSLConfig, Nothing}
-    readtimeout::Int
-    rate_limit::Rational{Int}
-    support100continue::Bool
-    chunksize::Union{Nothing, Int}
-    logbody::Bool
-end
-function ServerOptions(;
-        sslconfig::Union{SSLConfig, Nothing} = nothing,
-        readtimeout::Int = 0,
-        rate_limit::Rational{Int} = 10//1,
-        support100continue::Bool = true,
-        chunksize::Union{Nothing, Int} = nothing,
-        logbody::Bool=true
-    )
-    ServerOptions(sslconfig, readtimeout, rate_limit, support100continue, chunksize, logbody)
-end
 
 """
     WebSockets.ServerWS(handler::Function, wshandler::Function, logger::IO)
@@ -300,54 +306,32 @@ include .in  and .out channels, see WebSockets.serve.
 
 Server options can be set using keyword arguments, see methods(WebSockets.ServerWS).
 """
-mutable struct ServerWS
+struct ServerWS
     handler::RequestHandlerFunction
-    wshandler::WebSockets.WSHandlerFunction
-    logger::IO
+    wshandler::WSHandlerFunction
     in::Channel{Any}
     out::Channel{Any}
-    options::ServerOptions
-
-    ServerWS(handler, wshandler, logger::IO=stdout,
-        ch1=Channel(1), ch2=Channel(2), options=ServerOptions()) =
-        new(handler, wshandler, logger, ch1, ch2, options)
+    # the remaining parameters are server options,
+    # documented in HTTP.jl
+    sslconfig::Union{SSLConfig, Nothing}
+    tcpisvalid::Function
+    reuseaddr::Bool
+    connection_count::Ref{Int}
+    rate_limit::Union{Rational{Int}, Nothing}
+    reuse_limit::Int
+    readtimeout::Int
+    # keywords only constructor
+    ServerWS(;handler, wshandler, in, out, sslconfig, tcpisvalid, reuseaddr, connection_count, rate_limit, reuse_limit, readtimeout)=
+          new(handler, wshandler, in, out, sslconfig, tcpisvalid, reuseaddr, connection_count, rate_limit, reuse_limit, readtimeout)
 end
-
-# Define ServerWS without wrapping the functions first. Rely on argument sequence.
-function ServerWS(h::Function, w::Function, l::IO=stdout;
-            cert::String="", key::String="", kwargs...)
-
-        ServerWS(RequestHandlerFunction(h),
-                WebSockets.WSHandlerFunction(w), l;
-                cert=cert, key=key, kwargs...)
+# User supplied keywords take precedence over DEFAULTOPTIONS here:
+function ServerWS(handler::RequestHandlerFunction, wshandler::WSHandlerFunction; kwargs...)
+    ServerWS(;handler = handler, wshandler = wshandler,  merge(DEFAULTOPTIONS, collect(kwargs))...)
 end
-
-# Define ServerWS with keyword arguments only
-function ServerWS(;handler::Function, wshandler::Function,
-            logger::IO=stdout,
-            cert::String="", key::String="", kwargs...)
-
-        ServerWS(RequestHandlerFunction(handler),
-                WebSockets.WSHandlerFunction(wshandler), logger,
-                cert=cert, key=key, kwargs...)
-end
-
-# Define ServerWS with function wrappers
-function ServerWS(handler::RequestHandlerFunction,
-                wshandler::WebSockets.WSHandlerFunction,
-                logger::IO = stdout
-                ;
-                cert::String = "",
-                key::String = "",
-                kwargs...)
-
-    sslconfig = nothing;
-    if cert != "" && key != ""
-        sslconfig = SSLConfig(cert, key)
-    end
-
-    serverws = ServerWS(handler, wshandler, logger,
-        Channel(1), Channel(2), ServerOptions(sslconfig=sslconfig;kwargs...))
+# User supplied handler functions are packed into specialized types here.
+# It also defines the most useful method ServerWS(h::Function,w::Function)
+function ServerWS(h::Function, w::Function; kwargs...)
+    ServerWS(RequestHandlerFunction(h), WSHandlerFunction(w); kwargs...)
 end
 
 """
@@ -370,15 +354,8 @@ After a suspected connection task failure:
 """
 function serve(serverws::ServerWS, host, port, verbose)
     # An internal reference used for closing.
-    # tcpserver = Ref{Union{IOServer, Nothing}}()
-    # Start a couroutine that sleeps until tcpserver is assigned,
-    # ie. the reference is established further down.server:
-    # It then enters the while loop, where it
-    # waits for put! to channel .in. The value does not matter.
-    # The coroutine then closes the server and finishes its run.
-    # Note that WebSockets v1.0.3 required the channel input to be HTTP.KILL,
-    # but will now kill the server regardless of what is sent.
     tcpserver = Ref{Union{IOServer, Nothing}}(Sockets.listen(InetAddr(parse(IPAddr, host), port)))
+    # Start a couroutine that sleeps until something is put on the .in channel.
     @async begin
          # Next line will hold until something is put on the channel
          take!(serverws.in)
@@ -409,16 +386,16 @@ function serve(serverws::ServerWS, host, port, verbose)
     # 1) Checks if we are willing to accept
     # 2) Spawns a new task, namely our coroutine _servercoroutine.
     HTTP.listen(_servercoroutine,
-            host, port;
-            server=tcpserver[],
-            # ssl=(S == Val{:https}),
-            sslconfig = serverws.options.sslconfig,
+            host, port,
             verbose = verbose,
-            # tcpisvalid = serverws.options.rate_limit > 0 ?
-            #     tcp -> checkratelimit!(tcp,rate_limit=serverws.options.rate_limit) :
-            #     tcp -> true,
-            rate_limit = serverws.options.rate_limit,
-            readtimeout = serverws.options.readtimeout)
+            sslconfig = serverws.sslconfig,
+            tcpisvalid = serverws.tcpisvalid,
+            server = tcpserver[],
+            reuseaddr = serverws.reuseaddr,
+            connection_count = serverws.connection_count,
+            rate_limit = serverws.rate_limit,
+            reuse_limit = serverws.reuse_limit,
+            readtimeout = serverws.readtimeout)
     # We will only get to this point if the server is closed.
     # If this serve function is running as a coroutine, the server is closed
     # through the server.in channel, see above.
@@ -428,11 +405,11 @@ serve(serverws::ServerWS; host= "127.0.0.1", port= "") =  serve(serverws, host, 
 serve(serverws::ServerWS, host, port) =  serve(serverws, host, port, false)
 serve(serverws::ServerWS, port) =  serve(serverws, "127.0.0.1", port, false)
 
-function Base.close(serverws::WebSockets.ServerWS)
+function Base.close(serverws::ServerWS)
     put!(serverws.in, "Close!")
     if isready(serverws.out)
         @warn "Server closed. Error messages exist on the server's .out channel. Check
-            string(take!(myserver.out))"
+            string(take!(yourserverWS.out))"
     end
     return
 end

@@ -123,21 +123,17 @@ function Base.show(io::IO, sws::ServerWS)
     _show(io, sws.handler.func)
     print(io, ", wshandler=")
     _show(io, sws.wshandler.func)
-    if sws.logger != stdout
-        print(io, ", logger=")
-        if sws.logger isa Base.GenericIOBuffer
-            print(io, "IOBuffer():")
-        elseif sws.logger isa IOStream
-            print(io, sws.logger.name, ":")
-        elseif sws.logger == devnull
-        else
-            print(io, nameof(typeof(sws.logger)), ":")
+    for dke in keys(DEFAULTOPTIONS)
+        if dke ∉ (:in, :out)
+            dva = get(DEFAULTOPTIONS, dke, nothing)
+            ava = getfield(sws, dke)
+            if dva != ava
+                # ServerWS field not default
+                print(io, ", ")
+                _showoptions(IOContext(io, :wslog=>true), sws)
+                break
+            end
         end
-        _show(IOContext(io, :wslog=>true), sws.logger)
-    end
-    if sws.options != WebSockets.ServerOptions()
-        print(io, ", ")
-        show(IOContext(io, :wslog=>true), sws.options)
     end
     print(io, ")")
     if isready(sws.in)
@@ -151,26 +147,24 @@ function Base.show(io::IO, sws::ServerWS)
 end
 
 
-function Base.show(io::IO, swo::WebSockets.ServerOptions)
-    hidetype = get(IOContext(io), :wslog, false)
-    fina = fieldnames(WebSockets.ServerOptions)
-    hidetype || print(io, WebSockets.ServerOptions, "(")
+function _showoptions(io::IO, sws::ServerWS)
+    fina = fieldnames(ServerWS)
     for field in fina
-        fiva = getfield(swo, field)
-        if fiva != nothing
+        if field ∉ (:handler, :wshandler, :in, :out)
+            fiva = getfield(sws, field)
             print(io, field, "=")
-            print(io, fiva)
+            if fiva == nothing
+                print(io, "nothing")
+            else
+                _show(io, fiva)
+            end
             if field != last(fina)
                 print(io, ", ")
             end
         end
     end
-    hidetype || print(io, ")")
     nothing
 end
-
-
-
 
 _show(io::IO, x) = show(io, x)
 function _show(io::IO, f::Function)

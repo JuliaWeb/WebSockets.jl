@@ -207,38 +207,4 @@ output = String(take!(io))
 sws = WebSockets.ServerWS(h, w, rate_limit=1//1)
 show(io, sws)
 output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), readtimeout=0, rate_limit=1//1, support100continue=true, logbody=true)"
-
-# with loggers
-sws = WebSockets.ServerWS(handler= h, wshandler= w, logger = stderr)
-io = IOBuffer()
-show(io, sws)
-output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), logger=TTY:✓)" ||
-    output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), logger=PipeEndpoint():✓)" ||
-    output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), logger=PipeEndpoint:✓)"
-fi = open("temptemp", "w+")
-sws = WebSockets.ServerWS(h, w, fi)
-io = IOBuffer()
-WebSockets._show(io, sws)
-output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), logger=<file temptemp>:✓)"
-close(fi)
-WebSockets._show(io, sws)
-rm("temptemp")
-output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), logger=<file temptemp>:✘)"
-
-
-sws = WebSockets.ServerWS(handler= h, wshandler= w, logger = devnull)
-io = IOBuffer()
-show(io, sws)
-output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), logger=Base.DevNull())" ||
-    output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), logger=Base.DevNullStream())"
-
-sws = WebSockets.ServerWS(handler= h, wshandler= w, logger = IOBuffer())
-io = IOBuffer()
-show(io, sws)
-output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), logger=IOBuffer():✓)"
+@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), sslconfig=nothing, tcpisvalid=#1(tcp), reuseaddr=false, connection_count=Base.RefValue{Int64}(0), rate_limit=1//1, reuse_limit=9223372036854775807, readtimeout=0)"
