@@ -333,15 +333,19 @@ end
     @test shouldlog(logger, Info, Main, :group, :asdf) == true
 
     # Check that error handling works with @wslog
-    buf = IOBuffer()
-    io = IOContext(buf, :displaysize=>(30,80), :color=>true)
-    logger = WebSocketLogger(io)
-    with_logger(logger) do
-           @wslog sqrt(-2)
-           end
-   @test length(String(take!(buf))) > 1900
-   """
-   [ Info: test
-   """
+    if VERSION >= v"1.0.0"
+        # This covers an issue (#28786) in stdlib/Julia v 0.7, where log_record_id is not defined
+        # in the expanded macro. Fixed Nov 2018, labelled for backporting to v1.0.0
+        buf = IOBuffer()
+        io = IOContext(buf, :displaysize=>(30,80), :color=>true)
+        logger = WebSocketLogger(io)
+        with_logger(logger) do
+               @wslog sqrt(-2)
+               end
+       @test length(String(take!(buf))) > 1900
+       """
+       [ Info: test
+       """
+   end
 end
 nothing
