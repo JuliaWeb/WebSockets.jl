@@ -15,7 +15,7 @@ Test coverage 96%
 <!--[![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg?branch=master)](https://coveralls.io/r/JuliaWeb/WebSockets.jl?branch=master)
 [![Appveyor](https://ci.appveyor.com/api/projects/status/github/JuliaWeb/WebSockets.jl?svg=true&branch=master)](https://ci.appveyor.com/project/JuliaWeb/WebSockets-jl)-->
 
-Test coverage 96%
+Test coverage  ≈ 96%
 
 
 Server and client side [Websockets](https://tools.ietf.org/html/rfc6455) protocol in Julia. WebSockets is a small overhead message protocol layered over [TCP](https://tools.ietf.org/html/rfc793). It uses HTTP(S) for establishing the connections.
@@ -102,6 +102,17 @@ The issues section is used for planning development: Contributions are welcome.
 - Alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) and the direct implementation in [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl).
 
 ## Errors after updating?
+### To version 1.5.0
+
+The upgrade to using HTTP 0.8 changes the bevaviour of server options. If you see unexpected behaviour,
+try not passing any server options to ServerWS. If you don't call serve(::ServerWS, etc,) but you the
+'listen' interface, consider taking option values from the new constant DEFAULTOPTIONS.
+
+Type ServerOptions is removed and the corresponding fields now reside in  ServerWS.
+
+The optional function 'tcpisvalid' used to take two arguments; it should now take only one. Ratelimiting is now
+performed outside of user control,  if you pass keyword rate_limit ≠ nothing.
+
 ### To version 1.4.0
 We removed the default ratelimit! function, since the way it worked was counter-intuitive and slowed down most use cases. If you have not provided any ratelimit to SererOptions in the past, you may be able to notice a very tiny performance improvement. See issue #124 and the inline documentation.  
 

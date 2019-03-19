@@ -207,4 +207,4 @@ output = String(take!(io))
 sws = WebSockets.ServerWS(h, w, rate_limit=1//1)
 show(io, sws)
 output = String(take!(io))
-@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), sslconfig=nothing, tcpisvalid=#1(tcp), reuseaddr=false, connection_count=Base.RefValue{Int64}(0), rate_limit=1//1, reuse_limit=9223372036854775807, readtimeout=0)"
+@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), sslconfig=nothing, tcpisvalid=#1(tcp), reuseaddr=false, rate_limit=1//1, reuse_limit=$(typemax(Int)), readtimeout=0)"

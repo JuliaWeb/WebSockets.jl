@@ -58,14 +58,16 @@ e.g. say hello, close and leave
 using WebSockets
 WebSockets.open("ws://127.0.0.1:8000") do ws
     write(ws, "Hello")
-    println("that's it")
 end;
 ```
-If a server is listening and accepts, "Hello" is sent (as a Vector{UInt8}).
+If a server is listening and accepts, "Hello" is sent (as a CodeUnits{UInt8,String}).
 
 On exit, a closing handshake is started. If the server is not currently reading
-(which is a blocking function), this side will reset the underlying connection (ECONNRESET)
-after a reasonable amount of time and continue execution.
+(which is a blocking function and it may be busy with other things), this side
+will reset the underlying connection (ECONNRESET) after 10 seconds, and continue
+execution without error.
+
+
 """
 function open(f::Function, url; verbose=false, subprotocol = "", kw...)
     key = base64encode(rand(UInt8, 16))
@@ -126,8 +128,11 @@ function _openstream(f::Function, stream, key::String)
 end
 
 """
-Used as part of a server definition. Call this if
-is_upgrade(stream.message) returns true.
+Not called from user code in most cases.
+
+Called by serve > _servercoroutine, or in you own server coroutine definition if
+    `serve(ServerWS,  host, port, verbose)`
+does not suit your purpose. Call 'upgrade' if is_upgrade(stream.message) returns true.
 
 Responds to a WebSocket handshake request.
 If the connection is acceptable, sends status code 101
@@ -140,7 +145,7 @@ f(headers, ws)  also receives a dictionary of request headers for added security
 
 On exit from f, a closing handshake is started. If the client is not currently reading
 (which is a blocking function), this side will reset the underlying connection (ECONNRESET)
-after a reasonable amount of time and continue execution.
+after 10 seconds and continue execution.
 
 If the upgrade is not accepted, responds to client with '400'.
 
@@ -244,10 +249,10 @@ function upgrade(f::Function, stream)
 end
 
 """
+Not normally called from user code.
 Throws WebSocketError if the upgrade message is not basically valid.
 Called from 'upgrade' for potential server side websockets,
 and from `_openstream' for potential client side websockets.
-Not normally called from user code.
 """
 function check_upgrade(r)
     if !hasheader(r, "Upgrade", "websocket")
@@ -259,6 +264,7 @@ function check_upgrade(r)
 end
 
 """
+Not normally called from user code.
 Fast checking for websocket upgrade request vs content requests.
 Called on all new connections in '_servercoroutine'.
 """
@@ -291,7 +297,8 @@ WSHandlerFunction(f::Function) <: Handler
     `f(Request, WebSocket) => nothing`
 
     The latter form is intended for gatekeeping, ref. RFC 6455 section 10.1
- f accepts a `WebSocket` and does interesting things with it, like reading, writing and exiting when finished.
+ f accepts a `WebSocket` and does interesting things with it, like reading, writing and exiting when finished
+ and ready for starting the close handshake.
 """
 struct WSHandlerFunction{F <: Function} <: Handler
     func::F # func(ws) or func(request, ws)
@@ -304,7 +311,7 @@ end
 WebSockets.ServerWS is an argument type for WebSockets.serve. Instances
 include .in  and .out channels, see WebSockets.serve.
 
-Server options can be set using keyword arguments, see methods(WebSockets.ServerWS).
+Special server options can be set using keyword arguments, and will overrule DEFAULTOPTIONS.
 """
 struct ServerWS
     handler::RequestHandlerFunction
@@ -339,11 +346,16 @@ end
     WebSockets.serve(server::ServerWS, host, port)
     WebSockets.serve(server::ServerWS, host, port, verbose)
 
-A wrapper for WebSockets.HTTP.listen.
+A higher level interface for WebSockets.HTTP.listen.
+If you are running serve asyncronously, the serve task will
+exit when you close(ServerWS).
+
 Puts any caught error and stacktrace on the server.out channel.
-To stop a running server, put a byte on the server.in channel.
+The server.in channel is used by close(ServerWS).
+
+# Example
 ```julia
-    @async WebSockets.serve(server, "127.0.0.1", 8080)
+    @async WebSockets.serve(myserver_WS, "127.0.0.1", 8080)
 ```
 After a suspected connection task failure:
 ```julia
@@ -404,6 +416,7 @@ end
 serve(serverws::ServerWS; host= "127.0.0.1", port= "") =  serve(serverws, host, port, false)
 serve(serverws::ServerWS, host, port) =  serve(serverws, host, port, false)
 serve(serverws::ServerWS, port) =  serve(serverws, "127.0.0.1", port, false)
+
 
 function Base.close(serverws::ServerWS)
     put!(serverws.in, "Close!")
