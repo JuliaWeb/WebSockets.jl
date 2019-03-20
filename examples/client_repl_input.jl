@@ -16,6 +16,7 @@ function client_one_message(ws)
 end
 function main()
     while true
+        println("\nSuggestion: Run 'minimal_server.jl' in another REPL")
         println("\nWebSocket client side. WebSocket URI format:")
         println("ws:// host [ \":\" port ] path [ \"?\" query ]")
         println("Example:\nws://127.0.0.1:8080")

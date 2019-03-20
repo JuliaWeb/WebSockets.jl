@@ -6,12 +6,9 @@
 # stress tests opening and closing a sequence of servers.
 # At this time, we unfortunately get irritating messages
 # 'Workqueue inconsistency detected:...'
-using Test
-using WebSockets
 import Sockets: IPAddr,
                 InetAddr,
                 IPv4
-import Random.randstring
 
 include("logformat.jl")
 if !@isdefined SUBPROTOCOL
@@ -27,7 +24,6 @@ if !@isdefined(PORT)
     const EXTERNALHTTP = "http://httpbin.org/ip"
     const MSGLENGTHS = [0 , 125, 126, 127, 2000]
 end
-include("client_server_functions.jl")
 
 @info "External server http request"
 @test 200 == WebSockets.HTTP.request("GET", EXTERNALHTTP).status
@@ -35,30 +31,30 @@ include("client_server_functions.jl")
 @info "ServerWS: Open, http response, close. Repeat three times. Takes a while."
 for i = 1:3
     let
-        servertask, serverref = startserver()
+        server = startserver()
         @test 200 == WebSockets.HTTP.request("GET", "http://$SURL:$PORT").status
-        closeserver(serverref)
+        close(server)
     end
 end
 
 @info "ServerWS: Client side initates message exchange."
 let
-    servertask, serverref = startserver()
+    server = startserver()
     WebSockets.open(initiatingws, "ws://$SURL:$PORT")
-    closeserver(serverref)
+    close(server)
 end
 
 @info "ServerWS: Server side initates message exchange."
 let
-    servertask, serverref = startserver()
+    server = startserver()
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL)
-    closeserver(serverref)
+    close(server)
 end
 
 @info "ServerWS: Server side initates message exchange. Close from within server side handler."
 let
-    servertask, serverref = startserver()
+    server = startserver()
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL_CLOSE)
-    closeserver(serverref)
+    close(server)
 end
 nothing

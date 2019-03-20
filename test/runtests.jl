@@ -1,7 +1,12 @@
-using Test
+using WebSockets, Test, Base64, Random
+import Base: BufferStream, convert
+import WebSockets.HTTP, Sockets, Dates
+import WebSockets.MbedTLS
+import Sockets.@ip_str
 
 @testset "WebSockets" begin
     include("logformat.jl")
+    include("client_server_functions.jl")
 
     printstyled(color=:blue, "\nBase.Show\n")
     @testset "Base.show" begin

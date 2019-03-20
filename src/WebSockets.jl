@@ -16,17 +16,29 @@ includes another Julia session, running in a parallel process or task.
 3. Split messages over several frames.
 """
 module WebSockets
-import MbedTLS: digest, MD_SHA1
-import Base64: base64encode, base64decode
-import Sockets
-import      Sockets: TCPSocket,
-                     IPAddr,
-                     getsockname
 using Dates
-# imports from HTTP in this file
+using Logging
+import Sockets
+import Sockets: TCPSocket,        # For locked_write, show
+                IPAddr,           # For serve
+                InetAddr          # For serve
+import Base64:  base64decode,     # For generate_websocket_key
+                base64encode      # For open client websocket
+import Base:    IOServer,         # For serve
+                ReinterpretArray, # For data type
+                buffer_writes,    # For init_socket
+                CodeUnits,        # For data type
+                throwto           # For readframe_nonblocking
+import HTTP                       # Depend on WebSockets.HTTP only 
+                                  # to avoid version conflicts!
+import HTTP.Servers.MbedTLS       # For further imports
+import HTTP.Servers.MbedTLS:
+                MD_SHA1,          # For generate_websocket_key
+                digest            # For generate_websocket_key
+
+# further imports from HTTP in this file
 include("HTTP.jl")
 
-using Logging
 # A logger based on ConsoleLogger. This has an effect
 # only if the user chooses to use WebSocketLogger.
 include("Logger/websocketlogger.jl")
@@ -44,23 +56,22 @@ export WebSocket,
        send_pong,
        WebSocketClosedError,
        addsubproto,
-       ServerWS,
        WebSocketLogger,
        @wslog,
        Wslog
 
 # revisit the need for defining this union type for method definitions. The functions would
 # probably work just as fine with duck typing.
-const Dt = Union{Base.ReinterpretArray{UInt8,1,UInt16,Array{UInt16,1}},
+const Dt = Union{ReinterpretArray{UInt8,1,UInt16,Array{UInt16,1}},
             Vector{UInt8},
-            Base.CodeUnits{UInt8,String}   }
+            CodeUnits{UInt8,String}   }
 "A reasonable amount of time"
 const TIMEOUT_CLOSEHANDSHAKE = 10.0
 
 @enum ReadyState CONNECTED=0x1 CLOSING=0x2 CLOSED=0x3
 
 """ Buffer writes to socket till flush (sock)"""
-init_socket(sock) = Base.buffer_writes(sock)
+init_socket(sock) = buffer_writes(sock)
 
 
 struct WebSocketClosedError <: Exception
@@ -73,15 +84,15 @@ struct WebSocketError <: Exception
 end
 
 "Status codes according to RFC 6455 7.4.1"
-const codeDesc = Dict{Int, String}(1000=>"Normal", 1001=>"Going Away",
-    1002=>"Protocol Error", 1003=>"Unsupported Data",
-    1004=>"Reserved", 1005=>"No Status Recvd- reserved",
+const codeDesc = Dict{Int, String}(
+    1000=>"Normal",                     1001=>"Going Away",
+    1002=>"Protocol Error",             1003=>"Unsupported Data",
+    1004=>"Reserved",                   1005=>"No Status Recvd- reserved",
     1006=>"Abnormal Closure- reserved", 1007=>"Invalid frame payload data",
-    1008=>"Policy Violation", 1009=>"Message too big",
-    1010=>"Missing Extension", 1011=>"Internal Error",
-    1012=>"Service Restart", 1013=>"Try Again Later",
-    1014=>"Bad Gateway", 1015=>"TLS Handshake")
-
+    1008=>"Policy Violation",           1009=>"Message too big",
+    1010=>"Missing Extension",          1011=>"Internal Error",
+    1012=>"Service Restart",            1013=>"Try Again Later",
+    1014=>"Bad Gateway",                1015=>"TLS Handshake")
 
 """
 A WebSocket is a wrapper over a TCPSocket. It takes care of wrapping outgoing
@@ -506,7 +517,7 @@ function readframe_nonblocking(ws)
     # Define a task for throwing interrupt exception to the (possibly blocked) read task.
     # We don't start this task because it would never return
     killta = @task try
-        Base.throwto(rt, InterruptException())
+        throwto(rt, InterruptException())
     catch
     end
     # We start the killing task. When it is scheduled the second time,

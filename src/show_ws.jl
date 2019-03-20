@@ -1,4 +1,3 @@
-import Base.show
 import Base.method_argnames
 # Long form, as in display(ws) or REPL: ws enter
 function Base.show(io::IO, ::MIME"text/plain", ws::WebSocket{T}) where T
@@ -38,7 +37,7 @@ function _show(io::IO, stream::Base.LibuvStream)
     else
         kwargs, msg = _uv_status_tuple(stream)
         printstyled(io, msg; kwargs...)
-        if !(stream isa Servers.UDPSocket)
+        if !(stream isa HTTP.Servers.UDPSocket)
             nba = bytesavailable(stream.buffer)
             nba > 0 && print(io, ", ", nba, " bytes")
             nothing
@@ -124,21 +123,20 @@ function Base.show(io::IO, sws::ServerWS)
     _show(io, sws.handler.func)
     print(io, ", wshandler=")
     _show(io, sws.wshandler.func)
-    if sws.logger != stdout
-        print(io, ", logger=")
-        if sws.logger isa Base.GenericIOBuffer
-            print(io, "IOBuffer():")
-        elseif sws.logger isa IOStream
-            print(io, sws.logger.name, ":")
-        elseif sws.logger == devnull
-        else
-            print(io, nameof(typeof(sws.logger)), ":")
-        end
-        _show(IOContext(io, :wslog=>true), sws.logger)
+    if sws.connection_count[] != 0
+        print(io, ", connection_count=" * string(sws.connection_count[])  )
     end
-    if sws.options != WebSockets.ServerOptions()
-        print(io, ", ")
-        show(IOContext(io, :wslog=>true), sws.options)
+    for dke in keys(DEFAULTOPTIONS)
+        if dke ∉ (:in, :out, :connection_count)
+            dva = get(DEFAULTOPTIONS, dke, nothing)
+            ava = getfield(sws, dke)
+            if dva != ava
+                # ServerWS field not default
+                print(io, ", ")
+                _showoptions(IOContext(io, :wslog=>true), sws)
+                break
+            end
+        end
     end
     print(io, ")")
     if isready(sws.in)
@@ -152,26 +150,24 @@ function Base.show(io::IO, sws::ServerWS)
 end
 
 
-function Base.show(io::IO, swo::WebSockets.ServerOptions)
-    hidetype = get(IOContext(io), :wslog, false)
-    fina = fieldnames(ServerOptions)
-    hidetype || print(io, ServerOptions, "(")
+function _showoptions(io::IO, sws::ServerWS)
+    fina = fieldnames(ServerWS)
     for field in fina
-        fiva = getfield(swo, field)
-        if fiva != nothing
+        if field ∉ (:handler, :wshandler, :in, :out, :connection_count)
+            fiva = getfield(sws, field)
             print(io, field, "=")
-            print(io, fiva)
+            if fiva == nothing
+                print(io, "nothing")
+            else
+                _show(io, fiva)
+            end
             if field != last(fina)
                 print(io, ", ")
             end
         end
     end
-    hidetype || print(io, ")")
     nothing
 end
-
-
-
 
 _show(io::IO, x) = show(io, x)
 function _show(io::IO, f::Function)

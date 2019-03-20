@@ -1,41 +1,27 @@
-# included in runtests.jl
-# Opening / closing / triggering errors without crashing server.
-using Test
-using WebSockets
-import WebSockets:  is_upgrade,
-                    upgrade,
-                    _openstream,
-                    generate_websocket_key,
-                    Header,
-                    Response,
-                    Request,
-                    Stream,
-                    Transaction,
-                    Connection,
-                    setheader
-using Base64
-import Base: BufferStream, convert
 include("logformat.jl")
-convert(::Type{Header}, pa::Pair{String,String}) = Pair(SubString(pa[1]), SubString(pa[2]))
-sethd(r::Response, pa::Pair) = sethd(r, convert(Header, pa))
-sethd(r::Response, pa::Header) = setheader(r, pa)
+convert(::Type{HTTP.Header}, pa::Pair{String,String}) = Pair(SubString(pa[1]), SubString(pa[2]))
+sethd(r::HTTP.Response, pa::Pair) = sethd(r, convert(HTTP.Header, pa))
+sethd(r::HTTP.Response, pa::HTTP.Header) = HTTP.setheader(r, pa)
 
 const NEWPORT = 8091
 
 @info "Start server which accepts websocket upgrades including with subprotocol " *
       "'xml' and immediately closes, following protocol."
 addsubproto("xml")
-serverWS =  ServerWS(  (r::Request) -> Response(200, "OK"),
-                       (r::Request, ws::WebSocket) -> nothing)
-tas = @async WebSockets.serve(serverWS, "127.0.0.1", NEWPORT)
-while !istaskstarted(tas);yield();end
+serverws =  WebSockets.ServerWS(  
+    (r::HTTP.Request) -> HTTP.Response(200, "OK"),
+    (r::HTTP.Request, ws::WebSocket) -> nothing)
+@async WebSockets.serve(serverws, "127.0.0.1", NEWPORT, true)
+# tas = @async WebSockets.serve(serverws, "127.0.0.1", NEWPORT, true)
+# while !istaskstarted(tas);yield();end
+
+sleep(2)
 
 @info "Open client without subprotocol."
 sleep(1)
 URL = "ws://127.0.0.1:$NEWPORT"
 res = WebSockets.open((_)->nothing, URL);
 @test res.status == 101
-
 
 @info "Open client with approved subprotocol."
 sleep(1)
@@ -100,31 +86,31 @@ sleep(1)
 
 @info "Stop the server in morse code."
 sleep(1)
-put!(serverWS.in, "...-.-")
+put!(serverws.in, "...-.-")
 sleep(1)
 @info "Emulate a correct first accept response from server, with BufferStream socket."
 sleep(1)
-req = Request()
+req = HTTP.Request()
 req.method = "GET"
 key = base64encode(rand(UInt8, 16))
-resp = Response(101)
+resp = HTTP.Response(101)
 resp.request = req
 sethd(resp,   "Sec-WebSocket-Version" => "13")
 sethd(resp, "Upgrade" => "websocket")
-sethd(resp, "Sec-WebSocket-Accept" => generate_websocket_key(key))
+sethd(resp, "Sec-WebSocket-Accept" => WebSockets.generate_websocket_key(key))
 sethd(resp,   "Connection" => "Upgrade")
 servsock = BufferStream()
-s = Stream(resp, Transaction(Connection(servsock)))
+s = HTTP.Stream(resp, HTTP.Transaction(HTTP.Connection(servsock)))
 write(servsock, resp)
 function dummywsh(dws::WebSockets.WebSocket{BufferStream})
     close(dws.socket)
     close(dws)
 end
-@test _openstream(dummywsh, s, key) == WebSockets.CLOSED
+@test WebSockets._openstream(dummywsh, s, key) == WebSockets.CLOSED
 
 @info "Emulate an incorrect first accept response from server."
 sleep(1)
-sethd(resp, "Sec-WebSocket-Accept" => generate_websocket_key(base64encode(rand(UInt8, 16))))
+sethd(resp, "Sec-WebSocket-Accept" => WebSockets.generate_websocket_key(base64encode(rand(UInt8, 16))))
 write(servsock, resp)
-@test_throws WebSockets.WebSocketError _openstream(dummywsh, s, key)
+@test_throws WebSockets.WebSocketError WebSockets._openstream(dummywsh, s, key)
 nothing
