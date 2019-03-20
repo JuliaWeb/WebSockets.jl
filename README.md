@@ -85,18 +85,20 @@ WebSockets are well suited for user interactions via a browser or [cross-platfor
 - Compression is not currenlty implemented, but easily adaptable. On local connections, there's probably not much to gain.
 - If you worry about milliseconds, TCP quirks like 'warm-up' time with low transmission speed after a pause can be avoided with heartbeats. High-performance examples are missing.
 - Garbage collection increases message latency at semi-random intervals, as is visible in  benchmark plots. Benchmarks should include non-memory-allocating examples.
-- Time prefixes in e.g. `@wslog` is not accurate. To accurately track sequences of logging messages, include the time in your logging message.
+- Time prefixes in e.g. `@wslog` are not accurate. To accurately track sequences of logging messages, include the time in your logging message, e.g. using 'time_ns()'
 
 ##### Debugging with WebSockets.ServeWS servers
 Error messages from run-time are directed to a .out channel. See inline docs: ?Websockets.serve.
 When using `readguarded` or `writeguarded`, errors are logged with `@debug` statements. Set the logging level of the logger you use to 'Debug', as in 'examples/count_with_logger.jl'.
 
 ##### Debugging with WebSockets.HTTP.listen servers
-Error messages may be sent as messages to the client. This may not be good practice if you're serving pages to the internet, but nice while developing locally. There are some inline comments in the source code which may be of help.
+If you prefer to write your own server coroutine with this approach, error messages may be sent as messages to the client. This may not be good practice if you're serving pages to the internet, but very nice while developing locally. There are some inline comments in the source code which may be of help.
 
-## Further development and comments
+## Development, new features, comments
 The issues section is used for planning development: Contributions are welcome.
 
+- Version 1.5 shows the current number of connections on ServerWS. ServerWS in itself is immutable.
+- Version 1.4 removes a ratelimiter function.
 - Version 1.3 integrates `WebSocketLogger`. It closely resembles `ConsoleLogger` from the Julia standard library. Additional features: see inline docs and 'examples/count_with_logger.jl'. With this closer integration with Julia's core logging functionality, we also introduce `@debug` statements in `readguarded` and `writeguarded` (as well as when receiving 'ping' or 'pong'). The functions still return a boolean to indicate failure, but return no reason except the logger messages.
 - The /benchmark folder contain some code that is not currently working, pending logging facilities.
 - Alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) and the direct implementation in [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl).
@@ -104,14 +106,34 @@ The issues section is used for planning development: Contributions are welcome.
 ## Errors after updating?
 ### To version 1.5.0
 
-The upgrade to using HTTP 0.8 changes the bevaviour of server options. If you see unexpected behaviour,
-try not passing any server options to ServerWS. If you don't call serve(::ServerWS, etc,) but you the
-'listen' interface, consider taking option values from the new constant DEFAULTOPTIONS.
+#### If you don't call serve(::ServerWS, etc,) but write your own code including 'listen':
+The 'listen... do' syntax example is removed. You now need to wrap the handler function:
+    handler(req) = WebSockets.Response(200)
+    handler_wrap = WebSockets.RequestHandlerFunction(handler)
+
+The function that accepts RequestHandlerFunction is called `handle`. It replaces `handle_request`, which was more accepting.
+
+Consider taking keyword option values from the new constant WebSockets.DEFAULTOPTIONS.
+
+#### If you call WebSockets.serve(::ServerWS, etc,):
+
+There are no changes if you're using syntax like examples/minimal_server.jl.
+
+Keywords 'cert' and 'key' are no longer accepted. Instead, make sure you're using the same version of MbedTLS as WebSockets.HTTP this way:
+```
+sslconf = WebSockets.SSLConfig(cert, key)
+ServerWS(h,w, sslconfig = sslconf)
+```
+
+The upgrade to using HTTP 0.8 changes the bevaviour of server options. Try not passing any options to ServerWS. If you do, they will overrule the list of options in WebSockets.DEFAULTOPTIONS.
 
 Type ServerOptions is removed and the corresponding fields now reside in  ServerWS.
 
-The optional function 'tcpisvalid' used to take two arguments; it should now take only one. Ratelimiting is now
-performed outside of user control,  if you pass keyword rate_limit ≠ nothing.
+The optional function 'tcpisvalid' used to take two arguments; it should now take only one.
+
+Ratelimiting is now performed outside of optional user functions, if you pass keyword rate_limit ≠ nothing.
+
+Keyword logger is no longer supported. For redirecting logs, use Logging.with_logger
 
 ### To version 1.4.0
 We removed the default ratelimit! function, since the way it worked was counter-intuitive and slowed down most use cases. If you have not provided any ratelimit to SererOptions in the past, you may be able to notice a very tiny performance improvement. See issue #124 and the inline documentation.  

@@ -208,3 +208,8 @@ sws = WebSockets.ServerWS(h, w, rate_limit=1//1)
 show(io, sws)
 output = String(take!(io))
 @test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), sslconfig=nothing, tcpisvalid=#1(tcp), reuseaddr=false, rate_limit=1//1, reuse_limit=$(typemax(Int)), readtimeout=0)"
+
+sws = WebSockets.ServerWS(h, w, connection_count = Ref(2))
+show(io, sws)
+output = String(take!(io))
+@test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), connection_count=2)"

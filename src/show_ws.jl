@@ -124,7 +124,7 @@ function Base.show(io::IO, sws::ServerWS)
     print(io, ", wshandler=")
     _show(io, sws.wshandler.func)
     if sws.connection_count[] != 0
-        print(io, ", connection_count=" * sws.connection_count[]  )
+        print(io, ", connection_count=" * string(sws.connection_count[])  )
     end
     for dke in keys(DEFAULTOPTIONS)
         if dke ∉ (:in, :out, :connection_count)

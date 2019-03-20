@@ -149,26 +149,7 @@ after 10 seconds and continue execution.
 
 If the upgrade is not accepted, responds to client with '400'.
 
-
-e.g. server with local error handling. Combine with WebSocket.open example.
-```julia
-using WebSockets
-
-badgatekeeper(reqdict, ws) = sqrt(-2)
-handlerequest(req) = WebSockets.Response(501)
-const SERVERREF = Ref{IOServer}()
-try
-    WebSockets.HTTP.listen("127.0.0.1", UInt16(8000), tcpref = SERVERREF) do stream
-        if WebSockets.is_upgrade(stream.message)
-            WebSockets.upgrade(badgatekeeper, stream)
-        else
-            WebSockets.handle_request(handlerequest, stream)
-        end
-    end
-catch err
-    showerror(stderr, err)
-    println.(stacktrace(catch_backtrace())[1:4])
-end
+See /examples/server_listen_syntax.jl
 ```
 """
 function upgrade(f::Function, stream)
