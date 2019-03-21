@@ -7,8 +7,12 @@ const DEFAULTURL = "http://127.0.0.1:8000/index.html"
 "A stateful browser counter."
 mutable struct Countbrowser;value::Int;end
 (c::Countbrowser)() =COUNTBROWSER.value += 1
-"For next value: COUNTBROWSER(). For current value: COUNTBROWSER.value"
+"To get next value: COUNTBROWSER(). To get current value: COUNTBROWSER.value"
 const COUNTBROWSER = Countbrowser(0)
+const PORT = [8000]
+const PAGE = ["bce.html"]
+#const URL = ["http://127.0.0.1:$(PORT[1])/$(PAGE[1])"]
+const URL = "http://127.0.0.1:$(PORT[1])/$(PAGE[1])"
 
 
 "Get application path for developer applications"
@@ -150,14 +154,15 @@ function open_testpage(shortbrowsername; url = DEFAULTURL)
     return true
 end
 
-"Try to open one browser from BROWSERS.
+"""
+Try to open one browser from BROWSERS.
 In some cases we expect an immediate indication
 of failure, for example when the corresponding browser
 is not found on the system. In other cases, we will
-just wait in vain. In those cases,
+just wait in vain for a request. In those cases,
 call this function again after a reasonable timeout.
 The function remembers which browsers were tried before.
-"
+"""
 function open_a_browser(;url = DEFAULTURL)
     id = "open_a_browser "
     if COUNTBROWSER.value > length(BROWSERS)

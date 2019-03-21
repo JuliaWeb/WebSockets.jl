@@ -1,6 +1,25 @@
-# Included in benchmark.jl
+# Included in benchmark_prepare.jl
 using Distributed
 using Dates
+import Random: seed!
+import Millboard.table
+import UnicodePlots: lineplot,
+                    AsciiCanvas,
+                    title,
+                    title!,
+                    xlabel!
+import ws_hts: listen_hts,
+               TCPREF,
+               getws_hts
+import WebSockets: readguarded,
+                   write,
+                   WebSocket
+tabulate(vars) = table(hcat(eval.(vars)...), colnames = string.(vars))
+
+firstmatch(coll, value) = something(findfirst(isequal(value), coll), 0)
+
+
+
 "Adds process 2, same LOAD_PATH as process 1"
 function prepareworker()
     # Prepare worker
@@ -17,11 +36,11 @@ end
 
 "Start and wait for async hts server"
 function start_hts(timeout)
-    hts_task = @async ws_hts.listen_hts()
+    hts_task = @async listen_hts()
     t1 = now() + timeout
     while now() < t1
         sleep(0.5)
-        isdefined(ws_hts.TCPREF, :x) && break
+        isdefined(TCPREF, :x) && break
     end
     if now()>= t1
         msg = " did not establish server before timeout "
@@ -49,7 +68,7 @@ function get_hts_jce()
     t1 = now() + TIMEOUT
     while now() < t1
         yield()
-        hts = ws_hts.getws_hts()
+        hts = getws_hts()
         isa(hts, WebSocket) && break
         sleep(0.5)
     end
@@ -75,7 +94,7 @@ function get_hts_bce()
         t1 = now() + TIMEOUT
         while now() < t1
             yield()
-            hts = ws_hts.getws_hts()
+            hts = getws_hts()
             isa(hts, WebSocket) && break
             sleep(0.5)
         end
@@ -102,7 +121,7 @@ function HTS_JCE(n, messagesize)
     end
     clog(id, hts)
     # Random seeding, same for all samples
-    srand(1)
+    seed!(1)
     clog(id, "Sending ", n, " messages of ", messagesize , " random bytes")
     sendtime = Int64(0)
     receivereplytime = Int64(0)
@@ -166,7 +185,7 @@ function HTS_BCE(n, x)
     end
     clog(id, hts)
     # Random seeding, same for all samples
-    srand(1)
+    seed!(1)
     clog(id, "Sending ", n, " messages of ", x , " random bytes")
     st1 = UInt64(0)
     st2 = UInt64(0)

@@ -1,72 +1,116 @@
-# Submodule Julia HTTP Server
-# HTTP and WebSockets need to be loaded in the calling context.
-# LOAD_PATH must include logutils
+# Intended for running in a separate process, e.g. in a worker process.
 # Intended for accepting echoing clients, such as ws_jce.jl, and
 # running echo tests with that client.
+#
+# The websocket reference is held until close_hts, or the websocket is closed.
+# LOAD_PATH must include logutils
 # The server stays open until close_hts or the websocket is closed.
 module ws_hts
-using ..WebSockets
-using ..WebSockets.HTTP
-import ..WebSockets.Header
+if !@isdefined LOGGINGPATH
+    (@__DIR__) ∉ LOAD_PATH && push!(LOAD_PATH, @__DIR__)
+    const LOGGINGPATH = realpath(joinpath(@__DIR__, "..", "logutils"))
+    LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
+end
 
-# We want to log to a separate file, so
-# we use our own instance of logutils_ws here.
-import logutils_ws: logto, clog, zlog, zflush, clog_notime
-const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") : Base.source_dir()
-const SERVEFILE = "bce.html"
+using WebSockets
+import WebSockets: Stream,
+                Request
+#=
+import WebSockets.HTTP: Header,
+             Sockets.TCPServer,
+             listen,
+             Servers.handle_request,
+             Request,
+             Response,
+             Messages.appendheader,
+             Stream
+import WebSockets: WebSocket,
+            origin,
+            is_upgrade,
+			upgrade
+=#
+using logutils_ws
+using Dates
+export listen_hts, getws_hts, close_hts
+# For debugging, we include a handler for connecting with a browser.
+# In case of some errors, HTTP will redirect error messages to
+# the browser. Openn 127.0.0.1:8000 to check.
+const SERVEFILE = "hts.html"
+const SRCPATH = @__DIR__
 const PORT = 8000
 const SERVER = "127.0.0.1"
-const WSMAXTIME = Base.Dates.Second(600)
+const WSMAXTIME = Second(600)
 const WEBSOCKET = Vector{WebSockets.WebSocket}()
 const TCPREF = Ref{Base.IOServer}()
+const LOGFILE = string(@__MODULE__)
+
+function __init__()
+    global LOGSTREAM = open(joinpath((@__DIR__), "logs", LOGFILE), "w")
+    global MODLOG = WebSocketLogger(LOGSTREAM)
+    global_logger(MODLOG)
+    nothing
+end
+
+
 "Run asyncronously or in separate process"
 function listen_hts()
-    id = "listen_hts"
+    id = "listen_hts "
+    if !isopen(LOGSTREAM)
+         open(LOGSTREAM, "w")
+    end
     try
-        clog(id,"listen_hts starts on ", SERVER, ":", PORT)
-        zflush()
-        HTTP.listen(SERVER, UInt16(PORT), tcpref = TCPREF) do http
-            if WebSockets.is_upgrade(http.message)
-                acceptholdws(http)
-                clog(id, "Websocket closed, server stays open until ws_hts.close_hts()")
+        @debug id, " starts on ", SERVER, ":", PORT
+        flush(LOGSTREAM)
+        listen(SERVER, UInt16(PORT), tcpref = TCPREF) do stream::Stream
+            @debug id, "received request, argument of type ", :bold, typeof(stream)
+            while !eof(stream)
+                readavailable(stream)
+            end
+            if is_upgrade(stream.message)
+                @debug(id, "That is an upgrade!")
+                acceptholdws(stream)
+                @debug id, "Websocket closed"
+                setstatus(stream, 200)
             else
                 WebSockets.handle_request(handlerequest, http)
             end
         end
     catch err
-        clog(id, :red, err)
-        clog_notime.(stacktrace(catch_backtrace())[1:4])
-        zflush()
+        @error id, :red, "Error", logutils_ws.logbody_s.(stacktrace(catch_backtrace())[1:4]...)
+        flush(LOGSTREAM)
+    finally
+        close(LOGSTREAM)
     end
 end
 
 "Accepts an incoming connection, upgrades to websocket,
 and waits for timeout or a closed socket.
 Also stops the server from accepting more connections on exit."
-function acceptholdws(http)
+function acceptholdws(stream)
     id = "ws_hts.acceptholdws"
-    zlog(id);zflush()
+    @info(id);flush(LOGSTREAM)
     # If the ugrade is successful, just hold the reference and thread
     # of execution. Other tasks may do useful things with it.
-    WebSockets.upgrade(http) do ws
+    upgrade(stream) do ws
         if length(WEBSOCKET) > 0
             # unexpected behaviour.
             if !isopen(WEBSOCKET[1])
                 pop!(WEBSOCKET)
             else
                 msg = " A websocket is already open. Not accepting the attempt at opening more."
-                clog(id, :red, msg);zflush()
+                @debug (id, :red, msg);flush(LOGSTREAM)
                 return
             end
         end
         push!(WEBSOCKET, ws)
-        zlog(id, ws);zflush()
+        @info(id, ws);flush(LOGSTREAM)
         t1 = now() + WSMAXTIME
         while isopen(ws) && now() < t1
             yield()
         end
         length(WEBSOCKET) > 0 && pop!(WEBSOCKET)
-        zlog(id, " exiting");zflush()
+        @info(id, " exiting")
+        flush(LOGSTREAM)
     end
 end
 "Returns a websocket or a string"
@@ -74,12 +118,12 @@ function getws_hts()
     id = "getws_hts"
     if length(WEBSOCKET) > 0
         if isopen(WEBSOCKET[1])
-            zlog(id, " return reference")
+            @info(id, " return reference")
             return WEBSOCKET[1]
         else
             msg = " Websocket is referred but not open. Acceptholdws might not have been scheduled after is was closed."
-            clog(id, msg)
-            zflush()
+            @debug (id, msg)
+            flush(LOGSTREAM)
             return msg
         end
     else
@@ -88,48 +132,37 @@ function getws_hts()
         else
             msg = " No websocket has connected yet, run ws_hce.echowithdelay_jce() or wait"
         end
-        zlog(id, msg)
+        @info(id, msg)
+        flush(LOGSTREAM)
         return id * msg
     end
 end
 
-
-
-
 "HTTP request -> HTTP response."
-function handlerequest(request::HTTP.Request)
-    id = "handlerequest"
-    zlog(id, request)
-    response = responseskeleton(request)
+function handle(request::Request)
+    id = "handle "
+    @info(id, "The type of request is", typeof(request))
     try
         if request.method == "GET"
-            response = resp_HTTP(request.target, response)
-        elseif request.method == "HEAD"
-            response = resp_HTTP(request.target, response)
-            response.body = Array{UInt8,1}()
+            response = resp_HTTP(request.target)
         else
-            response = HTTP.Response(501, "Not implemented method: $(request.method), fix $id")
+            response = Response(501, "Not implemented method: $(request.method), fix $id")
         end
-    catch
+    catch err
+        @error id, :red, "Error", logutils_ws.logbody_s.(stacktrace(catch_backtrace())[1:4]...)
     end
-    zlog(id, response)
+    @info(id, response)
+    @info(id, "The type of response is ", typeof(response))
     response
 end
 
-
-"""
-Tell browser about the methods this server supports.
-"""
-function responseskeleton(request::HTTP.Request)
-    r = HTTP.Response()
-    HTTP.Messages.appendheader(r, Header("Allow" => "GET,HEAD"))
-    HTTP.Messages.appendheader(r, Header("Connection" => "close"))
-    r #
-end
-
-"request.target -> HTTP.Response , building on a skeleton response"
-function resp_HTTP(resource::String, resp::HTTP.Response)
+"request.target string -> HTTP.Response"
+function resp_HTTP(resource::String)
     id = "resp_HTTP"
+    @info(id, "Well, we got the request for resource ", resource)
+    r = Response()
+    appendheader(r, Header("Allow" => "GET"))
+    appendheader(r, Header("Connection" => "close"))
     if resource == "/favicon.ico"
         s = read(joinpath(SRCPATH, "favicon.ico"))
         push!(resp.headers, "Content-Type" => "image/x-icon")
@@ -143,27 +176,33 @@ function resp_HTTP(resource::String, resp::HTTP.Response)
     resp
 end
 
-"Close the websocket, stop the server. TODO improve"
+"Close the websocket, stop the server and close logstream."
 function close_hts()
-    clog("ws_hts.close_hts")
-    length(WEBSOCKET) >0 && isopen(WEBSOCKET[1]) && close(WEBSOCKET[1]) && sleep(0.5)
-    isassigned(TCPREF) && close(TCPREF.x)
+    if length(WEBSOCKET) > 0 && isopen(WEBSOCKET[1])
+        @debug "close_hts: Start close websocket"
+        # Note, if the client end is not actively reading, this will
+        # wait for, by default, 10 seconds.
+        close(WEBSOCKET[1])
+    else
+        if isassigned(TCPREF)
+            @debug "Start close_hts"
+            close(TCPREF.x)
+        end
+    end
+    @debug "Close logstream"
 end
 
 end # module
-"""
-For debugging:
+#=
+For debugging in a separate console:
 
-import HTTP
 using WebSockets
-using Dates
-const SRCPATH = Base.source_dir() == nothing ? Pkg.dir("WebSockets", "benchmark") :Base.source_dir()
-const LOGGINGPATH = realpath(joinpath(SRCPATH, "../logutils/"))
-# for finding local modules
-SRCPATH ∉ LOAD_PATH && push!(LOAD_PATH, SRCPATH)
-LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
-import ws_hts.listen_hts
-tas = @async ws_hts.listen_hts()
+wspath = realpath(joinpath(WebSockets |> pathof |> dirname, ".."))
+include(joinpath(wspath, "benchmark", "ws_hts.jl"))
+include(joinpath(wspath, "logutils", "logutils_ws.jl"))
+using ws_hts
+listen_hts()
+tas = @async listen_hts()
 sleep(7)
 hts = ws_hts.getws_hts()
-"""
+=#
