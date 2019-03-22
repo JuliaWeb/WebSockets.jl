@@ -323,7 +323,7 @@ function ServerWS(h::Function, w::Function; kwargs...)
 end
 
 to_IPAddr(ip::IPAddr) = ip
-to_IPAddr(s::AbstractString) = parse(IpAddr, s)
+to_IPAddr(s::AbstractString) = parse(IPAddr, s)
 
 """
     WebSockets.serve(server::ServerWS, port)
