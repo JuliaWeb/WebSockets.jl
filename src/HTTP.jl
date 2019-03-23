@@ -322,8 +322,8 @@ function ServerWS(h::Function, w::Function; kwargs...)
     ServerWS(RequestHandlerFunction(h), WSHandlerFunction(w); kwargs...)
 end
 
-to_IPAddr(ip::IPAddr) = ip
-to_IPAddr(s::AbstractString) = parse(IPAddr, s)
+to_ipaddr(ip::IPAddr) = ip
+to_ipaddr(s::AbstractString) = parse(IPAddr, s)
 
 """
     WebSockets.serve(server::ServerWS, port)
@@ -350,7 +350,7 @@ After a suspected connection task failure:
 """
 function serve(serverws::ServerWS, host, port, verbose)
     # An internal reference used for closing.
-    tcpserver = Ref{Union{IOServer, Nothing}}(Sockets.listen(InetAddr(to_IPAddr(host), port)))
+    tcpserver = Ref{Union{IOServer, Nothing}}(Sockets.listen(InetAddr(to_ipaddr(host), port)))
     # Start a couroutine that sleeps until something is put on the .in channel.
     @async begin
          # Next line will hold until something is put on the channel
