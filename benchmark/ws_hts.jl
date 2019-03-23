@@ -14,7 +14,8 @@ end
 
 using WebSockets
 import WebSockets: Stream,
-                Request
+                Request,
+                global_logger
 #=
 import WebSockets.HTTP: Header,
              Sockets.TCPServer,
@@ -29,7 +30,6 @@ import WebSockets: WebSocket,
             is_upgrade,
 			upgrade
 =#
-using logutils_ws
 using Dates
 export listen_hts, getws_hts, close_hts
 # For debugging, we include a handler for connecting with a browser.

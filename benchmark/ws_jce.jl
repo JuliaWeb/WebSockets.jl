@@ -2,24 +2,16 @@ __precompile__(false)
 """
 Submodule Julia Client Echo
 Intended for running in its own worker process.
-HTTP and WebSockets need to be loaded in the calling context.
-LOAD_PATH must include the directory logutils.
+WebSockets need to be loaded in the calling context.
 See comment at the end of this file for debugging code.
 """
 module ws_jce
-# TODO restructure this.
-if !@isdefined LOGGINGPATH
-    (@__DIR__) ∉ LOAD_PATH && push!(LOAD_PATH, @__DIR__)
-    const LOGGINGPATH = realpath(joinpath(@__DIR__, "..", "logutils"))
 
-    LOGGINGPATH ∉ LOAD_PATH && push!(LOAD_PATH, LOGGINGPATH)
-end
-
-using logutils_ws
 import Base.open
 using Serialization, Dates
 import WebSockets
-const LOGFILE = joinpath(@__FILE__, "logs", @__MODULE__ * ".log"
+import WebSockets: global_logger
+const LOGFILE = joinpath(@__FILE__, "logs", string(@__MODULE__ ) * ".log")
 const PORT = 8000
 const SERVER = "ws://127.0.0.1:$(PORT)"
 const CLOSEAFTER = Second(30)
@@ -51,16 +43,16 @@ function echowithdelay_jce()
     f = open(joinpath(@__DIR__, "logs", LOGFILE), "w")
     try
         logto(f)
-        clog(id, :green, "Open client on ", SERVER, "\nclient side handler ", _jce)
+        @debug(id, :green, "Open client on ", SERVER, "\nclient side handler ", _jce)
         zflush()
         WebSockets.open(_jce, SERVER)
         zlog(id, :green, " Websocket closed, control returned.")
     catch err
-        clog(id, :red, err)
-        clog_notime.(stacktrace(catch_backtrace())[1:4])
+        @debug(id, :red, err)
+        @debug_notime.(stacktrace(catch_backtrace())[1:4])
         zflush()
     finally
-        clog(id, :green, " Closing log ", LOGFILE)
+        @debug(id, :green, " Closing log ", LOGFILE)
         zflush()
         logto(Base.DevNullStream())
         close(f)
@@ -71,7 +63,7 @@ Handler for client websocket, defined by echowithdelay_jce
 "
 function _jce(ws)
     id = "_jce"
-    clog(id, :green, ws)
+    @debug(id, :green, ws)
     zflush()
     receivetimes = Vector{Int64}()
     replytime = Int64(0)
@@ -90,7 +82,7 @@ function _jce(ws)
         # react to delay instruction
         if length(msg) < 16 && msg[1:6] == codeunits("delay=")
             delay = Meta.parse(Int, String(msg[7:end]))
-            clog(id, :green, " Changing delay to ", delay, " ms")
+            @debug(id, :green, " Changing delay to ", delay, " ms")
             zflush()
         end
         sleep(delay / 1000)
@@ -119,7 +111,7 @@ function _jce(ws)
             end
         end
     end
-    clog(id, :green, " Exit, close websocket.")
+    @debug(id, :green, " Exit, close websocket.")
     zflush()
     # Exiting this function starts a closing handshake
     nothing

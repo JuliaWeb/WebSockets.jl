@@ -44,7 +44,7 @@ function start_hts(timeout)
     end
     if now()>= t1
         msg = " did not establish server before timeout "
-        clog("start_hts", :red, msg, timeout)
+        @debug("start_hts", :red, msg, timeout)
         error(msg)
     end
     hts_task
@@ -116,13 +116,13 @@ function HTS_JCE(n, messagesize)
     hts = get_hts_jce()
     if !isa(hts, WebSocket)
         msg = " could not get websocket reference"
-        clog(id, msg)
+        @debug(id, msg)
         error(id * msg)
     end
-    clog(id, hts)
+    @debug(id, hts)
     # Random seeding, same for all samples
     seed!(1)
-    clog(id, "Sending ", n, " messages of ", messagesize , " random bytes")
+    @debug(id, "Sending ", n, " messages of ", messagesize , " random bytes")
     sendtime = Int64(0)
     receivereplytime = Int64(0)
     sendtimes = Vector{Int64}()
@@ -180,13 +180,13 @@ function HTS_BCE(n, x)
         msg = " could not get ws reference from " * browser * " via HTS"
     end
     if msg != ""
-        clog(id, msg)
+        @debug(id, msg)
         return "", Vector{Int}(), Vector{Int}(), Vector{Int}(), Vector{Int}()
     end
-    clog(id, hts)
+    @debug(id, hts)
     # Random seeding, same for all samples
     seed!(1)
-    clog(id, "Sending ", n, " messages of ", x , " random bytes")
+    @debug(id, "Sending ", n, " messages of ", x , " random bytes")
     st1 = UInt64(0)
     st2 = UInt64(0)
     rt1 = UInt64(0)

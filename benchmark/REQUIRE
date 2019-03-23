@@ -2,4 +2,5 @@
 # To run benchmarks, you may need to Pkg.add("..package below...")
 IndexedTables
 UnicodePlots
+Millboard
 Requires
