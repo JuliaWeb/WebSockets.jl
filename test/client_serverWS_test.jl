@@ -28,10 +28,17 @@ end
 @info "External server http request"
 @test 200 == WebSockets.HTTP.request("GET", EXTERNALHTTP).status
 
+@info "String to IPAddr conversion"
+let
+    ip = parse(IPAddr, SURL)
+    @test WebSockets.to_ipaddr(SURL) == WebSockets.to_ipaddr(ip) == ip
+end
+
 @info "ServerWS: Open, http response, close. Repeat three times. Takes a while."
 for i = 1:3
     let
-        server = startserver()
+        ip = parse(IPAddr, SURL)
+        server = startserver(url=ip)
         @test 200 == WebSockets.HTTP.request("GET", "http://$SURL:$PORT").status
         close(server)
     end
