@@ -26,8 +26,8 @@ In the package manager, add WebSockets. Then [paste](https://docs.julialang.org/
 ```julia
 julia> using WebSockets
 
-julia> serverWS = WSServer(handler = (req) -> WebSockets.Response(200), wshandler = (ws_server) -> (writeguarded(ws_server, "Hello"); readguarded(ws_server)))
-WSServer(handler=<span>#</span>7(req), wshandler=<span>#</span>8(ws_server))
+julia> serverWS = WebSockets.ServerWS((req) -> WebSockets.Response(200), (ws_server) -> (writeguarded(ws_server, "Hello"); readguarded(ws_server)))
+WebSockets.ServerWS(handler=#17(req), wshandler=#18(ws_server), connection_count=7)
 
 julia> ta = @async WebSockets.with_logger(WebSocketLogger()) do
                 WebSockets.serve(serverWS, port = 8000)
