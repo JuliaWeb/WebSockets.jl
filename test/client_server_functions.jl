@@ -137,23 +137,6 @@ test_serverws = WebSockets.ServerWS(
     HTTP.RequestHandlerFunction(test_handler),
     WebSockets.WSHandlerFunction(test_wshandler))
 
-"""
-`startserver` is called from tests.
-Keyword argument
-    - usinglisten   defines which syntax to use internally. The resulting server
-     task should act identical with the exception of catching some errors.
-
-Returns
-    1) a task where a server is running
-    2) a reference which can be used for closing the server or checking trapped errors.
-        The type of reference depends on argument usinglisten.
-For usinglisten = true, error messages can sometimes be inspected through opening
-a web server.
-For usinglisten = false, error messages can sometimes be inspected through take!(reference.out)
-
-To close the server, call
-    close(serverws)
-"""
 function startserver(serverws=test_serverws;url=SURL, port=PORT, verbose=false)
     servertask = @async WebSockets.serve(serverws,url,port,verbose)
     while !istaskstarted(servertask);yield();end

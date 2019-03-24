@@ -213,3 +213,20 @@ sws = WebSockets.ServerWS(h, w, connection_count = Ref(2))
 show(io, sws)
 output = String(take!(io))
 @test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s), connection_count=2)"
+
+let chnlout, sws, sws1, sws2
+    chnlout = Channel{Any}(2)
+    sws = WebSockets.ServerWS(h, w; out = chnlout)
+    put!(chnlout, "Errormessage")
+    put!(chnlout, "stacktrace")
+    io = IOBuffer()
+    show(io, sws)
+    output = String(take!(io))
+    @test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s)).out:Channel{Any}(sz_max:2,sz_curr:2) "
+
+    sws1 = WebSockets.ServerWS(h, w)
+    sws2 = WebSockets.ServerWS(h, w)
+    put!(sws1.out, "Errormessage")
+    @test !isready(sws2.out)
+    @test isready(sws1.out)
+end

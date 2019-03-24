@@ -29,7 +29,7 @@ import Base:    IOServer,         # For serve
                 buffer_writes,    # For init_socket
                 CodeUnits,        # For data type
                 throwto           # For readframe_nonblocking
-import HTTP                       # Depend on WebSockets.HTTP only 
+import HTTP                       # Depend on WebSockets.HTTP only
                                   # to avoid version conflicts!
 import HTTP.Servers.MbedTLS       # For further imports
 import HTTP.Servers.MbedTLS:
@@ -451,7 +451,7 @@ function Base.read(ws::WebSocket)
             # Don't return control frames; they're not interesting to users.
             handle_control_frame(ws, frame)
             # Recurse to return the next data frame.
--           return read(ws)
+           return read(ws)
         end
 
         # Handle data message that uses multiple fragments.

@@ -1,4 +1,13 @@
 # included in runtests.jl
+using Test
+using WebSockets
+import WebSockets:HTTP,
+       base64encode,
+       throwto,
+       OPCODE_TEXT,
+       locked_write
+import Base.BufferStream
+include("client_server_functions.jl")
 const FURL = "ws://127.0.0.1"
 const FPORT = 8092
 
@@ -146,16 +155,6 @@ while isready(s.out)
     take!(s.out)
 end
 
-# println("********************************************************")
-# println("ServerWS: $(s)")
-# println("HTTP Handle: $(s.handler)")
-# println("WS Handler: $(s.wshandler)")
-# println("Logger: $(s.logger)")
-# println("Server: $(s.server == nothing ? "Nothing" : s.server)")
-# println("In: $(s.in)")
-# println("Out: $(s.out)")
-# println("Options: $(s.options)")
-# println("********************************************************")
 
 close(s)
 startserver(s, url=SURL, port=FPORT)
@@ -216,4 +215,22 @@ global err = take!(s.out)
 global stack_trace = take!(s.out)
 
 close(s)
+
+@info "Trigger check_upgrade WebSocketErrors "
+let noupgrade, noconnectionupgrade, key
+    key = base64encode(rand(UInt8, 16))
+    noupgrade = WebSockets.Request("GET", "/", [
+                    "Connection" => "Upgrade",
+                    "Sec-WebSocket-Key" => key,
+                    "Sec-WebSocket-Version" => "13"
+                ])
+    @test_throws WebSockets.WebSocketError WebSockets.check_upgrade(noupgrade)
+    noconnectionupgrade = WebSockets.Request("GET", "/", [
+                        "Upgrade" => "websocket",
+                        "Sec-WebSocket-Key" => key,
+                        "Sec-WebSocket-Version" => "13"
+                ])
+    @test_throws WebSockets.WebSocketError WebSockets.check_upgrade(noconnectionupgrade)
+end
+
 sleep(2)
