@@ -26,7 +26,7 @@ import HTTP.Servers.MbedTLS:
             SSLConfig                       # For ServerWS
 
 """
-DEFAULTOPTIONS can be overruled by passing keyword arguments to the
+default_options() can be overruled by passing keyword arguments to the
 ServerWS constructor.
 # Options include
 ```
@@ -39,7 +39,7 @@ ServerWS constructor.
     readtimeout::Int
 ```
 """
-const DEFAULTOPTIONS = (in = Channel(1),
+default_options() = (in = Channel(1),
                     out = Channel(2),
                     sslconfig = nothing,
                     tcpisvalid = tcp->true,
@@ -292,7 +292,7 @@ end
 WebSockets.ServerWS is an argument type for WebSockets.serve. Instances
 include .in  and .out channels, see WebSockets.serve.
 
-Special server options can be set using keyword arguments, and will overrule DEFAULTOPTIONS.
+Special server options can be set using keyword arguments, and will overrule default_options().
 """
 struct ServerWS
     handler::RequestHandlerFunction
@@ -312,9 +312,9 @@ struct ServerWS
     ServerWS(;handler, wshandler, in, out, sslconfig, tcpisvalid, reuseaddr, connection_count, rate_limit, reuse_limit, readtimeout)=
           new(handler, wshandler, in, out, sslconfig, tcpisvalid, reuseaddr, connection_count, rate_limit, reuse_limit, readtimeout)
 end
-# User supplied keywords take precedence over DEFAULTOPTIONS here:
+# User supplied keywords take precedence over default_options() here:
 function ServerWS(handler::RequestHandlerFunction, wshandler::WSHandlerFunction; kwargs...)
-    ServerWS(;handler = handler, wshandler = wshandler,  merge(DEFAULTOPTIONS, collect(kwargs))...)
+    ServerWS(;handler = handler, wshandler = wshandler,  merge(default_options(), collect(kwargs))...)
 end
 # User supplied handler functions are packed into specialized types here.
 # It also defines the most useful method ServerWS(h::Function,w::Function)

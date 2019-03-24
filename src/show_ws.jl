@@ -126,9 +126,9 @@ function Base.show(io::IO, sws::ServerWS)
     if sws.connection_count[] != 0
         print(io, ", connection_count=" * string(sws.connection_count[])  )
     end
-    for dke in keys(DEFAULTOPTIONS)
+    for dke in keys(default_options())
         if dke ∉ (:in, :out, :connection_count)
-            dva = get(DEFAULTOPTIONS, dke, nothing)
+            dva = get(default_options(), dke, nothing)
             ava = getfield(sws, dke)
             if dva != ava
                 # ServerWS field not default
