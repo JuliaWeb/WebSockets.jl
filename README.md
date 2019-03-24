@@ -104,6 +104,12 @@ The issues section is used for planning development: Contributions are welcome.
 - Alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) and the direct implementation in [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl).
 
 ## Errors after updating?
+### To version 1.5.2
+WebSockets.DEFAULTOPTIONS has changed to WebSockets.default_options()
+The previous behaviour is considered a bug, and might result in
+   close(s1::ServerWS) or put!(s1::ServerWS.in, "close")
+also closing s2::ServerWS.
+
 ### To version 1.5.0
 
 #### If you don't call serve(::ServerWS, etc,) but write your own code including 'listen':
@@ -113,7 +119,7 @@ The 'listen... do' syntax example is removed. You now need to wrap the handler f
 
 The function that accepts RequestHandlerFunction is called `handle`. It replaces `handle_request`, which was more accepting.
 
-Consider taking keyword option values from the new constant WebSockets.DEFAULTOPTIONS.
+Consider taking keyword option values from the new function WebSockets.default_options()
 
 #### If you call WebSockets.serve(::ServerWS, etc,):
 
