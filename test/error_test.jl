@@ -2,8 +2,11 @@
 using Test
 using WebSockets
 import WebSockets:HTTP,
-       base64encode
-import Base.throwto
+       base64encode,
+       throwto,
+       OPCODE_TEXT,
+       locked_write
+import Base.BufferStream
 include("client_server_functions.jl")
 const FURL = "ws://127.0.0.1"
 const FPORT = 8092
@@ -213,7 +216,7 @@ global stack_trace = take!(s.out)
 
 close(s)
 
-@info "Some error triggers missed elsewhere"
+@info "Trigger check_upgrade WebSocketErrors "
 let noupgrade, noconnectionupgrade, key
     key = base64encode(rand(UInt8, 16))
     noupgrade = WebSockets.Request("GET", "/", [
@@ -228,55 +231,6 @@ let noupgrade, noconnectionupgrade, key
                         "Sec-WebSocket-Version" => "13"
                 ])
     @test_throws WebSockets.WebSocketError WebSockets.check_upgrade(noconnectionupgrade)
-
-
 end
 
-#= Work in progress. The below creates Workqueue inconsistency.
- Instead, take the more formal approach in readframe_nonblocking(ws)
- for throwing errors to clta.
-let clta, dws
-    dws = WebSocket(Base.BufferStream(), true)
-        # the closing task will wait 10 s for a response:
-    clta = @async close(dws)
-    while !istaskstarted(clta);yield();end
-    # This should finish the closing task without errors.
-    # Common reasons for a mssing closing handshake are suppressed.
-    Base.throwto(clta, Base.IOError("A common suppressed exception", 0))
-    # Instead, we throw an unexpected error at the task
-    @test_throws ArgumentError     Base.throwto(clta, ArgumentError("Not your usual exception!"))
-end
-
-=#
-
-#=
-let h, w, sws, io, output, chnlout
-    h(r) = WebSockets.Response(200)
-    w(s) = nothing
-    # ServerWS creates channels, which may take a little time to be ready for writing.
-    chnlout = Channel()
-    sws = WebSockets.ServerWS(h, w; out = chnlout)
-println(1)
-    put!(sws.out, "Errormessage")
-    println(3)
-
-    put!(sws.out, "stacktrace")
-    println(4)
-
-    io = IOBuffer()
-    println(5)
-
-    show(io, sws)
-    println(6)
-    output = String(take!(io))
-    println(7)
-    @test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s)).out:Channel{Any}(sz_max:2,sz_curr:2) "
-end
-WebSockets._show(io, x-> 2x)
-output = String(take!(io))
-@test output[1] == '#'
-
-sws = WebSockets.ServerWS(h, w)
-=#
-#end
 sleep(2)
