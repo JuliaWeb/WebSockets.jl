@@ -17,8 +17,8 @@ ws_task = @async WebSockets.with_logger(WebSocketLogger(stderr, Base.CoreLogging
                     put!(inbox, in_msg)
                 end
             finally
-                @debug ws " Now closing inbox."
-                close(inbox)
+                @debug ws " Now closing outbox, to be sure"
+                close(outbox)
             end
             outbox_task = @async try
                 for outmsg in outbox
