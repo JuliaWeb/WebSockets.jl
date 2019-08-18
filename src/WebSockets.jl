@@ -360,7 +360,7 @@ function handle_control_frame(ws::WebSocket, wsf::WebSocketFragment)
         ws.state = CLOSED
         try
             locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, UInt8[])
-        catch
+        catch e
         end
         # Find out why the other side wanted to close.
         # RFC 6455 5.5.1. If there is a status code, it's a two-byte number in network order.
@@ -368,10 +368,10 @@ function handle_control_frame(ws::WebSocket, wsf::WebSocketFragment)
             reason = " No reason "
         elseif wsf.payload_len == 2
             scode = Int(reinterpret(UInt16, reverse(wsf.data))[1])
-            reason = string(scode) * ":" * get(codeDesc, scode, "")
+            reason = string(scode) * ": " * get(codeDesc, scode, "")
         else
             scode = Int(reinterpret(UInt16, reverse(wsf.data[1:2]))[1])
-            reason = string(scode) * ":" * String(wsf.data[3:end])
+            reason = string(scode) * ": " * String(wsf.data[3:end])
         end
         throw(WebSocketClosedError("ws|$(ws.server ? "server" : "client") respond to OPCODE_CLOSE " * reason))
     elseif wsf.opcode == OPCODE_PING
@@ -381,7 +381,7 @@ function handle_control_frame(ws::WebSocket, wsf::WebSocketFragment)
         @debug ws, " received OPCODE_PING"
         # Nothing to do here; no reply is needed for a pong message.
     else  # %xB-F are reserved for further control frames
-        error(" while handle_control_frame(ws|$(ws.server ? "server" : "client"), wsf): Unknown opcode $(wsf.opcode)")
+        error("while handle_control_frame(ws|$(ws.server ? "server" : "client"), wsf): Unknown opcode $(wsf.opcode)")
     end
 end
 

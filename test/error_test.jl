@@ -115,7 +115,7 @@ global res = WebSockets.open((ws)-> close(ws.socket), "$(FURL):$(FPORT)")
 sleep(1)
 global err = take!(chfromserv)
 @test typeof(err) <: WebSocketClosedError
-@test err.message == " while read(ws|server) BoundsError(UInt8[], (1,))"
+@test err.message == "while read(ws|server) Client side closed socket connection - Performed closing handshake."
 global stack_trace = take!(chfromserv)
 if VERSION <= v"1.0.2"
     # Stack trace on master is zero. Unknown cause.
@@ -143,7 +143,7 @@ sleep(1)
 WebSockets.open((ws)-> close(ws.socket), "$(FURL):$(FPORT)");
 global err = take!(s.out)
 @test typeof(err) <: WebSocketClosedError
-@test err.message == " while read(ws|server) BoundsError(UInt8[], (1,))"
+@test err.message == "while read(ws|server) Client side closed socket connection - Performed closing handshake."
 sleep(1)
 global stack_trace = take!(s.out);
 if VERSION <= v"1.0.2"
@@ -170,7 +170,7 @@ for (ke, va) in WebSockets.codeDesc
     wait(s.out)
     global err = take!(s.out)
     @test typeof(err) <: WebSocketClosedError
-    @test err.message == "ws|server respond to OPCODE_CLOSE $ke:$va"
+    @test err.message == "ws|server respond to OPCODE_CLOSE $ke: $va"
     wait(s.out)
     stacktra = take!(s.out)
     if VERSION <= v"1.0.2"
@@ -193,7 +193,7 @@ WebSockets.open((ws)-> close(ws, statusnumber = va, freereason = "goodbye!"), "$
 wait(s.out)
 global err = take!(s.out)
 @test typeof(err) <: WebSocketClosedError
-@test err.message == "ws|server respond to OPCODE_CLOSE 1000:goodbye!"
+@test err.message == "ws|server respond to OPCODE_CLOSE 1000: goodbye!"
 global stack_trace = take!(s.out)
 sleep(1)
 
