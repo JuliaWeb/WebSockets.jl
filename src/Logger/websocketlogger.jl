@@ -11,6 +11,10 @@ import Base.CoreLogging: logmsg_code,
                 _min_enabled_level,
                 current_logger_for_env,
                 logging_error
+if VERSION >= v"1.1"
+    import Base.CoreLogging: _invoked_shouldlog
+end
+
 import Base.string_with_env
 const Wslog = LogLevel(50)
 """
