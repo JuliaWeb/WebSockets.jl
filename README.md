@@ -1,6 +1,6 @@
 # WebSockets.jl
 
-[![WebSockets](http://pkg.julialang.org/badges/WebSockets_0.6.svg)](http://pkg.julialang.org/?pkg=WebSockets&ver=0.6) [![Build Status](https://travis-ci.org/JuliaWeb/WebSockets.jl.svg)](https://travis-ci.org/JuliaWeb/WebSockets.jl)
+[![Build Status](https://github.com/JuliaWeb/WebSockets.jl/workflows/CI/badge.svg)](https://github.com/JuliaWeb/URIs.jl/actions)
 [![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg)](https://coveralls.io/r/JuliaWeb/WebSockets.jl)
 [![Appveyor](https://ci.appveyor.com/api/projects/status/github/JuliaWeb/WebSockets.jl?svg=true&logo=appveyor)](https://ci.appveyor.com/project/shashi/WebSockets-jl/branch/master)
 
@@ -91,6 +91,9 @@ The issues section is used for planning development: Contributions are welcome.
 - Alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) and the direct implementation in [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl).
 
 ## Errors after updating?
+### To version 1.5.2/3
+Julia 0.7 is dropped from testing, but the compatibility as stated in 'Project.toml' is kept, since HTTP is also claiming to be 0.7 compatible and we do not want to put too many restraints on the compatibility graph. The non-compatibility is that @wslog will not quite work.
+
 ### To version 1.5.2
 WebSockets.DEFAULTOPTIONS has changed to WebSockets.default_options()
 The previous behaviour is considered a bug, and might result in
