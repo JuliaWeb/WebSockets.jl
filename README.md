@@ -1,6 +1,5 @@
 # WebSockets.jl
 
-[![Build Status](https://github.com/JuliaWeb/WebSockets.jl/workflows/CI/badge.svg)](https://github.com/JuliaWeb/WebSockets.jl/actions)
 [![Coverage Status](https://img.shields.io/coveralls/JuliaWeb/WebSockets.jl.svg)](https://coveralls.io/r/JuliaWeb/WebSockets.jl)
 [![Appveyor](https://ci.appveyor.com/api/projects/status/github/JuliaWeb/WebSockets.jl?svg=true&logo=appveyor)](https://ci.appveyor.com/project/shashi/WebSockets-jl/branch/master)
 
