@@ -66,7 +66,7 @@ This more downstream package may lag behind the latest version of HTTP.jl, and i
 WebSockets are well suited for user interactions via a browser or [cross-platform applications](https://electronjs.org/) like electron. Workload and development time can be moved off Julia resources, error checking code can be reduced. Preferably use websockets for passing arguments, not code, between compiled functions on both sides; it has both speed and security advantages over passing code for evaluation.
 
 ## Other tips
-- putting http handlers and websocket coroutines ('handlers') in the same process can be a security advantage. It is good practice to modify web page responses to include time-limited tokens in the address, the wsuri.
+- Putting http handlers and websocket coroutines ('handlers') in the same process can be a security advantage. It is good practice to modify web page responses to include time-limited tokens in the address, the wsuri.
 - Since `read` and `readguared` are blocking functions, you can easily end up reading indefinitely from any side of the connection. See the `close` function code for an example of non-blocking read with a timeout.
 - Compression is not currenlty implemented, but easily adaptable. On local connections, there's probably not much to gain.
 - If you worry about milliseconds, TCP quirks like 'warm-up' time with low transmission speed after a pause can be avoided with heartbeats. High-performance examples are missing.
@@ -90,6 +90,9 @@ The issues section is used for planning development: Contributions are welcome.
 - Alternative Julia packages: [DandelionWebSockets](https://github.com/dandeliondeathray/DandelionWebSockets.jl) and the direct implementation in [HTTP.jl](https://github.com/JuliaWeb/HTTP.jl).
 
 ## Errors after updating?
+### To version 1.5.6
+Updated to use HTTP 0.9 as a dependency.
+
 ### To version 1.5.2/3
 Julia 0.7 is dropped from testing, but the compatibility as stated in 'Project.toml' is kept, since HTTP is also claiming to be 0.7 compatible and we do not want to put too many restraints on the compatibility graph. The non-compatibility is that @wslog will not quite work.
 
