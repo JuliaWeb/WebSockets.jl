@@ -360,7 +360,7 @@ function handle_control_frame(ws::WebSocket, wsf::WebSocketFragment)
         ws.state = CLOSED
         try
             locked_write(ws.socket, true, OPCODE_CLOSE, !ws.server, UInt8[])
-        catch
+        catch e
         end
         # Find out why the other side wanted to close.
         # RFC 6455 5.5.1. If there is a status code, it's a two-byte number in network order.
@@ -368,10 +368,10 @@ function handle_control_frame(ws::WebSocket, wsf::WebSocketFragment)
             reason = " No reason "
         elseif wsf.payload_len == 2
             scode = Int(reinterpret(UInt16, reverse(wsf.data))[1])
-            reason = string(scode) * ":" * get(codeDesc, scode, "")
+            reason = string(scode) * ": " * get(codeDesc, scode, "")
         else
             scode = Int(reinterpret(UInt16, reverse(wsf.data[1:2]))[1])
-            reason = string(scode) * ":" * String(wsf.data[3:end])
+            reason = string(scode) * ": " * String(wsf.data[3:end])
         end
         throw(WebSocketClosedError("ws|$(ws.server ? "server" : "client") respond to OPCODE_CLOSE " * reason))
     elseif wsf.opcode == OPCODE_PING
@@ -381,27 +381,24 @@ function handle_control_frame(ws::WebSocket, wsf::WebSocketFragment)
         @debug ws, " received OPCODE_PING"
         # Nothing to do here; no reply is needed for a pong message.
     else  # %xB-F are reserved for further control frames
-        error(" while handle_control_frame(ws|$(ws.server ? "server" : "client"), wsf): Unknown opcode $(wsf.opcode)")
+        error("while handle_control_frame(ws|$(ws.server ? "server" : "client"), wsf): Unknown opcode $(wsf.opcode)")
     end
 end
 
 """ Read a frame: turn bytes from the websocket into a WebSocketFragment."""
 function read_frame(ws::WebSocket)
-    # Try to read two bytes. There is no guarantee that two bytes are actually allocated.
-    ab = read(ws.socket, 2)
-    #=
-    Browsers will seldom close in the middle of writing to a socket,
-    but other clients often do, and the stacktraces can be very long.
-    ab can be assigned, but of length 1. Use an enclosing try..catch in the calling function
-    =#
-    a = ab[1]
+    if eof(ws.socket)
+        throw(WebSocketError(1006, "Client side closed socket connection"))
+    end
+    # Read first byte
+    a = read(ws.socket, UInt8)
     fin    = (a & 0b1000_0000) >>> 7  # If fin, then is final fragment
     rsv1   = a & 0b0100_0000  # If not 0, fail.
     rsv2   = a & 0b0010_0000  # If not 0, fail.
     rsv3   = a & 0b0001_0000  # If not 0, fail.
     opcode = a & 0b0000_1111  # If not known code, fail.
 
-    b = ab[2]
+    b = read(ws.socket, UInt8)
     mask = (b & 0b1000_0000) >>> 7
     hasmask = mask != 0
 
@@ -416,17 +413,20 @@ function read_frame(ws::WebSocket)
 
     payload_len::UInt64 = b & 0b0111_1111
     if payload_len == 126
-        payload_len = ntoh(read(ws.socket,UInt16))  # 2 bytes
+        payload_len = ntoh(read(ws.socket, UInt16))  # 2 bytes
     elseif payload_len == 127
-        payload_len = ntoh(read(ws.socket,UInt64))  # 8 bytes
+        payload_len = ntoh(read(ws.socket, UInt64))  # 8 bytes
     end
 
-    maskkey = hasmask ? read(ws.socket,4) : UInt8[]
+    maskkey = hasmask ? read(ws.socket, 4) : UInt8[]
 
     data = read(ws.socket,Int(payload_len))
-    hasmask && maskswitch!(data,maskkey)
+    hasmask && maskswitch!(data, maskkey)
 
-    return WebSocketFragment(fin,rsv1,rsv2,rsv3,opcode,mask,payload_len,maskkey,data)
+    return WebSocketFragment(
+        fin, rsv1, rsv2, rsv3,
+        opcode, mask, payload_len, maskkey, data
+    )
 end
 
 """
@@ -461,21 +461,18 @@ function Base.read(ws::WebSocket)
         return frame.data
     catch err
         try
-            errtyp = typeof(err)
-            if errtyp <: InterruptException
-                msg = " while read(ws|$(ws.server ? "server" : "client") received InterruptException."
+            server_str = ws.server ? "server" : "client"
+            if err isa InterruptException
+                msg = "while read(ws|$(server_str) received InterruptException."
                 # This exception originates from this side. Follow close protocol so as not to irritate the other side.
                 close(ws, statusnumber = 1006, freereason = msg)
                 throw(WebSocketClosedError(msg * " Performed closing handshake."))
-            elseif errtyp <: WebSocketError
+            elseif err isa WebSocketError
                 # This exception originates on the other side. Follow close protocol with reason.
                 close(ws, statusnumber = err.status)
-                throw(WebSocketClosedError(" while read(ws|$(ws.server ? "server" : "client")) $(err.message) - Performed closing handshake."))
-            elseif  errtyp <: Base.IOError ||
-                    errtyp <: Base.BoundsError ||
-                    errtyp <: Base.EOFError ||
-                    errtyp <: Base.ArgumentError
-                throw(WebSocketClosedError(" while read(ws|$(ws.server ? "server" : "client")) $(string(err))"))
+                throw(WebSocketClosedError("while read(ws|$(server_str)) $(err.message) - Performed closing handshake."))
+            elseif err isa Base.IOError || err isa Base.EOFError
+                throw(WebSocketClosedError("while read(ws|$(server_str)) $(string(err))"))
             else
                 # Unknown cause, give up continued execution.
                 # If this happens in a multiple fragment message, the accumulated
@@ -489,7 +486,7 @@ function Base.read(ws::WebSocket)
             ws.state = CLOSED
         end
     end
-    return Vector{UInt8}()
+    return UInt8[]
 end
 
 """

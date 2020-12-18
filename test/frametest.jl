@@ -173,7 +173,7 @@ for op in 0xB:0xF
         thiserror = err
     end
     @test typeof(thiserror) <: ErrorException
-    @test thiserror.msg == " while handle_control_frame(ws|client, wsf): Unknown opcode $op"
+    @test thiserror.msg == "while handle_control_frame(ws|client, wsf): Unknown opcode $op"
 
     close(dws.socket)
 end
@@ -219,7 +219,7 @@ for clientwriting in [false, true]
         thiserror = err
     end
     @test typeof(thiserror) <: WebSocketClosedError
-    expmsg = " while read(ws|$(dws.server ? "server" : "client")) WebSocket|$(dws.server ? "server" : "client") cannot handle incoming messages with$(dws.server ? "out" : "") mask. Ref. rcf6455 5.3 - Performed closing handshake."
+    expmsg = "while read(ws|$(dws.server ? "server" : "client")) WebSocket|$(dws.server ? "server" : "client") cannot handle incoming messages with$(dws.server ? "out" : "") mask. Ref. rcf6455 5.3 - Performed closing handshake."
     @test thiserror.message ==  expmsg
     @test !isopen(dws)
     close(dws.socket)
