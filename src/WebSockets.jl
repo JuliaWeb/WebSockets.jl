@@ -388,7 +388,11 @@ end
 """ Read a frame: turn bytes from the websocket into a WebSocketFragment."""
 function read_frame(ws::WebSocket)
     # Try to read two bytes. There is no guarantee that two bytes are actually allocated.
-    ab = read(ws.socket, 2)
+    ab = Array{UInt8}(undef, 2)
+    if readbytes!(ws.socket, ab) != 2
+      throw(WebSocketError(1006, "Client side closed socket connection"))
+    end
+
     #=
     Browsers will seldom close in the middle of writing to a socket,
     but other clients often do, and the stacktraces can be very long.
