@@ -34,7 +34,7 @@ sleep(1)
 res = WebSockets.open((_) -> nothing, URL, subprotocol = "unapproved");
 @test res.status == 400
 
-@info "Try to open a websocket with uknown port. Takes a few seconds."
+@info "Try to open a websocket with unknown port. Takes a few seconds."
 sleep(1)
 global caughterr = WebSockets.WebSocketClosedError("")
 try
@@ -45,7 +45,7 @@ end
 @test typeof(caughterr) <: WebSocketClosedError
 @test caughterr.message == " while open ws|client: connect: connection refused (ECONNREFUSED)"
 
-@info "Try open with uknown scheme."
+@info "Try open with unknown scheme."
 sleep(1)
 global caughterr = ArgumentError("")
 try

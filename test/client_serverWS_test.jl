@@ -44,21 +44,21 @@ for i = 1:3
     end
 end
 
-@info "ServerWS: Client side initates message exchange."
+@info "ServerWS: Client side initiates message exchange."
 let
     server = startserver()
     WebSockets.open(initiatingws, "ws://$SURL:$PORT")
     close(server)
 end
 
-@info "ServerWS: Server side initates message exchange."
+@info "ServerWS: Server side initiates message exchange."
 let
     server = startserver()
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL)
     close(server)
 end
 
-@info "ServerWS: Server side initates message exchange. Close from within server side handler."
+@info "ServerWS: Server side initiates message exchange. Close from within server side handler."
 let
     server = startserver()
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL_CLOSE)
