@@ -18,7 +18,7 @@ for i = 1:3
         println("Status($(i)): $(status)")
         @test 200 == status
         close(server)
-        sleep(1)
+        sleep(2)
     end
 end
 
@@ -27,6 +27,7 @@ let
     server = startserver(url=SURL,port=PORT)
     WebSockets.open(initiatingws, "ws://$SURL:$PORT")
     close(server)
+    sleep(2)
 end
 
 @info "Listen: Server side initiates message exchange."
@@ -34,6 +35,7 @@ let
     server = startserver(url=SURL,port=PORT)
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL)
     close(server)
+    sleep(2)
 end
 
 @info "Listen: Server side initiates message exchange. Close from within server side handler."
@@ -41,5 +43,6 @@ let
     server = startserver(url=SURL,port=PORT)
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL_CLOSE)
     close(server)
+    sleep(2)
 end
 nothing

@@ -41,7 +41,7 @@ for i = 1:3
         server = startserver(url=ip)
         @test 200 == WebSockets.HTTP.request("GET", "http://$SURL:$PORT").status
         close(server)
-        sleep(1)
+        sleep(2)
     end
 end
 
@@ -50,7 +50,7 @@ let
     server = startserver()
     WebSockets.open(initiatingws, "ws://$SURL:$PORT")
     close(server)
-    sleep(1)
+    sleep(2)
 end
 
 @info "ServerWS: Server side initiates message exchange."
@@ -67,6 +67,6 @@ let
     server = startserver()
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL_CLOSE)
     close(server)
-    sleep(1)
+    sleep(2)
 end
 nothing
