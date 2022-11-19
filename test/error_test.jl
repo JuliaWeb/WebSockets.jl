@@ -69,8 +69,8 @@ try
         read(ws_client)
     end
 catch err
-    @test typeof(err) <: ErrorException
-    @test err.msg == "Attempt to read from closed WebSocket|client. First isopen(ws), or use readguarded(ws)!"
+    @test typeof(err) <: HTTP.Exceptions.RequestError
+    @test err.error == ErrorException("Attempt to read from closed WebSocket|client. First isopen(ws), or use readguarded(ws)!")
 end
 sleep(1)
 
@@ -85,8 +85,8 @@ try
     end
 catch err
     show(err)
-     @test typeof(err) <: WebSocketClosedError
-     @test err.message == " while open ws|client: stream is closed or unusable"
+     @test typeof(err) <: HTTP.Exceptions.RequestError
+     @test err.error == Base.IOError("stream is closed or unusable", 0)
 end
 
 close(s)

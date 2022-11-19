@@ -6,7 +6,7 @@ end
 
 let kws = [], msgs =[]
     ds = DummyStream(IOBuffer(), 0, 0)
-    for s = 0:9, h in [Base.C_NULL, Ptr{UInt64}(3)]
+    for s = 0:9, h in [Base.C_NULL, Ptr{Cvoid}(3)]
         ds.handle = h
         ds.status = s
         kwarg, msg = WebSockets._uv_status_tuple(ds)
@@ -50,7 +50,7 @@ rm("temptemp")
 output = String(take!(io))
 @test output == "✓"
 
-ds = DummyStream(IOBuffer(), 0, 0x00000001)
+ds = DummyStream(IOBuffer(), 0, Ptr{Cvoid}(1))
 io = IOBuffer()
 WebSockets._show(io, ds)
 # The handle type depends on operating system, skip that
@@ -222,7 +222,7 @@ let chnlout, sws, sws1, sws2
     io = IOBuffer()
     show(io, sws)
     output = String(take!(io))
-    @test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s)).out:Channel{Any}(sz_max:2,sz_curr:2) "
+    @test output == "WebSockets.ServerWS(handler=h(r), wshandler=w(s)).out:Channel{Any}(2) "
 
     sws1 = WebSockets.ServerWS(h, w)
     sws2 = WebSockets.ServerWS(h, w)

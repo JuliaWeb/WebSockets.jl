@@ -43,7 +43,7 @@ catch err
     global caughterr = err
 end
 @test typeof(caughterr) <: WebSocketClosedError
-@test caughterr.message == " while open ws|client: connect: connection refused (ECONNREFUSED)"
+@test caughterr.message == " while open ws|client: Base.IOError(\"connect: connection refused (ECONNREFUSED)\", -4078)"
 
 @info "Try open with unknown scheme."
 sleep(1)
@@ -82,7 +82,7 @@ res = WebSockets.open((_)->nothing, URL);
 
 @info "Open with a ws client handler that throws a domain error."
 sleep(1)
-@test_throws DomainError WebSockets.open((_)->sqrt(-2), URL);
+@test_throws HTTP.Exceptions.RequestError WebSockets.open((_)->sqrt(-2), URL);
 
 @info "Stop the server in morse code."
 sleep(1)
@@ -100,7 +100,7 @@ sethd(resp, "Upgrade" => "websocket")
 sethd(resp, "Sec-WebSocket-Accept" => WebSockets.generate_websocket_key(key))
 sethd(resp,   "Connection" => "Upgrade")
 servsock = BufferStream()
-s = HTTP.Stream(resp, HTTP.Transaction(HTTP.Connection(servsock)))
+s = HTTP.Stream(resp, HTTP.Connection(servsock))
 write(servsock, resp)
 function dummywsh(dws::WebSockets.WebSocket{BufferStream})
     close(dws.socket)

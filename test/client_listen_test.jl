@@ -18,6 +18,7 @@ for i = 1:3
         println("Status($(i)): $(status)")
         @test 200 == status
         close(server)
+        sleep(1)
     end
 end
 
