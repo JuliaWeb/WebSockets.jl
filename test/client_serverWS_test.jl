@@ -50,21 +50,23 @@ let
     server = startserver()
     WebSockets.open(initiatingws, "ws://$SURL:$PORT")
     close(server)
+    sleep(1)
 end
-sleep(1)
 
 @info "ServerWS: Server side initiates message exchange."
 let
     server = startserver()
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL)
     close(server)
+    sleep(2)
 end
-sleep(1)
+
 
 @info "ServerWS: Server side initiates message exchange. Close from within server side handler."
 let
     server = startserver()
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL_CLOSE)
     close(server)
+    sleep(1)
 end
 nothing
