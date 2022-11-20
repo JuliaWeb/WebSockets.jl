@@ -64,20 +64,26 @@ Therefore, test results will not propagate to the enclosing test scope.
 """
 function echows(ws::WebSocket)
     while isopen(ws)
+        @debug "reading from socket"
         data, ok = readguarded(ws)
         if ok
+            @debug "writing to socket"
             if writeguarded(ws, data)
                 @test true
             else
                 break
             end
         else
+            @debug "failed to read"
             if !isopen(ws)
+            	@debug "socket is not open"
                 break
             else
+            	@debug "yet socket is open"
                 break
             end
         end
+        sleep(0.01)
     end
 end
 
