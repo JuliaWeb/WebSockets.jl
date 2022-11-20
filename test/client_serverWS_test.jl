@@ -38,35 +38,31 @@ end
 for i = 1:3
     let
         ip = parse(IPAddr, SURL)
-        server = startserver(url=ip)
+        server, servertask  = startserver(url=ip)
         @test 200 == WebSockets.HTTP.request("GET", "http://$SURL:$PORT").status
-        close(server)
-        sleep(2)
+        close(server, servertask)
     end
 end
 
 @info "ServerWS: Client side initiates message exchange."
 let
-    server = startserver()
+    server, servertask  = startserver()
     WebSockets.open(initiatingws, "ws://$SURL:$PORT")
-    close(server)
-    sleep(2)
+    close(server, servertask)
 end
 
 @info "ServerWS: Server side initiates message exchange."
 let
-    server = startserver()
+    server, servertask  = startserver()
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL)
-    close(server)
-    sleep(2)
+    close(server, servertask)
 end
 
 
 @info "ServerWS: Server side initiates message exchange. Close from within server side handler."
 let
-    server = startserver()
+    server, servertask  = startserver()
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL_CLOSE)
-    close(server)
-    sleep(2)
+    close(server, servertask)
 end
 nothing

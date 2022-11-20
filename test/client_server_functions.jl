@@ -149,5 +149,13 @@ function startserver(serverws=test_serverws;url=SURL, port=PORT, verbose=false)
         # capture errors, if any were made during the definition.
         @error take!(serverws.out)
     end
-    serverws
+    serverws, servertask
+end
+
+function Base.close(serverws::WebSockets.ServerWS, servertask::Task)
+    close(serverws)
+    @info "waiting for servertask to finish"
+    wait(servertask)
+    @info "servertask done"
+    return
 end
