@@ -109,8 +109,22 @@ The tests will be captured if the function is run on client side.
 If started by the server side, this is called as part of a coroutine.
 Therefore, test results will not propagate to the enclosing test scope.
 """
+
 function echows(ws::WebSocket)
+    #give a chance for server to write anything
+    @debug "will wait before starting echows..."
+    sleep(5)
+    @debug "starting echows now"
     while isopen(ws)
+        try 
+            @debug "try to peek..."
+            peek(ws.socket, UInt8)
+            @debug "got data"
+        catch err 
+            @debug "nothing to read on the socket yet, $(sprint(showerror, err))"
+            sleep(1)
+            continue
+        end
         @debug "reading from socket"
         data, ok = readguarded_nonblocking(ws)
         #data, ok = readguarded(ws)
