@@ -128,7 +128,11 @@ function echows(ws::WebSocket)
         @debug "reading from socket"
         data, ok = readguarded_nonblocking(ws)
         #data, ok = readguarded(ws)
-        isempty(data) && @error("empty data ok=$(ok)")
+        if isempty(data)
+            @error("empty data ok=$(ok)")
+        else
+            @error "data\n$(String(data))"
+        end
         if ok
             @debug "writing to socket"
             if writeguarded(ws, data)
@@ -178,9 +182,14 @@ function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = 
     for slen in msglengths
         test_str = Random.randstring(slen)
         forcecopy_str = test_str |> collect |> copy |> join
-        if writeguarded(ws, test_str)
+        @error "server will write $(slen) bytes \"$(test_str)\""
+        ok_write =  writeguarded(ws, test_str)
+        @error "written ok = $(ok_write)"
+        if ok_write
             yield()
+            @error "reading on the server side..."
             readback, ok = readguarded(ws)
+            @error "reading on the server side done"
             if ok
                 # if run by the server side, this test won't be captured.
                 if String(readback) == forcecopy_str
