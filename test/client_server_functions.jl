@@ -112,8 +112,8 @@ Therefore, test results will not propagate to the enclosing test scope.
 
 function echows(ws::WebSocket)
     #give a chance for server to write anything
-    @debug "will wait before starting echows..."
-    sleep(5)
+    #@debug "will wait before starting echows..."
+    #sleep(5)
     @debug "starting echows now"
     while isopen(ws)
         try 
@@ -131,10 +131,10 @@ function echows(ws::WebSocket)
         if isempty(data)
             @error("empty data ok=$(ok)")
         else
-            @error "data\n$(String(data))"
+            @error "data\n$(String(copy(data)))"
         end
         if ok
-            @debug "writing to socket"
+            @debug "writing to socket $(length(copy(data))) bytes of \"$(copy(data))\""
             if writeguarded(ws, data)
                 @test true
             else
@@ -189,7 +189,7 @@ function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = 
             yield()
             @error "reading on the server side..."
             readback, ok = readguarded(ws)
-            @error "reading on the server side done"
+            @error "reading on the server side done \"$(String(copy(readback)))\" ok = $(ok)"
             if ok
                 # if run by the server side, this test won't be captured.
                 if String(readback) == forcecopy_str

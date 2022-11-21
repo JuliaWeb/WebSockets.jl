@@ -419,6 +419,7 @@ function read_frame(ws::WebSocket)
     end
 
     payload_len::UInt64 = b & 0b0111_1111
+    @error " a = $(a) fin = $(fin) rsv1 = $(rsv1) rsv2 = $(rsv2) rsv3 = $(rsv3) opcode = $(opcode)\nb = $(b), mask = $(mask), hasmask = $(hasmask) payload_len = $(payload_len), $(length(ab))"
     if payload_len == 126
         payload_len = ntoh(read(ws.socket, UInt16))  # 2 bytes
     elseif payload_len == 127
