@@ -134,7 +134,7 @@ function echows(ws::WebSocket)
             @error "data\n$(String(copy(data)))"
         end
         if ok
-            @debug "writing to socket $(length(copy(data))) bytes of \"$(copy(data))\""
+            @debug "writing to socket $(length(copy(data))) bytes of \"$(String(copy(data)))\""
             if writeguarded(ws, data)
                 @test true
             else
