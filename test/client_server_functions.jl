@@ -49,6 +49,53 @@ function test_wshandler(req::HTTP.Request, ws::WebSocket)
 end
 
 """
+experiment with nonblocking reads
+"""
+function readguarded_nonblocking(ws; sleep = 2)
+    chnl= Channel{Tuple{Vector{UInt8}, Bool}}(1)
+    # Read, output put to Channel for type stability
+    function _readinterruptable(c::Channel{Tuple{Vector{UInt8}, Bool}})
+        try
+            @error "preparing to readguarded..."
+            #sleep !=0 && sleep(sleep)
+            put!(chnl, readguarded(ws))
+            @error "preparing to readguarded done"
+        catch err
+            @debug sprint(showerror, err)
+            errtyp = typeof(err)
+            ok = !(errtyp != InterruptException &&
+                   errtyp != Base.IOError &&
+                   errtyp != HTTP.IOExtras.IOError &&
+                   errtyp != Base.BoundsError &&
+                   errtyp != Base.EOFError &&
+                   errtyp != Base.ArgumentError)
+            # Output a dummy frame that is not a control frame.
+            put!(chnl, (Vector{UInt8}(), ok))
+        end
+    end
+    # Start reading as a task. Will not return if there is nothing to read
+    rt = @async _readinterruptable(chnl)
+    bind(chnl, rt)
+    yield()
+    # Define a task for throwing interrupt exception to the (possibly blocked) read task.
+    # We don't start this task because it would never return
+    killta = @task try
+        sleep(30)
+        @error "will be killing _readinterruptable"
+        throwto(rt, InterruptException())
+    catch
+    end
+    # We start the killing task. When it is scheduled the second time,
+    # we pass an InterruptException through the scheduler.
+    try
+        schedule(killta, InterruptException(), error = false)
+    catch
+    end
+    # We now have content on chnl, and no additional tasks.
+    take!(chnl)
+end
+
+"""
 `echows` is called by
     - `test_wshandler` (in which case ws will be a server side websocket)
     or
@@ -65,7 +112,9 @@ Therefore, test results will not propagate to the enclosing test scope.
 function echows(ws::WebSocket)
     while isopen(ws)
         @debug "reading from socket"
-        data, ok = readguarded(ws)
+        data, ok = readguarded_nonblocking(ws)
+        #data, ok = readguarded(ws)
+        isempty(data) && @error("empty data ok=$(ok)")
         if ok
             @debug "writing to socket"
             if writeguarded(ws, data)
