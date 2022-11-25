@@ -300,7 +300,12 @@ struct RequestHandlerFunction{F} <: RequestHandler
 end
 
 #handle(h::RequestHandlerFunction, req::Request, args...) = h.func(req, args...)
-handle(h::RequestHandlerFunction, stream::HTTP.Streams.Stream, args...) = h.func(stream, args...)
+function handle(h::RequestHandlerFunction, stream::HTTP.Streams.Stream, args...) 
+    request = stream.message
+    request.response = h.func(request, args...)
+    request.response.request = request
+    write(stream, request.response.body)
+end
 
 
 """
@@ -405,6 +410,7 @@ function serve(serverws::ServerWS, host, port, verbose)
                 handle(serverws.handler, stream)
             end
         catch err
+            @error "WebSocket: _servercoroutine CRASH\n$(sprint(showerror, err))"
             put!(serverws.out, err)
             put!(serverws.out, stacktrace(catch_backtrace()))
         end

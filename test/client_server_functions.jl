@@ -19,12 +19,7 @@ end
 `test_handler` is called by WebSockets inner function `_servercoroutine` for all accepted http requests
 that are not upgrades. We don't check what's actually requested.
 """
-function test_handler(stream::HTTP.Streams.Stream)
-    request = stream.message
-    request.response = HTTP.Response(200, "OK")
-    request.response.request = request
-    write(stream, request.response.body)
-end
+test_handler(req::HTTP.Request) = HTTP.Response(200, "OK")
 
 """
 `test_wshandler` is called by WebSockets inner function
