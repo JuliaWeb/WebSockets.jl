@@ -44,6 +44,53 @@ function test_wshandler(req::HTTP.Request, ws::WebSocket)
 end
 
 """
+experiment with nonblocking reads
+"""
+function readguarded_nonblocking(ws; sleep = 2)
+    chnl= Channel{Tuple{Vector{UInt8}, Bool}}(1)
+    # Read, output put to Channel for type stability
+    function _readinterruptable(c::Channel{Tuple{Vector{UInt8}, Bool}})
+        try
+            @error "preparing to readguarded..."
+            #sleep !=0 && sleep(sleep)
+            put!(chnl, readguarded(ws))
+            @error "preparing to readguarded done"
+        catch err
+            @debug sprint(showerror, err)
+            errtyp = typeof(err)
+            ok = !(errtyp != InterruptException &&
+                   errtyp != Base.IOError &&
+                   errtyp != HTTP.IOExtras.IOError &&
+                   errtyp != Base.BoundsError &&
+                   errtyp != Base.EOFError &&
+                   errtyp != Base.ArgumentError)
+            # Output a dummy frame that is not a control frame.
+            put!(chnl, (Vector{UInt8}(), ok))
+        end
+    end
+    # Start reading as a task. Will not return if there is nothing to read
+    rt = @async _readinterruptable(chnl)
+    bind(chnl, rt)
+    yield()
+    # Define a task for throwing interrupt exception to the (possibly blocked) read task.
+    # We don't start this task because it would never return
+    killta = @task try
+        sleep(30)
+        @error "will be killing _readinterruptable"
+        throwto(rt, InterruptException())
+    catch
+    end
+    # We start the killing task. When it is scheduled the second time,
+    # we pass an InterruptException through the scheduler.
+    try
+        schedule(killta, InterruptException(), error = false)
+    catch
+    end
+    # We now have content on chnl, and no additional tasks.
+    take!(chnl)
+end
+
+"""
 `echows` is called by
     - `test_wshandler` (in which case ws will be a server side websocket)
     or
@@ -57,22 +104,48 @@ The tests will be captured if the function is run on client side.
 If started by the server side, this is called as part of a coroutine.
 Therefore, test results will not propagate to the enclosing test scope.
 """
+
 function echows(ws::WebSocket)
+    #give a chance for server to write anything
+    #@debug "will wait before starting echows..."
+    #sleep(5)
+    @debug "starting echows now"
     while isopen(ws)
-        data, ok = readguarded(ws)
+        try 
+            @debug "try to peek..."
+            peek(ws.socket, UInt8)
+            @debug "got data"
+        catch err 
+            @debug "nothing to read on the socket yet, $(sprint(showerror, err))"
+            sleep(1)
+            continue
+        end
+        @debug "reading from socket"
+        data, ok = readguarded_nonblocking(ws)
+        #data, ok = readguarded(ws)
+        if isempty(data)
+            @error("empty data ok=$(ok)")
+        else
+            @error "data\n$(String(copy(data)))"
+        end
         if ok
+            @debug "writing to socket $(length(copy(data))) bytes of \"$(String(copy(data)))\""
             if writeguarded(ws, data)
                 @test true
             else
                 break
             end
         else
+            @debug "failed to read"
             if !isopen(ws)
+            	@debug "socket is not open"
                 break
             else
+            	@debug "yet socket is open"
                 break
             end
         end
+        sleep(0.01)
     end
 end
 
@@ -104,9 +177,14 @@ function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = 
     for slen in msglengths
         test_str = Random.randstring(slen)
         forcecopy_str = test_str |> collect |> copy |> join
-        if writeguarded(ws, test_str)
+        @error "server will write $(slen) bytes \"$(test_str)\""
+        ok_write =  writeguarded(ws, test_str)
+        @error "written ok = $(ok_write)"
+        if ok_write
             yield()
+            @error "reading on the server side..."
             readback, ok = readguarded(ws)
+            @error "reading on the server side done \"$(String(copy(readback)))\" ok = $(ok)"
             if ok
                 # if run by the server side, this test won't be captured.
                 if String(readback) == forcecopy_str
@@ -134,7 +212,7 @@ function initiatingws(ws::WebSocket; msglengths = MSGLENGTHS, closebeforeexit = 
 end
 
 test_serverws = WebSockets.ServerWS(
-    HTTP.RequestHandlerFunction(test_handler),
+    WebSockets.RequestHandlerFunction(test_handler),
     WebSockets.WSHandlerFunction(test_wshandler))
 
 function startserver(serverws=test_serverws;url=SURL, port=PORT, verbose=false)
@@ -144,5 +222,13 @@ function startserver(serverws=test_serverws;url=SURL, port=PORT, verbose=false)
         # capture errors, if any were made during the definition.
         @error take!(serverws.out)
     end
-    serverws
+    serverws, servertask
+end
+
+function Base.close(serverws::WebSockets.ServerWS, servertask::Task)
+    close(serverws)
+    @info "waiting for servertask to finish"
+    wait(servertask)
+    @info "servertask done"
+    return
 end

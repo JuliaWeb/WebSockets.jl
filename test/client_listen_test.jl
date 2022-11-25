@@ -13,32 +13,32 @@
 @info "Listen: Open, http response, close. Repeat three times. Takes a while."
 for i = 1:3
     let
-        server = startserver(url=SURL,port=PORT)
+        server, servertask  = startserver(url=SURL,port=PORT)
         status = HTTP.request("GET", "http://$SURL:$PORT").status
         println("Status($(i)): $(status)")
         @test 200 == status
-        close(server)
+        close(server, servertask)
     end
 end
 
 @info "Listen: Client side initiates message exchange."
 let
-    server = startserver(url=SURL,port=PORT)
+    server, servertask  = startserver(url=SURL,port=PORT)
     WebSockets.open(initiatingws, "ws://$SURL:$PORT")
-    close(server)
+    close(server, servertask)
 end
 
 @info "Listen: Server side initiates message exchange."
 let
-    server = startserver(url=SURL,port=PORT)
+    server, servertask  = startserver(url=SURL,port=PORT)
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL)
-    close(server)
+    close(server, servertask)
 end
 
 @info "Listen: Server side initiates message exchange. Close from within server side handler."
 let
-    server = startserver(url=SURL,port=PORT)
+    server, servertask  = startserver(url=SURL,port=PORT)
     WebSockets.open(echows, "ws://$SURL:$PORT", subprotocol = SUBPROTOCOL_CLOSE)
-    close(server)
+    close(server, servertask)
 end
 nothing

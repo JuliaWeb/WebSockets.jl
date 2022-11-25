@@ -7,18 +7,14 @@ import HTTP:Response,   # For upgrade
             setstatus,  # For upgrade
             startwrite, # For upgrade
             startread,  # For _openstream
-            handle,     # For _servercoroutine
-            Connection, # For handshaketest
-            Transaction,# For handshaketest
             URI,        # For open
-            Handler,    # For WebSocketHandler, ServerWS, error_test
-            RequestHandlerFunction,         # For ServerWS
             StatusError,                    # For open
             Servers,                        # For further imports
             Streams,                        # For further imports
             ConnectionPool                  # For further imports
 import HTTP.ConnectionPool:
-            getrawstream                    # For _openstream
+            getrawstream,                    # For _openstream
+            Connection                       # For handshaketest
 import HTTP.Streams:
             Stream                          # For is_upgrade, handshaketest
 import HTTP.Servers: MbedTLS                # For further imports
@@ -95,9 +91,9 @@ function open(f::Function, url; verbose=false, subprotocol = "", kw...)
             "GET", uri, headers;
             reuse_limit=0, verbose=verbose ? 2 : 0, kw...)
     catch err
-        if typeof(err) <: HTTP.IOExtras.IOError
-            throw(WebSocketClosedError(" while open ws|client: $(string(err.e.msg))"))
-        elseif typeof(err) <: HTTP.StatusError
+        if typeof(err) <: HTTP.Exceptions.ConnectError
+            throw(WebSocketClosedError(" while open ws|client: $(string(err.error))"))
+        elseif  typeof(err) <: HTTP.StatusError
             return err.response
         else
            rethrow(err)
@@ -270,6 +266,48 @@ target(req::Request) = req.target
 subprotocol(req::Request) = header(req, "Sec-WebSocket-Protocol")
 origin(req::Request) = header(req, "Origin")
 
+#functions which are not present in HTTP 1.0
+function handle end
+
+abstract type Handler end
+
+"""
+    RequestHandler
+
+Abstract type representing objects that handle `HTTP.Request` and return `HTTP.Response` objects.
+
+See `?HTTP.RequestHandlerFunction` for an example of a concrete implementation.
+"""
+abstract type RequestHandler <: Handler end
+
+"""
+    StreamHandler
+
+Abstract type representing objects that handle `HTTP.Stream` objects directly.
+
+See `?HTTP.StreamHandlerFunction` for an example of a concrete implementation.
+"""
+abstract type StreamHandler <: Handler end
+
+"""
+    RequestHandlerFunction(f)
+
+A function-wrapper type that is a subtype of `RequestHandler`. Takes a single function as an argument
+that should be of the form `f(::HTTP.Request) => HTTP.Response`
+"""
+struct RequestHandlerFunction{F} <: RequestHandler
+    func::F # func(req)
+end
+
+#handle(h::RequestHandlerFunction, req::Request, args...) = h.func(req, args...)
+function handle(h::RequestHandlerFunction, stream::HTTP.Streams.Stream, args...) 
+    request = stream.message
+    request.response = h.func(request, args...)
+    request.response.request = request
+    write(stream, request.response.body)
+end
+
+
 """
 WSHandlerFunction(f::Function) <: Handler
  The provided argument should be one of the forms
@@ -372,6 +410,7 @@ function serve(serverws::ServerWS, host, port, verbose)
                 handle(serverws.handler, stream)
             end
         catch err
+            @error "WebSocket: _servercoroutine CRASH\n$(sprint(showerror, err))"
             put!(serverws.out, err)
             put!(serverws.out, stacktrace(catch_backtrace()))
         end
