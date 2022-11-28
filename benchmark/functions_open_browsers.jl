@@ -14,7 +14,7 @@ const COUNTBROWSER = Countbrowser(0)
 "Get application path for developer applications"
 function fwhich(s)
     fi = ""
-    if Sys.is_windows()
+    if Sys.iswindows()
         try
             fi = split(read(`where.exe $s`, String), "\r\n")[1]
             if !isfile(fi)
@@ -35,7 +35,7 @@ end
 function browser_path_unix_apple(shortname)
     trypath = ""
     if shortname == "chrome"
-        if Base.Sys.is_apple()
+        if Base.Sys.isapple()
             return "Google Chrome"
         else
             return "google-chrome"
@@ -45,7 +45,7 @@ function browser_path_unix_apple(shortname)
         return "firefox"
     end
     if shortname == "safari"
-        if Base.Sys.is_apple()
+        if Base.Sys.isapple()
             return "safari"
         else
             return ""
@@ -65,7 +65,7 @@ function browser_path_windows(shortname)
     path32 = homdr * "/Program Files (x86)/"
     path64 = homdr * "/Program Files/"
     if shortname == "chrome"
-        trypath = path64 * "Chrome/Application/chrome.exe"
+        trypath = path64 * "Google/Chrome/Application/chrome.exe"
         isfile(trypath) && return trypath
         trypath = path32 * "Google/Chrome/Application/chrome.exe"
         isfile(trypath) && return trypath

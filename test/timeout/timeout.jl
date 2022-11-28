@@ -1,7 +1,9 @@
-# This opens 14*3 = 42 websockets which close from the client side after
-# timeouts up to 8192 seconds.
-# Not included in runtests.jl because this takes two and a half hours to run.
-# Checking against erros equires inspecting REPL.
+# Provided that three browser types are found, 
+# this opens 9 webscokets * (3 browsers + 1 Julia ) = 36 websockets.
+# They close from the client side after
+# timeouts up to 256 seconds.
+# Not included in runtests.jl.
+# Checking against errors equires inspecting REPL.
 
 using Test
 using WebSockets
@@ -15,11 +17,6 @@ const CLIENTTASKS = Dict{typeof(time_ns()) , Task}()
 const CLOSINGMESSAGES = Dict{typeof(time_ns()) , String}()
 const CURRENT = Vector{Pair{WebSocket, String}}()
 const T0 = now()
-# At Http 0.7 / WebSockets 1.3, there is no obviously nice interface to limiting
-# the maximum simultaneous connections. We settle for a naughty as well as ugly way, and state our
-# intention to fix this up (sometime). It should not concern timeouts, just
-# our ability to open many sockets at a time.
-@eval WebSockets.HTTP.ConnectionPool default_connection_limit = 32
 
 const SERVER = WebSockets.ServerWS(handle, gatekeeper, rate_limit = 1000//1)
 const OLDLOGGER = WebSockets.global_logger()
@@ -29,14 +26,18 @@ WebSockets.global_logger(WebSocketLogger())
 #WebSockets.global_logger(WebSocketLogger(shouldlog= (_, _, _, _, _) -> true))
 
 const SERTASK = @async WebSockets.serve(SERVER, 8000)
+
 open_a_browser()
-# We'll also open a second type of browser. If all are available, the default sequence is
-# ["chrome", "firefox", "iexplore", "safari", "phantomjs"]
+
+# We'll also open a second and third type of browser. The default sequence is
+# ["chrome", "firefox", "iexplore", "safari", "phantomjs"]. If one is unavailable,
+# the next will be picked.
+open_a_browser()
 open_a_browser()
 
 # The browsers are working on opening client side websockets. Meanwhile,
 # Julia will open some, too:
-for i = 0:13
+for i = 0:8
     sec = 2^i
     wsh = clientwsh(sec)
     push!(CLIENTTASKS, time_ns() => @async WebSockets.open(wsh, "ws://127.0.0.1:8000"))
@@ -45,25 +46,25 @@ for i = 0:13
     yield()
 end
 
-
-
 # The time to open a websocket may depend on things like the browser updating,
 # or, for Julia, if compilation is necessary.
 sleep(24)
-if checktasks() == 14
-    @wslog "All client tasks are running without error"
+if checktasks() == 9
+    @wslog "All client tasks are running or finished without error"
+else
+    @warn CLIENTTASKS
 end
-@test length(WSLIST) == 42
+@test length(WSLIST) == 36
 for (key, ws) in WSLIST
     push!(CURRENT, ws => get(WSIDLIST, key, "See WSIDLIST directly"))
 end
 @wslog CURRENT
 @async begin
-    # Wait for all timeouts (the longest is 8192s)
-    @wslog "\e[32m --- The final tests will run in 8250s---\n
+    # Wait for all timeouts (the longest is 256s)
+    @wslog "\e[32m --- The final tests will run in 256s + 58s = ---\n
     \t For more viewing pleasure, now inspect CURRENT\n
     \t\e[39m or alternatively WSIDLIST WSLIST  CLIENTTASKS  CLOSINGMESSAGES and SERVER"
-    sleep(8250)
+    sleep(314)
     #put!(SERVER.in("Job well done!"))
     for (key, ws) in WSLIST
         @wslog ws, WSIDLIST[key]
