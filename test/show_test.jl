@@ -188,7 +188,7 @@ output = String(take!(io.io))
 @test output == "WebSocket{BufferStream}(client, \e[32mCONNECTED\e[39m): \e[32m✓\e[39m, 2 bytes"
 
 ### For testing Base.show(ServerWS)
-h(r) = HTTP.Response(200)
+h(r) = HTTP.Response(200, "OK")
 w(s) = nothing
 io = IOBuffer()
 WebSockets._show(io, h)

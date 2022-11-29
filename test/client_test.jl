@@ -93,7 +93,7 @@ sleep(1)
 req = HTTP.Request()
 req.method = "GET"
 key = base64encode(rand(UInt8, 16))
-resp = HTTP.Response(101)
+resp = HTTP.Response(101, "Switching protocols")
 resp.request = req
 sethd(resp,   "Sec-WebSocket-Version" => "13")
 sethd(resp, "Upgrade" => "websocket")
