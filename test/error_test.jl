@@ -117,10 +117,6 @@ global err = take!(chfromserv)
 @test typeof(err) <: WebSocketClosedError
 @test err.message == "while read(ws|server) Client side closed socket connection - Performed closing handshake."
 global stack_trace = take!(chfromserv)
-if VERSION <= v"1.0.2"
-    # Stack trace on master is zero. Unknown cause.
-    @test length(stack_trace) == 2
-end
 
 close(s)
 
@@ -146,10 +142,6 @@ global err = take!(s.out)
 @test err.message == "while read(ws|server) Client side closed socket connection - Performed closing handshake."
 sleep(1)
 global stack_trace = take!(s.out);
-if VERSION <= v"1.0.2"
-    # Stack trace on master is zero. Unknown cause.
-    @test length(stack_trace) in [5, 6]
-end
 
 while isready(s.out)
     take!(s.out)
@@ -173,10 +165,6 @@ for (ke, va) in WebSockets.codeDesc
     @test err.message == "ws|server respond to OPCODE_CLOSE $ke: $va"
     wait(s.out)
     stacktra = take!(s.out)
-    if VERSION <= v"1.0.2"
-        # Unknown cause, nighly behaves differently
-        @test length(stacktra) == 0
-    end
     while isready(s.out)
         take!(s.out)
     end

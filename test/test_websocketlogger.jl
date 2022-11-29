@@ -32,23 +32,21 @@ import Base.CoreLogging: Info,
     logger = WebSocketLogger(io)
     # This covers an issue (#28786) in stdlib/Julia v 0.7, where log_record_id is not defined
     # in the expanded macro. Fixed Nov 2018, labelled for backporting to v1.0.0
-    if VERSION >= v"1.0.0"
-        with_logger(logger) do
-            for i in 1:2
-                @info "test" maxlog=1
-            end
+    with_logger(logger) do
+        for i in 1:2
+            @info "test" maxlog=1
         end
-        @test String(take!(buf)) ==
-        """
-        [ Info: test
-        """
-        with_logger(logger) do
-            for i in 1:2
-                @info "test" maxlog=0
-            end
-        end
-        @test String(take!(buf)) == ""
     end
+    @test String(take!(buf)) ==
+    """
+    [ Info: test
+    """
+    with_logger(logger) do
+        for i in 1:2
+            @info "test" maxlog=0
+        end
+    end
+    @test String(take!(buf)) == ""
     @testset "Default metadata formatting" begin
         @test Logging.default_metafmt(Debug, Base, :g, :i, expanduser("~/somefile.jl"), 42) ==
             (:blue,      "Debug:",   "@ Base ~/somefile.jl:42")
@@ -202,7 +200,7 @@ import Base.CoreLogging: Info,
     │   exception =
     │    DivideError: integer division error
     │    Stacktrace:
-    │     $(VERSION < v"1.6" ? "" : " ")[1] func1()""")
+    │      [1] func1()""")
 
 
     @testset "Limiting large data structures" begin
@@ -214,7 +212,7 @@ import Base.CoreLogging: Info,
         │     1.00001  1.00001  1.00001  1.00001  …  1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
-        │     ⋮                                   ⋱                    $(VERSION < v"1.1" ? "       " : "")
+        │     ⋮                                   ⋱                    
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │   b =
@@ -222,7 +220,7 @@ import Base.CoreLogging: Info,
         │     2.00002  2.00002  2.00002  2.00002  …  2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
-        │     ⋮                                   ⋱                    $(VERSION < v"1.1" ? "       " : "")
+        │     ⋮                                   ⋱                    
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         └ SUFFIX
@@ -293,19 +291,16 @@ end
     # Loglevel Wslog, own format
     # This covers an issue related to #28786 in stdlib/Julia v 0.7, where log_record_id is not defined
     # in the expanded macro. Why it is triggered here, but not in the LogLevel Info test is unknown.
-    if VERSION >= v"1.0.0"
-        msg = spec_msg("---", level = Wslog)
-        @test startswith(msg, "[ Wslog ")
-        @test endswith(msg, ": ---\n")
-    end
+    msg = spec_msg("---", level = Wslog)
+    @test startswith(msg, "[ Wslog ")
+    @test endswith(msg, ": ---\n")
     # Blocking all log levels except Wslog.
     spec_shouldlog(logger, level, _module, group, id) = level == Wslog
     # Issue 28786
-    if VERSION >= v"1.0.0"
-        msg = spec_msg("---", level = Wslog, shouldlog = spec_shouldlog)
-        @test startswith(msg, "[ Wslog ")
-        @test endswith(msg, ": ---\n")
-    end
+    msg = spec_msg("---", level = Wslog, shouldlog = spec_shouldlog)
+    @test startswith(msg, "[ Wslog ")
+    @test endswith(msg, ": ---\n")
+    #
     @test spec_msg("---", shouldlog = spec_shouldlog) == ""
     @test spec_msg("---", level = Debug, shouldlog = spec_shouldlog) == ""
     @test spec_msg("---", level = Warn, shouldlog = spec_shouldlog) == ""
@@ -333,19 +328,18 @@ end
     @test shouldlog(logger, Info, Main, :group, :asdf) == true
 
     # Check that error handling works with @wslog
-    if VERSION >= v"1.0.0"
-        # This covers an issue (#28786) in stdlib/Julia v 0.7, where log_record_id is not defined
-        # in the expanded macro. Fixed Nov 2018, labelled for backporting to v1.0.0
-        buf = IOBuffer()
-        io = IOContext(buf, :displaysize=>(30,80), :color=>true)
-        logger = WebSocketLogger(io)
-        with_logger(logger) do
-               @wslog sqrt(-2)
-               end
-       @test length(String(take!(buf))) > 1900
-       """
-       [ Info: test
-       """
-   end
+    # This covers an issue (#28786) in stdlib/Julia v 0.7, where log_record_id is not defined
+    # in the expanded macro. Fixed Nov 2018, labelled for backporting to v1.0.0
+    buf = IOBuffer()
+    io = IOContext(buf, :displaysize=>(30,80), :color=>true)
+    logger = WebSocketLogger(io)
+    with_logger(logger) do
+            @wslog sqrt(-2)
+            end
+    @test length(String(take!(buf))) > 1900
+    """
+    [ Info: test
+    """
+
 end
 nothing
