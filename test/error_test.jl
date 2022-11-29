@@ -14,7 +14,7 @@ const FPORT = 8092
 @info "Start a server with a ws handler that is unresponsive. \nClose from client side. The " *
       " close handshake aborts after $(WebSockets.TIMEOUT_CLOSEHANDSHAKE) seconds..."
 s = WebSockets.ServerWS(
-    req::HTTP.Request -> HTTP.Response(200),
+    req::HTTP.Request -> HTTP.Response(200, "OK"),
     (req::HTTP.Request, ws::WebSocket) -> begin
         for i=1:16
             sleep(1)
@@ -32,7 +32,7 @@ close(s)
 @info "Start a server with a ws handler that always reads guarded."
 sleep(1)
 s = WebSockets.ServerWS(
-    req -> HTTP.Response(200),
+    req -> HTTP.Response(200, "OK"),
     (req, ws_serv) -> begin
         while isopen(ws_serv)
             WebSockets.readguarded(ws_serv)
@@ -95,7 +95,7 @@ close(s)
 sleep(1)
 chfromserv=Channel(2)
 s = WebSockets.ServerWS(
-    req-> HTTP.Response(200),
+    req-> HTTP.Response(200, "OK"),
     ws_serv->begin
         while isopen(ws_serv)
             try
@@ -117,10 +117,6 @@ global err = take!(chfromserv)
 @test typeof(err) <: WebSocketClosedError
 @test err.message == "while read(ws|server) Client side closed socket connection - Performed closing handshake."
 global stack_trace = take!(chfromserv)
-if VERSION <= v"1.0.2"
-    # Stack trace on master is zero. Unknown cause.
-    @test length(stack_trace) == 2
-end
 
 close(s)
 
@@ -129,7 +125,7 @@ sleep(1)
 @info "Start a server. Errors are output on built-in channel"
 sleep(1)
 s = WebSockets.ServerWS(
-    req-> HTTP.Response(200),
+    req-> HTTP.Response(200, "OK"),
     ws_serv->begin
         while isopen(ws_serv)
                 read(ws_serv)
@@ -146,10 +142,6 @@ global err = take!(s.out)
 @test err.message == "while read(ws|server) Client side closed socket connection - Performed closing handshake."
 sleep(1)
 global stack_trace = take!(s.out);
-if VERSION <= v"1.0.2"
-    # Stack trace on master is zero. Unknown cause.
-    @test length(stack_trace) in [5, 6]
-end
 
 while isready(s.out)
     take!(s.out)
@@ -173,10 +165,6 @@ for (ke, va) in WebSockets.codeDesc
     @test err.message == "ws|server respond to OPCODE_CLOSE $ke: $va"
     wait(s.out)
     stacktra = take!(s.out)
-    if VERSION <= v"1.0.2"
-        # Unknown cause, nighly behaves differently
-        @test length(stacktra) == 0
-    end
     while isready(s.out)
         take!(s.out)
     end

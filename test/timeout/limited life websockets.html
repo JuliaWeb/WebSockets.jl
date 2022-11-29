@@ -18,18 +18,12 @@
 <ul><li id="64s_timeout">Timeout 64 s</li></ul>
 <ul><li id="128s_timeout">Timeout 128 s</li></ul>
 <ul><li id="256s_timeout">Timeout 256 s</li></ul>
-<ul><li id="512s_timeout">Timeout 512 s</li></ul>
-<ul><li id="1024s_timeout">Timeout 1024 s</li></ul>
-<ul><li id="2048s_timeout">Timeout 2048 s</li></ul>
-<ul><li id="4096s_timeout">Timeout 4096 s</li></ul>
-<ul><li id="8192s_timeout">Timeout 8192 s</li></ul>
-
 <p id = "init"></p>
 <script>
 
 window.onload= function(){
 	plog("init", "<p>:window.onload</p>")
-	for(var i = 0; i < 14; i++){
+	for(var i = 0; i < 9; i++){
 			var sec = Math.pow(2, i)
 			addtimeoutwebsocket(sec)
 		}
